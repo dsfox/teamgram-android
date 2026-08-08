@@ -10431,7 +10431,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 dataRow = rowCount++;
                 liteModeRow = rowCount++;
 //                stickersRow = rowCount++;
-                if (getMessagesController().filtersEnabled || !getMessagesController().dialogFilters.isEmpty()) {
+                // Chat folders: left out here too, see SettingsActivity. This older
+                // settings screen is still reachable in some flows.
+                if (false) {
                     filtersRow = rowCount++;
                 }
                 devicesRow = rowCount++;

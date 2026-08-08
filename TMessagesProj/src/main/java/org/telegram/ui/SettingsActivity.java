@@ -683,7 +683,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(3, 0xFF55CA47, 0xFF27B434, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
         items.add(SettingCell.Factory.of(5, 0xFFF45255, 0xFFDF3955, R.drawable.settings_sounds, getString(R.string.SettingsNotifications), getString(R.string.SettingsNotificationsInfo)));
         items.add(SettingCell.Factory.of(6, 0xFF4F85F6, 0xFF3568E8, R.drawable.settings_data, getString(R.string.SettingsData), getString(R.string.SettingsDataInfo)));
-        items.add(SettingCell.Factory.of(7, 0xFF1CA5ED, 0xFF1387E1, R.drawable.settings_folders, getString(R.string.SettingsFolders), getString(R.string.SettingsFoldersInfo)));
+        // Chat folders are left out until the server can keep them: reading them
+        // returns nothing and creating one has no handler (#22). A row that opens
+        // an empty screen reads as a broken app.
         items.add(SettingCell.Factory.of(8, 0xFF32C0CE, 0xFF1D9CC6, R.drawable.settings_devices, getString(R.string.SettingsDevices), getString(R.string.SettingsDevicesInfo)));
         items.add(SettingCell.Factory.of(9, 0xFFF28B31, 0xFFE26314, R.drawable.settings_power, getString(R.string.SettingsPowerSaving), getString(R.string.SettingsPowerSavingInfo)));
         items.add(SettingCell.Factory.of(10, 0xFFC46EF4, 0xFF9F55DF, R.drawable.settings_language, getString(R.string.SettingsLanguage), LocaleController.getCurrentLanguageName()));
