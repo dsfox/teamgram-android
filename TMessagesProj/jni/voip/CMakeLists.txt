@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.6.0)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 -DANDROID -g")
+# Append, not overwrite - see the note in ../CMakeLists.txt: these flags carry
+# the target triple from NDK 26 on, and wiping them builds for the host.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -DANDROID -g")
 
 #tgvoip
 add_library(tgvoip STATIC

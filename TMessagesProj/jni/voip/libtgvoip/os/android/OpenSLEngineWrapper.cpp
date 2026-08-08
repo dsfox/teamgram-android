@@ -8,7 +8,7 @@
 #include "OpenSLEngineWrapper.h"
 #include "../../logging.h"
 
-#define CHECK_SL_ERROR(res, msg) if(res!=SL_RESULT_SUCCESS){ LOGE(msg); return NULL; }
+#define CHECK_SL_ERROR(res, msg) if(res!=SL_RESULT_SUCCESS){ LOGE("%s", msg); return NULL; }
 
 using namespace tgvoip;
 using namespace tgvoip::audio;

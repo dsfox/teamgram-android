@@ -12,7 +12,7 @@
 #include "../../logging.h"
 #include "OpenSLEngineWrapper.h"
 
-#define CHECK_SL_ERROR(res, msg) if(res!=SL_RESULT_SUCCESS){ LOGE(msg); return; }
+#define CHECK_SL_ERROR(res, msg) if(res!=SL_RESULT_SUCCESS){ LOGE("%s", msg); return; }
 #define BUFFER_SIZE 960 // 20 ms
 
 using namespace tgvoip;

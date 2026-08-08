@@ -1,10 +1,22 @@
 cmake_minimum_required(VERSION 3.10.2)
 
-set(CMAKE_CXX_FLAGS "-std=c++14 -DANDROID -g")
-set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g")
+# Append, never overwrite: the flags CMake has already put here carry the
+# target triple and the sysroot. With NDK 21 those lived inside the compiler
+# binaries themselves, so wiping the flags was harmless; from NDK 26 they arrive
+# only as flags, and wiping them makes clang build for the host - the assembler
+# then fails on "mach-o section specifier" in the middle of opus.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -DANDROID -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g")
 set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
+# Everything after the first item of this -Wl, group is a link input, not an
+# exclusion: -Wl,a,b,c hands the linker three separate arguments, and only the
+# one right after --exclude-libs is its value. So the archives below are how
+# ffmpeg, boringssl and tde2e get linked in - do not "tidy" them into names.
+# --exclude-libs,ALL below is the real exclusion. Without it the ffmpeg symbols
+# stay exported, become preemptible in a shared object, and the lld shipped
+# since NDK 23 rejects the ADRP+ADD relocations against them, blaming -fPIC.
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--exclude-libs,libtgvoip.a,libtgcalls.a,libtgcalls_tp.a,libtgnet.a,libflac.a,librlottie.a,libsqlite.a,
 ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libswscale.a,
 ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavformat.a,
@@ -17,7 +29,7 @@ ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libdav1d.a,
 ${CMAKE_HOME_DIRECTORY}/boringssl/lib/${ANDROID_ABI}/libssl.a,
 ${CMAKE_HOME_DIRECTORY}/boringssl/lib/${ANDROID_ABI}/libcrypto.a,
 ${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtde2e.a,
-${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtdutils.a")
+${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtdutils.a -Wl,--exclude-libs,ALL")
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     enable_language(ASM)
@@ -263,21 +275,13 @@ target_include_directories(rlottie PUBLIC
         rlottie/src/vector/freetype
         rlottie/src/vector/stb)
 
-if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
-    target_compile_options(rlottie PUBLIC
-            -fno-integrated-as)
-    target_compile_definitions(rlottie PUBLIC
-            USE_ARM_NEON)
-    target_sources(rlottie PRIVATE
-            rlottie/src/vector/pixman/pixman-arm-neon-asm.S)
-elseif(${ANDROID_ABI} STREQUAL "arm64-v8a")
-    target_compile_options(rlottie PUBLIC
-            -fno-integrated-as)
-    target_compile_definitions(rlottie PUBLIC
-            USE_ARM_NEON __ARM64_NEON__)
-    target_sources(rlottie PRIVATE
-            rlottie/src/vector/pixman/pixman-arma64-neon-asm.S)
-endif()
+# The hand-written pixman NEON path is off. It needs the GNU assembler, which the
+# NDK dropped in r23, and clang's integrated assembler chokes on the pixman macros
+# (.func, and .if over a macro argument). Worse, -fno-integrated-as was PUBLIC here,
+# so every target that links rlottie inherited it and the whole build fell back to
+# the host assembler. rlottie has a C path for both entry points it replaces
+# (memfill32 and the SrcOver solid blend), so this costs sticker rendering speed and
+# nothing else. Porting the asm - or moving to a newer rlottie - is issue #30.
 
 
 #flac

@@ -13,7 +13,7 @@
 #include "OpenSLEngineWrapper.h"
 #include "AudioInputAndroid.h"
 
-#define CHECK_SL_ERROR(res, msg) if(res!=SL_RESULT_SUCCESS){ LOGE(msg); failed=true; return; }
+#define CHECK_SL_ERROR(res, msg) if(res!=SL_RESULT_SUCCESS){ LOGE("%s", msg); failed=true; return; }
 #define BUFFER_SIZE 960 // 20 ms
 
 using namespace tgvoip;
