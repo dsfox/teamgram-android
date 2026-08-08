@@ -1817,11 +1817,12 @@ void ConnectionsManager::initDatacenters() {
     if (!testBackend) {
         if (datacenters.find(1) == datacenters.end()) {
             datacenter = new Datacenter(instanceNum, 1);
-            // Our server. Both addresses are listed: while the old one is still
-            // bound either serves, and when it is released the build already on
-            // people's phones keeps working.
+            // Our server, and only ours. The old address was kept here as a
+            // fallback while it was still bound; it is not any more, so the
+            // client rotated onto a dead endpoint, waited out an eight-second
+            // timeout and showed "Connecting" for as long as it took to come
+            // back round. A fallback that does not answer is worse than none.
             datacenter->addAddressAndPort("5.23.53.210", 10443, 0, "");
-            datacenter->addAddressAndPort("37.77.106.140", 10443, 0, "");
             // datacenter->addAddressAndPort("149.154.175.50", 443, 0, "");
             // datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000a", 443, 1, "");
             datacenters[1] = datacenter;
@@ -1860,11 +1861,12 @@ void ConnectionsManager::initDatacenters() {
     } else {
         if (datacenters.find(1) == datacenters.end()) {
             datacenter = new Datacenter(instanceNum, 1);
-            // Our server. Both addresses are listed: while the old one is still
-            // bound either serves, and when it is released the build already on
-            // people's phones keeps working.
+            // Our server, and only ours. The old address was kept here as a
+            // fallback while it was still bound; it is not any more, so the
+            // client rotated onto a dead endpoint, waited out an eight-second
+            // timeout and showed "Connecting" for as long as it took to come
+            // back round. A fallback that does not answer is worse than none.
             datacenter->addAddressAndPort("5.23.53.210", 10443, 0, "");
-            datacenter->addAddressAndPort("37.77.106.140", 10443, 0, "");
             // datacenter->addAddressAndPort("149.154.175.40", 443, 0, "");
             // datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000e", 443, 1, "");
             datacenters[1] = datacenter;

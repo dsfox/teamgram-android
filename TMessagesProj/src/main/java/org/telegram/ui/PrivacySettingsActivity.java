@@ -177,6 +177,51 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     private SessionsActivity devicesActivityPreload;
     private SessionsActivity webSessionsActivityPreload;
 
+    private void confirmDeleteAccount() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder warning = new AlertDialog.Builder(getParentActivity());
+        warning.setTitle(getString("DeleteAccountNow", R.string.DeleteAccountNow));
+        warning.setMessage(getString("DeleteAccountConfirm", R.string.DeleteAccountConfirm));
+        warning.setNegativeButton(getString(R.string.Cancel), null);
+        warning.setPositiveButton(getString("DeleteAccountNow", R.string.DeleteAccountNow),
+                (dialog, which) -> deleteAccountNow());
+        AlertDialog alert = warning.create();
+        showDialog(alert);
+        TextView button = (TextView) alert.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (button != null) {
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
+        }
+    }
+
+    private void deleteAccountNow() {
+        final AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
+        progress.setCanCancel(false);
+        progress.show();
+
+        final TL_account.deleteAccount req = new TL_account.deleteAccount();
+        req.reason = "";
+        getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            try {
+                progress.dismiss();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            if (response instanceof TLRPC.TL_boolTrue) {
+                // The server signs every device out as part of this, so the
+                // answer sometimes never arrives; when it does, leave cleanly.
+                getMessagesController().performLogout(0);
+            } else if (getParentActivity() != null) {
+                new AlertDialog.Builder(getParentActivity())
+                        .setTitle(getString("DeleteAccountNow", R.string.DeleteAccountNow))
+                        .setMessage(getString("DeleteAccountFailed", R.string.DeleteAccountFailed))
+                        .setPositiveButton(getString(R.string.OK), null)
+                        .show();
+            }
+        }));
+    }
+
     @Override
     public boolean onFragmentCreate() {
         super.onFragmentCreate();
@@ -403,6 +448,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         }));
                     });
                 }
+                // Deleting the account on the spot, not in a year's time. Apple
+                // requires it and Google expects it; without it the only way out
+                // was an email to us, which the deletion page had to admit.
+                builder.setNeutralButton(getString("DeleteAccountNow", R.string.DeleteAccountNow),
+                        (dialog, which) -> confirmDeleteAccount());
                 builder.setNegativeButton(getString(R.string.Cancel), null);
                 showDialog(builder.create());
             } else if (position == lastSeenRow) {
