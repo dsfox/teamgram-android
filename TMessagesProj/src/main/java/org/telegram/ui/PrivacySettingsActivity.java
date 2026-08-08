@@ -899,6 +899,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     }
 
     private void loadPasskeys() {
+        // Nothing on the other end and nothing to show: the row is hidden by the
+        // same switch, so this was a request whose answer went nowhere.
+        if (!BuildVars.SUPPORTS_PASSKEYS) {
+            return;
+        }
         getConnectionsManager().sendRequestTyped(new TL_account.getPasskeys(), AndroidUtilities::runOnUIThread, (passkeys, error) -> {
             if (passkeys != null) {
                 currentPasskeys = passkeys.passkeys;
