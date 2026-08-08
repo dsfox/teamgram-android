@@ -10,7 +10,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:457310145225:android:4125967cf5bd14c13e9b18",
         "android_client_info": {
-          "package_name": "org.chatengine.messenger"
+          "package_name": "app.twobytes.android"
         }
       },
       "oauth_client": [
@@ -39,7 +39,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:457310145225:android:3c9e96cd1954245a3e9b18",
         "android_client_info": {
-          "package_name": "org.chatengine.messenger.beta"
+          "package_name": "app.twobytes.android.beta"
         }
       },
       "oauth_client": [
