@@ -601,68 +601,11 @@ public class LocaleController {
         languages.add(localeInfo);
         languagesDict.put(localeInfo.shortName, localeInfo);
 
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "Italiano";
-        localeInfo.nameEnglish = "Italian";
-        localeInfo.shortName = localeInfo.pluralLangCode = "it";
-        localeInfo.pathToFile = null;
-        localeInfo.builtIn = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
-
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "Español";
-        localeInfo.nameEnglish = "Spanish";
-        localeInfo.shortName = localeInfo.pluralLangCode = "es";
-        localeInfo.builtIn = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
-
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "Deutsch";
-        localeInfo.nameEnglish = "German";
-        localeInfo.shortName = localeInfo.pluralLangCode = "de";
-        localeInfo.pathToFile = null;
-        localeInfo.builtIn = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
-
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "Nederlands";
-        localeInfo.nameEnglish = "Dutch";
-        localeInfo.shortName = localeInfo.pluralLangCode = "nl";
-        localeInfo.pathToFile = null;
-        localeInfo.builtIn = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
-
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "العربية";
-        localeInfo.nameEnglish = "Arabic";
-        localeInfo.shortName = localeInfo.pluralLangCode = "ar";
-        localeInfo.pathToFile = null;
-        localeInfo.builtIn = true;
-        localeInfo.isRtl = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
-
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "Português (Brasil)";
-        localeInfo.nameEnglish = "Portuguese (Brazil)";
-        localeInfo.shortName = localeInfo.pluralLangCode = "pt_br";
-        localeInfo.pathToFile = null;
-        localeInfo.builtIn = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
-
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "한국어";
-        localeInfo.nameEnglish = "Korean";
-        localeInfo.shortName = localeInfo.pluralLangCode = "ko";
-        localeInfo.pathToFile = null;
-        localeInfo.builtIn = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
+        // Only two languages are offered, and only one is built in. Italian,
+        // Spanish, German, Dutch, Arabic, Portuguese and Korean shipped with the
+        // fork translated between a tenth and a seventh of the way through -
+        // enough to make the interface look broken rather than translated.
+        // Russian arrives from the server, where a full pack lives.
 
         loadOtherLanguages();
         if (remoteLanguages.isEmpty()) {
@@ -719,6 +662,9 @@ public class LocaleController {
                 }
             }
 
+            if (currentInfo == null) {
+                currentInfo = getLanguageFromDict(defaultLanguageFor(systemDefaultLocale));
+            }
             if (currentInfo == null && systemDefaultLocale.getLanguage() != null) {
                 currentInfo = getLanguageFromDict(systemDefaultLocale.getLanguage());
             }
@@ -907,6 +853,36 @@ public class LocaleController {
                 patching = false;
             }));
         }
+    }
+
+    // Which language a phone gets before anybody chooses one. We offer two, so
+    // this decides between them: Russian where it is the language people read -
+    // Russia, Ukraine, Kazakhstan, Belarus, by the device language or by the
+    // region it is set to - and English everywhere else.
+    //
+    // The country matters as much as the language: a phone set to English in
+    // Kazakhstan most likely belongs to someone who reads Russian, and a phone
+    // set to Russian anywhere is not ambiguous at all.
+    private static final String[] RUSSIAN_SPEAKING_COUNTRIES = {"RU", "UA", "KZ", "BY"};
+    private static final String[] RUSSIAN_SPEAKING_LANGUAGES = {"ru", "uk", "kk", "be"};
+
+    public static String defaultLanguageFor(Locale locale) {
+        if (locale == null) {
+            return "en";
+        }
+        String language = locale.getLanguage() == null ? "" : locale.getLanguage().toLowerCase();
+        for (String code : RUSSIAN_SPEAKING_LANGUAGES) {
+            if (code.equals(language)) {
+                return "ru";
+            }
+        }
+        String country = locale.getCountry() == null ? "" : locale.getCountry().toUpperCase();
+        for (String code : RUSSIAN_SPEAKING_COUNTRIES) {
+            if (code.equals(country)) {
+                return "ru";
+            }
+        }
+        return "en";
     }
 
     private String getLocaleString(Locale locale) {
