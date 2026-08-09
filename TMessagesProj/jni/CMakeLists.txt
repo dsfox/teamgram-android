@@ -37,6 +37,14 @@ else()
     enable_language(ASM_NASM)
 endif()
 
+# The MLS core: end-to-end encryption, one piece of Rust shared with iOS.
+# Built by crypto/build.sh in the 2bytes repository and copied here, because
+# that is the only way one library can serve two clients that live in two
+# repositories. Missing it fails the link loudly rather than quietly shipping a
+# client without encryption.
+add_library(mls STATIC IMPORTED)
+set_target_properties(mls PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/mls/${ANDROID_ABI}/libmls.a)
+
 add_library(avutil STATIC IMPORTED)
 set_target_properties(avutil PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavutil.a)
 
@@ -389,6 +397,7 @@ add_library(${NATIVE_LIB} SHARED
         genann.c
         secureid_ocr.cpp
         tde2e/bridge.cpp
+        mls_jni.c
 )
 
 target_compile_options(${NATIVE_LIB} PUBLIC
@@ -647,6 +656,7 @@ target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
 target_link_libraries(${NATIVE_LIB}
         -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
+        mls
         tgvoip
         tgcalls
         tgcalls_tp
