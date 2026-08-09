@@ -2413,7 +2413,7 @@
     <string name="PrivacyPolicy">Privacy Policy</string>
     <string name="TermsOfService">Terms of Service</string>
     <string name="TermsOfServiceLogin">By signing up,\nyou agree to the *Terms of Service*.</string>
-    <string name="PrivacyPolicyUrl">https://teamgram.net/privacy</string>
+    <string name="PrivacyPolicyUrl">https://2bytes.app/privacy</string>
     <string name="TermsOfServiceUrl">https://teamgram.net/tos</string>
     <string name="WebAppDisclaimerUrl">https://teamgram.net/tos/mini-apps</string>
     <string name="DeleteLocalizationTitle">Delete language pack</string>

@@ -677,6 +677,16 @@
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="org.telegram.messenger.chromecast.ChromecastOptionsProvider" />
 
+        <!-- Without this Firebase falls back to the launcher icon, which Android
+             then squares off into a plain blob in the status bar. Our stencil is
+             the same mark, drawn for a 24dp monochrome slot. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+
     </application>
 
 </manifest>
