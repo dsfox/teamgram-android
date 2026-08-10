@@ -98,6 +98,177 @@ public class TLRPCMls {
         }
     }
 
+    /** mls.ok ok:Bool = mls.Ok; */
+    public static class TL_mls_ok extends TLObject {
+        public static final int constructor = -1518331278;
+
+        public boolean ok;
+
+        public static TL_mls_ok TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_ok.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.ok", constructor));
+                }
+                return null;
+            }
+            TL_mls_ok result = new TL_mls_ok();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            ok = stream.readBool(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeBool(ok);
+        }
+    }
+
+    /**
+     * mls.sendWelcome user_id:long welcome:bytes = mls.Ok;
+     *
+     * A welcome is what lets a device into a conversation somebody started with
+     * it. It travels through its own method rather than as a message, so that
+     * nothing about a conversation starting has to be hidden from a chat list.
+     */
+    public static class TL_mls_sendWelcome extends TLObject {
+        public static final int constructor = -773834602;
+
+        public long user_id;
+        public byte[] welcome;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_ok.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(user_id);
+            stream.writeByteArray(welcome);
+        }
+    }
+
+    /** mls.welcome id:long from_id:long welcome:bytes = mls.Welcome; */
+    public static class TL_mls_welcome extends TLObject {
+        public static final int constructor = -180214709;
+
+        public long id;
+        public long from_id;
+        public byte[] welcome;
+
+        public static TL_mls_welcome TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_welcome.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.welcome", constructor));
+                }
+                return null;
+            }
+            TL_mls_welcome result = new TL_mls_welcome();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            id = stream.readInt64(exception);
+            from_id = stream.readInt64(exception);
+            welcome = stream.readByteArray(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(id);
+            stream.writeInt64(from_id);
+            stream.writeByteArray(welcome);
+        }
+    }
+
+    /** mls.welcomes welcomes:Vector&lt;mls.Welcome&gt; = mls.Welcomes; */
+    public static class TL_mls_welcomes extends TLObject {
+        public static final int constructor = -1921518262;
+
+        public java.util.ArrayList<TL_mls_welcome> welcomes = new java.util.ArrayList<>();
+
+        public static TL_mls_welcomes TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_welcomes.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.welcomes", constructor));
+                }
+                return null;
+            }
+            TL_mls_welcomes result = new TL_mls_welcomes();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            int magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int count = stream.readInt32(exception);
+            for (int i = 0; i < count; i++) {
+                TL_mls_welcome item = TL_mls_welcome.TLdeserialize(stream, stream.readInt32(exception), exception);
+                if (item == null) {
+                    return;
+                }
+                welcomes.add(item);
+            }
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(welcomes.size());
+            for (TL_mls_welcome welcome : welcomes) {
+                welcome.serializeToStream(stream);
+            }
+        }
+    }
+
+    /** mls.getWelcomes = mls.Welcomes; */
+    public static class TL_mls_getWelcomes extends TLObject {
+        public static final int constructor = -512239425;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_welcomes.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+        }
+    }
+
+    /**
+     * mls.confirmWelcomes ids:Vector&lt;long&gt; = mls.Ok;
+     *
+     * Sent only after the conversation is open and saved. Confirming on receipt
+     * would lose a conversation to a crash in between, and the loss would show
+     * up much later as messages that will not open.
+     */
+    public static class TL_mls_confirmWelcomes extends TLObject {
+        public static final int constructor = -1226029994;
+
+        public java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_ok.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(ids.size());
+            for (Long id : ids) {
+                stream.writeInt64(id);
+            }
+        }
+    }
+
     /** mls.keyPackages packages:Vector&lt;bytes&gt; = mls.KeyPackages; */
     public static class TL_mls_keyPackages extends TLObject {
         public static final int constructor = -548140819;
