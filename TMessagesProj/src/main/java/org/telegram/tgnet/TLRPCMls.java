@@ -269,6 +269,67 @@ public class TLRPCMls {
         }
     }
 
+    /**
+     * mls.content text:string entities:Vector&lt;MessageEntity&gt; = mls.Content;
+     *
+     * What actually gets encrypted. Not the text on its own: an entity - bold, a
+     * link, a mention - is a pair of offsets into the text, and beside a
+     * ciphertext those offsets point at nothing. Sent unchanged they arrive
+     * pointing past the end of what the other side reads back; dropped, an
+     * encrypted message silently loses its formatting.
+     *
+     * This never reaches the server - it is the plaintext - but it is written in
+     * TL and carries a constructor like everything else, because the other
+     * client has to read exactly what this one wrote.
+     */
+    public static class TL_mls_content extends TLObject {
+        public static final int constructor = 1833308697;
+
+        public String text = "";
+        public java.util.ArrayList<TLRPC.MessageEntity> entities = new java.util.ArrayList<>();
+
+        public static TL_mls_content TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_content.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.content", constructor));
+                }
+                return null;
+            }
+            TL_mls_content result = new TL_mls_content();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            text = stream.readString(exception);
+            int magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int count = stream.readInt32(exception);
+            for (int i = 0; i < count; i++) {
+                TLRPC.MessageEntity item = TLRPC.MessageEntity.TLdeserialize(stream, stream.readInt32(exception), exception);
+                if (item == null) {
+                    return;
+                }
+                entities.add(item);
+            }
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeString(text);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(entities.size());
+            for (TLRPC.MessageEntity entity : entities) {
+                entity.serializeToStream(stream);
+            }
+        }
+    }
+
     /** mls.keyPackages packages:Vector&lt;bytes&gt; = mls.KeyPackages; */
     public static class TL_mls_keyPackages extends TLObject {
         public static final int constructor = -548140819;
