@@ -2567,10 +2567,17 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void loadAppConfig() {
         loadAppConfig(true);
-        // Leaves a supply of key packages with the server, so somebody can
-        // start an encrypted conversation with this device while it is asleep.
-        // Invisible until they do - and without it, they could not.
-        MlsKeyPackages.getInstance(currentAccount).publish();
+        // Key packages are not published from here yet, on purpose.
+        //
+        // Publishing one is a promise: encrypt to me, I can read it. This client
+        // has the crypto but no receive path - it never collects a welcome and
+        // never decrypts - so the promise would be false, and worse than
+        // silence: an iPhone would encrypt to a device that can never read a
+        // single message, and the person here would see `mls1:...` for ever
+        // instead of merely an unprotected message.
+        //
+        // The call goes back the moment sending and receiving are wired up.
+        // MlsKeyPackages.getInstance(currentAccount).publish();
     }
 
     public void loadAppConfig(boolean force) {
