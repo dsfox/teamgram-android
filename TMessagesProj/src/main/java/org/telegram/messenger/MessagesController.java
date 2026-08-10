@@ -2567,6 +2567,10 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void loadAppConfig() {
         loadAppConfig(true);
+        // Leaves a supply of key packages with the server, so somebody can
+        // start an encrypted conversation with this device while it is asleep.
+        // Invisible until they do - and without it, they could not.
+        MlsKeyPackages.getInstance(currentAccount).publish();
     }
 
     public void loadAppConfig(boolean force) {
