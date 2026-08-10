@@ -397,6 +397,178 @@ public class TLRPCMls {
         }
     }
 
+    /**
+     * mls.media kind:int mime:string name:string size:long width:int height:int duration:int key:bytes iv:bytes thumb:bytes = mls.Media;
+     *
+     * Everything needed to show a file the server is holding as a blob of
+     * random bytes: what it is, how big it is on screen, and the key that turns
+     * it back into a picture. The server generates no preview for it and knows
+     * no filename, because both would describe what it is not allowed to see.
+     */
+    public static class TL_mls_media extends TLObject {
+        public static final int constructor = 859009216;
+
+        /** 0 file, 1 picture, 2 video, 3 voice, 4 round video, 5 animation. */
+        public int kind;
+        public String mime = "";
+        public String name = "";
+        public long size;
+        public int width;
+        public int height;
+        public int duration;
+        public byte[] key = new byte[0];
+        public byte[] iv = new byte[0];
+        /** The blurred placeholder shown until the file has come down. */
+        public byte[] thumb = new byte[0];
+
+        public static TL_mls_media TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_media.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.media", constructor));
+                }
+                return null;
+            }
+            TL_mls_media result = new TL_mls_media();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            kind = stream.readInt32(exception);
+            mime = stream.readString(exception);
+            name = stream.readString(exception);
+            size = stream.readInt64(exception);
+            width = stream.readInt32(exception);
+            height = stream.readInt32(exception);
+            duration = stream.readInt32(exception);
+            key = stream.readByteArray(exception);
+            iv = stream.readByteArray(exception);
+            thumb = stream.readByteArray(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(kind);
+            stream.writeString(mime);
+            stream.writeString(name);
+            stream.writeInt64(size);
+            stream.writeInt32(width);
+            stream.writeInt32(height);
+            stream.writeInt32(duration);
+            stream.writeByteArray(key);
+            stream.writeByteArray(iv);
+            stream.writeByteArray(thumb);
+        }
+    }
+
+    /** mls.forward from_id:long from_name:string date:int = mls.Forward; */
+    public static class TL_mls_forward extends TLObject {
+        public static final int constructor = 940936156;
+
+        /** Zero when the account is hidden and only a name is left. */
+        public long from_id;
+        public String from_name = "";
+        public int date;
+
+        public static TL_mls_forward TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_forward.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.forward", constructor));
+                }
+                return null;
+            }
+            TL_mls_forward result = new TL_mls_forward();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            from_id = stream.readInt64(exception);
+            from_name = stream.readString(exception);
+            date = stream.readInt32(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(from_id);
+            stream.writeString(from_name);
+            stream.writeInt32(date);
+        }
+    }
+
+    /**
+     * mls.message flags:# text:string entities:Vector&lt;MessageEntity&gt; forward:flags.0?mls.Forward media:flags.1?mls.Media = mls.Content;
+     *
+     * What goes inside the ciphertext now that a message can be more than text:
+     * the text with its formatting, where it was forwarded from, and what file
+     * it carries. The two older shapes - mls.content and mls.forwarded - are
+     * still read, because they are in people's chats.
+     */
+    public static class TL_mls_message extends TLObject {
+        public static final int constructor = 995434673;
+
+        public int flags;
+        public String text = "";
+        public java.util.ArrayList<TLRPC.MessageEntity> entities = new java.util.ArrayList<>();
+        public TL_mls_forward forward;
+        public TL_mls_media media;
+
+        public static TL_mls_message TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_message.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.message", constructor));
+                }
+                return null;
+            }
+            TL_mls_message result = new TL_mls_message();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            flags = stream.readInt32(exception);
+            text = stream.readString(exception);
+            int magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int count = stream.readInt32(exception);
+            for (int i = 0; i < count; i++) {
+                TLRPC.MessageEntity item = TLRPC.MessageEntity.TLdeserialize(stream, stream.readInt32(exception), exception);
+                if (item == null) {
+                    return;
+                }
+                entities.add(item);
+            }
+            if ((flags & 1) != 0) {
+                forward = TL_mls_forward.TLdeserialize(stream, stream.readInt32(exception), exception);
+            }
+            if ((flags & 2) != 0) {
+                media = TL_mls_media.TLdeserialize(stream, stream.readInt32(exception), exception);
+            }
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(flags);
+            stream.writeString(text);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(entities.size());
+            for (TLRPC.MessageEntity entity : entities) {
+                entity.serializeToStream(stream);
+            }
+            if ((flags & 1) != 0) {
+                forward.serializeToStream(stream);
+            }
+            if ((flags & 2) != 0) {
+                media.serializeToStream(stream);
+            }
+        }
+    }
+
     /** mls.keyPackages packages:Vector&lt;bytes&gt; = mls.KeyPackages; */
     public static class TL_mls_keyPackages extends TLObject {
         public static final int constructor = -548140819;
