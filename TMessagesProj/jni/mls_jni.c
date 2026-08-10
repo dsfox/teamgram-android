@@ -148,6 +148,35 @@ Java_org_telegram_messenger_MlsCore_decrypt(JNIEnv *env, jclass class, jlong gro
     return take(env, out);
 }
 
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_exportIdentity(JNIEnv *env, jclass class, jlong identity) {
+    return take(env, mls_identity_export((const Identity *) from_handle(identity)));
+}
+
+JNIEXPORT jlong JNICALL
+Java_org_telegram_messenger_MlsCore_openIdentity(JNIEnv *env, jclass class, jbyteArray state) {
+    jsize len = (*env)->GetArrayLength(env, state);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, state, NULL);
+    Identity *identity = mls_identity_open((const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, state, bytes, JNI_ABORT);
+    return to_handle(identity);
+}
+
+JNIEXPORT jlong JNICALL
+Java_org_telegram_messenger_MlsCore_groupLoad(JNIEnv *env, jclass class, jlong identity, jbyteArray id) {
+    jsize len = (*env)->GetArrayLength(env, id);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, id, NULL);
+    Group *group = mls_group_load((const Identity *) from_handle(identity),
+                                  (const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, id, bytes, JNI_ABORT);
+    return to_handle(group);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_groupId(JNIEnv *env, jclass class, jlong group) {
+    return take(env, mls_group_id((const Group *) from_handle(group)));
+}
+
 JNIEXPORT jint JNICALL
 Java_org_telegram_messenger_MlsCore_memberCount(JNIEnv *env, jclass class, jlong group) {
     return (jint) mls_group_members((const Group *) from_handle(group));

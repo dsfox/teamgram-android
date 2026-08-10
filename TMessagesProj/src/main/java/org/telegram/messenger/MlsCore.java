@@ -45,6 +45,14 @@ public final class MlsCore {
 
     private static native byte[] decrypt(long group, long identity, byte[] ciphertext);
 
+    private static native byte[] exportIdentity(long identity);
+
+    private static native long openIdentity(byte[] state);
+
+    private static native long groupLoad(long identity, byte[] id);
+
+    private static native byte[] groupId(long group);
+
     private static native int memberCount(long group);
 
     private static native long epoch(long group);
@@ -79,6 +87,36 @@ public final class MlsCore {
             return result;
         }
 
+        /**
+         * Everything this device needs to carry on after the app is closed: its
+         * key, its conversations, and where each ratchet had got to. Without
+         * storing this, closing the app would leave every conversation
+         * unreadable - by design and for good.
+         *
+         * It holds the keys to everything this device can read, so it belongs
+         * wherever the client keeps its most guarded things.
+         */
+        public byte[] export() throws MlsException {
+            byte[] state = exportIdentity(this.handle);
+            if (state == null) {
+                throw failure("nothing was saved");
+            }
+            return state;
+        }
+
+        /** Reads a device back from what export() wrote. */
+        public static Identity open(byte[] state) throws MlsException {
+            long handle = openIdentity(state);
+            if (handle == 0) {
+                throw failure("the device did not come back");
+            }
+            return new Identity(handle);
+        }
+
+        private Identity(long handle) {
+            this.handle = handle;
+        }
+
         @Override
         public void close() {
             identityFree(this.handle);
@@ -100,6 +138,28 @@ public final class MlsCore {
                 throw failure("no group was created");
             }
             return new Group(handle);
+        }
+
+        /**
+         * Reopens a conversation this device was already in, or null when this
+         * device does not know it - an answer rather than a failure, since a
+         * chat can exist on the server and not on this phone.
+         */
+        public static Group load(Identity identity, byte[] id) {
+            long handle = groupLoad(identity.handle, id);
+            return handle == 0 ? null : new Group(handle);
+        }
+
+        /**
+         * Which conversation this is, to keep beside the chat so that it can be
+         * reopened after a restart.
+         */
+        public byte[] id() throws MlsException {
+            byte[] id = groupId(this.handle);
+            if (id == null) {
+                throw failure("the conversation has no id");
+            }
+            return id;
         }
 
         /** Joins a conversation this device was invited into. */
