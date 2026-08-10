@@ -330,6 +330,73 @@ public class TLRPCMls {
         }
     }
 
+    /**
+     * mls.forwarded text:string entities:Vector&lt;MessageEntity&gt; from_id:long from_name:string date:int = mls.Content;
+     *
+     * The same thing plus who wrote it first. A forward cannot be one on the
+     * wire: the server copies a message by its id, and the copy lands in a
+     * conversation whose members were never able to read it. So an encrypted
+     * forward is sent as a new message that says inside itself where it came
+     * from, and the other side puts the "forwarded from" back.
+     */
+    public static class TL_mls_forwarded extends TLObject {
+        public static final int constructor = 1144791349;
+
+        public String text = "";
+        public java.util.ArrayList<TLRPC.MessageEntity> entities = new java.util.ArrayList<>();
+        /** Zero when the account is hidden and only a name is left. */
+        public long from_id;
+        public String from_name = "";
+        public int date;
+
+        public static TL_mls_forwarded TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_forwarded.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.forwarded", constructor));
+                }
+                return null;
+            }
+            TL_mls_forwarded result = new TL_mls_forwarded();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            text = stream.readString(exception);
+            int magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int count = stream.readInt32(exception);
+            for (int i = 0; i < count; i++) {
+                TLRPC.MessageEntity item = TLRPC.MessageEntity.TLdeserialize(stream, stream.readInt32(exception), exception);
+                if (item == null) {
+                    return;
+                }
+                entities.add(item);
+            }
+            from_id = stream.readInt64(exception);
+            from_name = stream.readString(exception);
+            date = stream.readInt32(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeString(text);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(entities.size());
+            for (TLRPC.MessageEntity entity : entities) {
+                entity.serializeToStream(stream);
+            }
+            stream.writeInt64(from_id);
+            stream.writeString(from_name);
+            stream.writeInt32(date);
+        }
+    }
+
     /** mls.keyPackages packages:Vector&lt;bytes&gt; = mls.KeyPackages; */
     public static class TL_mls_keyPackages extends TLObject {
         public static final int constructor = -548140819;
