@@ -82,6 +82,30 @@ public class TLRPCMls {
         }
     }
 
+    /**
+     * mls.setRecoverySecret secret:string = mls.Ok;
+     *
+     * The way back into an account, registered by the device that owns it. What
+     * travels is a one-way derivation of the recovery phrase; the words are made
+     * on the device and never leave it. The server used to make them and send
+     * them as a message, which left every one of them in the message table in
+     * plain text - and a phrase signs in without a code.
+     */
+    public static class TL_mls_setRecoverySecret extends TLObject {
+        public static final int constructor = -369099376;
+
+        public String secret = "";
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_ok.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeString(secret);
+        }
+    }
+
     /** mls.claimKeyPackages user_id:long = mls.KeyPackages; */
     public static class TL_mls_claimKeyPackages extends TLObject {
         public static final int constructor = 88879177;
