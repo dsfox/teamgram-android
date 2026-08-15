@@ -731,7 +731,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         // Of the four entries here, three led to Telegram: a support chat that is
         // not ours, their FAQ and their features page. The policy is the one that
-        // belongs, and it now points at 2bytes.app/privacy - the stores want it
+        // belongs, and it now points at ice9.app/privacy - the stores want it
         // reachable from inside the app, so hiding the section outright would
         // cost more than it saves.
         items.add(UItem.asHeader(getString(R.string.SettingsHelp)));

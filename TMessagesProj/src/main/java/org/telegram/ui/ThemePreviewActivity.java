@@ -1057,7 +1057,7 @@ public class ThemePreviewActivity extends BaseFragment implements DownloadContro
         }
 
         if (messagesAdapter.showSecretMessages) {
-            actionBar2.setTitle("2bytes Beta Chat");
+            actionBar2.setTitle("ice9 Beta Chat");
             actionBar2.setSubtitle(LocaleController.formatPluralString("Members", 505));
         } else {
             if (screenType == SCREEN_TYPE_CHANGE_BACKGROUND) {

@@ -97,8 +97,8 @@ public class FilesMigrationService extends Service {
         }
 
         File newPath = ApplicationLoader.applicationContext.getExternalFilesDir(null);
-        File telegramPath = new File(newPath, "2bytes");
-        File oldPath = new File(path, "2bytes");
+        File telegramPath = new File(newPath, "ice9");
+        File oldPath = new File(path, "ice9");
 
         totalFilesCount = getFilesCount(oldPath);
 
@@ -204,7 +204,7 @@ public class FilesMigrationService extends Service {
                     }
                 }
             }
-            File oldDirectory = new File(path, "2bytes");
+            File oldDirectory = new File(path, "ice9");
             hasOldFolder = oldDirectory.exists();
         }
         if (hasOldFolder) {

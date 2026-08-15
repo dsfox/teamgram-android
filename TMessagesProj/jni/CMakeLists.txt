@@ -38,7 +38,7 @@ else()
 endif()
 
 # The MLS core: end-to-end encryption, one piece of Rust shared with iOS.
-# Built by crypto/build.sh in the 2bytes repository and copied here, because
+# Built by crypto/build.sh in the ice9 repository and copied here, because
 # that is the only way one library can serve two clients that live in two
 # repositories. Missing it fails the link loudly rather than quietly shipping a
 # client without encryption.
