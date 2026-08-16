@@ -287,6 +287,177 @@ public class MlsRuntime {
     }
 
     // ----------------------------------------------------------------------
+    // Writing
+    // ----------------------------------------------------------------------
+
+    /** Peers this device asked about and found no device for, and when. Asked
+     *  again after a while rather than before every message. */
+    private final Map<Long, Long> withoutDevices = new HashMap<>();
+
+    private final java.util.Set<Long> starting = new java.util.HashSet<>();
+
+    /**
+     * Whether it makes any sense to encrypt to this peer at all.
+     *
+     * Only conversations between two people. A group or a channel has no device
+     * to encrypt to, so every attempt would cost a round trip and end in the
+     * clear anyway - once per message, for ever, because nothing is remembered.
+     *
+     * Saved Messages is out for a harder reason: a conversation with oneself
+     * would be one where every message is written by the only person who cannot
+     * read it back, and the notes would go in unreadable.
+     */
+    private boolean worthEncrypting(long peerId) {
+        if (peerId <= 0 || peerId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+            return false;
+        }
+        Long asked = withoutDevices.get(peerId);
+        return asked == null || System.currentTimeMillis() - asked > 600_000L;
+    }
+
+    /**
+     * Turns a message into what travels, or null when this conversation cannot
+     * carry it - and then the caller sends as it always did, in the clear.
+     *
+     * Sending in the clear rather than refusing to send is the whole shape of
+     * this: a messenger that will not send is worse than one that sometimes
+     * cannot protect, and it means this can ship without betting the product on
+     * it.
+     *
+     * The formatting goes inside rather than beside it. An entity is a pair of
+     * offsets into the text, and next to a ciphertext they point at nothing.
+     */
+    public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities) {
+        if (text == null || text.isEmpty() || !worthEncrypting(peerId)) {
+            return null;
+        }
+        loadConversations();
+        byte[] groupId;
+        synchronized (this) {
+            groupId = groupIdByPeer.get(peerId);
+        }
+        if (groupId == null) {
+            // Nothing yet. Started now so the next message is protected; this
+            // one goes as it always did.
+            ensureConversation(peerId);
+            return null;
+        }
+
+        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+            if (group == null) {
+                return null;
+            }
+            try {
+                TLRPCMls.TL_mls_content content = new TLRPCMls.TL_mls_content();
+                content.text = text;
+                if (entities != null) {
+                    content.entities.addAll(entities);
+                }
+                SerializedData out = new SerializedData();
+                content.serializeToStream(out);
+
+                byte[] ciphertext = group.encrypt(identity, out.toByteArray());
+                // The ratchet has moved, so it is written back at once. Saving
+                // late is the same as not saving: the app can be killed at any
+                // moment, and what is lost is the ability to read.
+                MlsKeyPackages.getInstance(currentAccount).save(identity);
+                return CIPHERTEXT_PREFIX + Base64.encodeToString(ciphertext, Base64.NO_WRAP);
+            } finally {
+                group.close();
+            }
+        } catch (MlsCore.MlsException e) {
+            FileLog.e("mls: cannot encrypt to " + peerId + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Builds a conversation with this peer if there is not one, so that the
+     * messages after this one are protected.
+     *
+     * Every device of theirs at once: there is one welcome and it has to serve
+     * all of them.
+     */
+    public void ensureConversation(long peerId) {
+        if (!worthEncrypting(peerId)) {
+            return;
+        }
+        loadConversations();
+        synchronized (this) {
+            if (groupIdByPeer.containsKey(peerId) || starting.contains(peerId)) {
+                return;
+            }
+            starting.add(peerId);
+        }
+
+        TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
+        request.user_id = peerId;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+            if (error != null || !(response instanceof TLRPCMls.TL_mls_keyPackages)) {
+                synchronized (MlsRuntime.this) {
+                    starting.remove(peerId);
+                }
+                FileLog.e("mls: no key packages for " + peerId
+                        + (error != null ? ": " + error.text : ""));
+                return;
+            }
+            TLRPCMls.TL_mls_keyPackages claimed = (TLRPCMls.TL_mls_keyPackages) response;
+            if (claimed.packages.isEmpty()) {
+                // Not a failure: somebody whose client does not do this yet, or
+                // a device that has not published. Remembered so the next
+                // message does not pay for the same round trip.
+                synchronized (MlsRuntime.this) {
+                    starting.remove(peerId);
+                    withoutDevices.put(peerId, System.currentTimeMillis());
+                }
+                return;
+            }
+            Utilities.globalQueue.postRunnable(() -> begin(peerId, claimed.packages));
+        });
+    }
+
+    private void begin(long peerId, List<byte[]> keyPackages) {
+        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+            MlsCore.Group group = MlsCore.Group.create(identity);
+            try {
+                MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
+                byte[] groupId = group.id();
+
+                // Saved before the welcome is sent. A welcome delivered for a
+                // conversation this device has forgotten is one the other side
+                // can join and nobody can talk in.
+                MlsKeyPackages.getInstance(currentAccount).save(identity);
+                remember(peerId, groupId);
+
+                TLRPCMls.TL_mls_sendWelcome send = new TLRPCMls.TL_mls_sendWelcome();
+                send.user_id = peerId;
+                send.welcome = invitation.welcome;
+                ConnectionsManager.getInstance(currentAccount).sendRequest(send, (response, error) -> {
+                    synchronized (MlsRuntime.this) {
+                        starting.remove(peerId);
+                    }
+                    if (error != null) {
+                        // The conversation exists here and they were never
+                        // invited. Sending in the clear is right: a message they
+                        // cannot read is worse than one the server can.
+                        FileLog.e("mls: the welcome for " + peerId + " was not delivered");
+                        return;
+                    }
+                    FileLog.d("mls: started conversation " + shortId(groupId) + " with " + peerId);
+                });
+            } finally {
+                group.close();
+            }
+        } catch (MlsCore.MlsException e) {
+            synchronized (this) {
+                starting.remove(peerId);
+            }
+            FileLog.e("mls: cannot start a conversation with " + peerId + ": " + e.getMessage());
+        }
+    }
+
+    // ----------------------------------------------------------------------
     // The welcomes that let this device in
     // ----------------------------------------------------------------------
 

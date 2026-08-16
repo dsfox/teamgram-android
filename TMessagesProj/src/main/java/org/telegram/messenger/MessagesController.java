@@ -2567,23 +2567,20 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void loadAppConfig() {
         loadAppConfig(true);
-        // Key packages are not published from here yet, on purpose.
+        // Publishing a key package is a promise: encrypt to me, I can read it.
+        // It was left out while this client had the crypto and no receive path,
+        // because a false promise is worse than silence - an iPhone would
+        // encrypt to a device that could never read a single message, and the
+        // person here would see `mls1:...` for ever instead of merely an
+        // unprotected message.
         //
-        // Publishing one is a promise: encrypt to me, I can read it. This client
-        // has the crypto but no receive path - it never collects a welcome and
-        // never decrypts - so the promise would be false, and worse than
-        // silence: an iPhone would encrypt to a device that can never read a
-        // single message, and the person here would see `mls1:...` for ever
-        // instead of merely an unprotected message.
-        //
-        // The call goes back the moment sending and receiving are wired up.
-        // MlsKeyPackages.getInstance(currentAccount).publish();
+        // Both halves are wired now, so the promise is one this client keeps.
+        MlsKeyPackages.getInstance(currentAccount).publish();
 
-        // Receiving is wired up, and it starts here: the invitations waiting on
-        // the server are what let this device into conversations somebody else
-        // began. Asked for at start rather than only when a message arrives,
-        // because a welcome sent while this phone was off has nothing to arrive
-        // behind.
+        // And the invitations waiting on the server, which are what let this
+        // device into conversations somebody else began. Asked for at start
+        // rather than only when a message arrives, because a welcome sent while
+        // this phone was off has nothing to arrive behind.
         MlsRuntime.getInstance(currentAccount).collectWelcomes();
     }
 

@@ -4739,7 +4739,20 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     } else {
                         final TLRPC.TL_messages_sendMessage reqSend = new TLRPC.TL_messages_sendMessage();
 
-                        reqSend.message = message;
+                        // What travels is the ciphertext; what stays in this
+                        // chat is the words. The formatting travels inside the
+                        // ciphertext, because an entity is a pair of offsets
+                        // into the text and beside a ciphertext they point at
+                        // nothing - so the entities are dropped from the request
+                        // rather than sent pointing into base64.
+                        //
+                        // Null means this conversation cannot carry it, and then
+                        // the message goes as it always did. A messenger that
+                        // will not send is worse than one that sometimes cannot
+                        // protect.
+                        String carried = MlsRuntime.getInstance(currentAccount)
+                                .encrypt(peer, message, entities);
+                        reqSend.message = carried != null ? carried : message;
                         reqSend.clear_draft = retryMessageObject == null;
                         reqSend.silent = newMsg.silent;
                         reqSend.peer = sendToPeer;
@@ -4769,7 +4782,11 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         if (!searchLinks) {
                             reqSend.no_webpage = true;
                         }
-                        if (entities != null && !entities.isEmpty()) {
+                        // Not when the text is a ciphertext: the offsets would
+                        // point into base64, and the server would be told where
+                        // the bold began in a message it cannot read. They went
+                        // inside instead.
+                        if (carried == null && entities != null && !entities.isEmpty()) {
                             reqSend.entities = entities;
                             reqSend.flags |= 8;
                         }
