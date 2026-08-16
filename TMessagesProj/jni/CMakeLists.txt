@@ -275,6 +275,26 @@ set_target_properties(rlottie PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(rlottie PUBLIC
         HAVE_PTHREAD NDEBUG)
+
+# rlottie's NEON path calls hand-written pixman assembly, and that assembly is
+# not in this build: the NDK dropped GNU binutils in r23, and clang's integrated
+# assembler rejects the pixman macros. That was decided in #30, which also says
+# rlottie has a C path for both entry points, so the only cost is slower
+# stickers.
+#
+# What the decision missed is that the branch is chosen by __ARM_NEON__, which
+# the compiler defines by itself on armeabi-v7a. So on that ABI the NEON path
+# was still compiled, still called pixman_composite_src_n_8888_asm_neon, and the
+# link failed on a symbol nobody had built. arm64 was fine because the guard
+# there is __ARM64_NEON__, which is ours and is not set.
+#
+# Undone for the two files that choose between the two paths, and only those:
+# __ARM_NEON__ elsewhere is a real answer to a real question, and taking it away
+# from libyuv would cost speed for nothing.
+set_source_files_properties(
+        rlottie/src/vector/vdrawhelper.cpp
+        rlottie/src/vector/vdrawhelper_neon.cpp
+        PROPERTIES COMPILE_OPTIONS "-U__ARM_NEON__")
 target_include_directories(rlottie PUBLIC
         ./
         rlottie/inc
@@ -402,6 +422,31 @@ add_library(${NATIVE_LIB} SHARED
 
 target_compile_options(${NATIVE_LIB} PUBLIC
         -ffast-math -Os -funroll-loops -ffast-math -fno-strict-aliasing -fno-math-errno)
+
+# opusfile calls fseeko and ftello, and on a 32-bit ABI bionic only declares
+# those when _FILE_OFFSET_BITS is 64 *and* the platform is API 24 or later. Ours
+# is android-21, so armeabi-v7a and x86 stopped with "call to undeclared
+# function 'fseeko'" while arm64 built - on a 64-bit ABI off_t is already 64
+# bits, so the declaration is unconditional. That is issue #46, and it is why
+# only one of the three architectures has built since August.
+#
+# Nobody asked for 64-bit offsets here. The flag arrives from tgvoip, which
+# declares _FILE_OFFSET_BITS=64 PUBLIC and so hands it to everything that links
+# it; rnnoise declares the same list PRIVATE, which is what PUBLIC should have
+# been. It is not changed there because the main library does include webrtc
+# headers, and some of them do put off_t in a struct - so narrowing it globally
+# would trade a build error for a size mismatch nobody would see.
+#
+# Undone for these four files instead. It is safe because off_t does not cross
+# out of them: opusfile.h has none, audio.c has none, and stream.c uses it only
+# as a cast at the call. The cost is that a file over 2GB could not be seeked,
+# which is a voice message of about eleven days.
+set_source_files_properties(
+        opus/opusfile/info.c
+        opus/opusfile/internal.c
+        opus/opusfile/opusfile.c
+        opus/opusfile/stream.c
+        PROPERTIES COMPILE_OPTIONS "-U_FILE_OFFSET_BITS")
 
 target_compile_definitions(${NATIVE_LIB} PUBLIC
         BSD=1 NULL=0 SOCKLEN_T=socklen_t ANDROID_NDK DISABLE_IMPORTGL AVOID_TABLES ANDROID_TILE_BASED_DECODE __STDC_CONSTANT_MACROS ANDROID_ARMV6_IDCT OPUS_BUILD FIXED_POINT USE_ALLOCA restrict= __EMX__ LOCALE_NOT_USED HAVE_LRINT HAVE_LRINTF)
