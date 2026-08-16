@@ -2787,6 +2787,20 @@ void ConnectionsManager::processRequestQueue(uint32_t connectionTypes, uint32_t 
                     }
                     allDc.push_back(datacenter.first);
                 }
+                // There may be nowhere else to go. Upstream is written for a
+                // network of several datacenters, and ours is one: the loop
+                // above skips the current one, so the list comes back empty,
+                // and `allDc[index % 0]` walked off it and killed the app on
+                // the networking thread. It happened on the first request that
+                // timed out - which is every sign-in on a slow connection - so
+                // the client returned to the welcome screen with nothing said.
+                //
+                // Staying put is the right answer as well as the safe one: a
+                // request that timed out against the only server there is will
+                // not do better against the same server named differently.
+                if (allDc.empty()) {
+                    if (LOGS_ENABLED) DEBUG_D("request timed out and there is no other datacenter to try");
+                } else {
                 uint8_t index;
                 RAND_bytes(&index, 1);
                 datacenterId = allDc[index % allDc.size()];
@@ -2795,6 +2809,7 @@ void ConnectionsManager::processRequestQueue(uint32_t connectionTypes, uint32_t 
                     request->datacenterId = datacenterId;
                 } else {
                     currentDatacenterId = datacenterId;
+                }
                 }
             }
         }
