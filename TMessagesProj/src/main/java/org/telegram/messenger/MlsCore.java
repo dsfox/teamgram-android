@@ -41,6 +41,10 @@ public final class MlsCore {
 
     private static native byte[][] addMember(long group, long identity, byte[] keyPackage);
 
+    private static native byte[][] addMembers(long group, long identity, byte[] packed);
+
+    private static native byte[] messageGroupId0(byte[] ciphertext);
+
     private static native byte[] encrypt(long group, long identity, byte[] plaintext);
 
     private static native byte[] decrypt(long group, long identity, byte[] ciphertext);
@@ -60,6 +64,24 @@ public final class MlsCore {
     private static MlsException failure(String fallback) {
         String reason = lastError();
         return new MlsException(reason == null || reason.isEmpty() ? fallback : reason);
+    }
+
+    /**
+     * Which conversation this ciphertext belongs to, without opening it, or
+     * null when it says nothing usable.
+     *
+     * A message is read with the conversation it names rather than the one this
+     * device keeps for whoever sent it, because those are not always the same.
+     * Every reinstall makes them differ: the phone that was set up again has
+     * lost every group it was in and starts a new one, while the other side
+     * goes on sending in the old one until the welcome arrives. Picking by
+     * person there opens neither.
+     */
+    public static byte[] messageGroupId(byte[] ciphertext) {
+        if (ciphertext == null || ciphertext.length == 0) {
+            return null;
+        }
+        return messageGroupId0(ciphertext);
     }
 
     /** One device's identity: the key it signs with and the name it goes by. */
@@ -180,6 +202,44 @@ public final class MlsCore {
             byte[][] pair = MlsCore.addMember(this.handle, identity.handle, keyPackage);
             if (pair == null || pair.length != 2) {
                 throw failure("the member was not added");
+            }
+            return new Invitation(pair[0], pair[1]);
+        }
+
+        /**
+         * Adds every device of theirs at once.
+         *
+         * One welcome comes back and it lets all of them in. Added one at a
+         * time this kept the last welcome and threw the rest away, so which of
+         * their phones could join was chance - and for somebody who has set a
+         * phone up more than once, most of those rows belong to devices that no
+         * longer exist. Both sides then held a conversation the other was not
+         * in.
+         */
+        public Invitation addMembers(Identity identity, java.util.List<byte[]> keyPackages)
+                throws MlsException {
+            // Length first, four bytes, most significant first - the shape the
+            // other side of the boundary reads. One buffer rather than an array
+            // of pointers, because that is one thing to keep alive instead of
+            // two and the caller is a garbage-collected language.
+            int total = 0;
+            for (byte[] each : keyPackages) {
+                total += 4 + each.length;
+            }
+            byte[] packed = new byte[total];
+            int at = 0;
+            for (byte[] each : keyPackages) {
+                packed[at] = (byte) (each.length >>> 24);
+                packed[at + 1] = (byte) (each.length >>> 16);
+                packed[at + 2] = (byte) (each.length >>> 8);
+                packed[at + 3] = (byte) each.length;
+                System.arraycopy(each, 0, packed, at + 4, each.length);
+                at += 4 + each.length;
+            }
+
+            byte[][] pair = MlsCore.addMembers(this.handle, identity.handle, packed);
+            if (pair == null || pair.length != 2) {
+                throw failure("the members were not added");
             }
             return new Invitation(pair[0], pair[1]);
         }

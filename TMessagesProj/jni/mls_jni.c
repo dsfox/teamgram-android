@@ -186,3 +186,58 @@ JNIEXPORT jlong JNICALL
 Java_org_telegram_messenger_MlsCore_epoch(JNIEnv *env, jclass class, jlong group) {
     return (jlong) mls_group_epoch((const Group *) from_handle(group));
 }
+
+// Which conversation a ciphertext belongs to, without opening it.
+//
+// A message is read with the conversation it names rather than the one this
+// device keeps for whoever sent it, because those are not always the same: a
+// phone set up again has lost every group it was in and starts a new one, while
+// the other side goes on sending in the old one until the welcome arrives.
+// Picking by person there opens neither.
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_messageGroupId0(JNIEnv *env, jclass class, jbyteArray ciphertext) {
+    jsize len = (*env)->GetArrayLength(env, ciphertext);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, ciphertext, NULL);
+    struct MlsBuffer out = mls_message_group_id((const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, ciphertext, bytes, JNI_ABORT);
+    return take(env, out);
+}
+
+// Every device of theirs at once. One welcome comes back and it lets all of
+// them in; added one at a time, only the last welcome survives and which of
+// their phones can join is chance.
+//
+// The packages arrive already packed - each preceded by its length as four
+// bytes, most significant first - because that is one thing to keep alive
+// across the boundary instead of two.
+JNIEXPORT jobjectArray JNICALL
+Java_org_telegram_messenger_MlsCore_addMembers(JNIEnv *env, jclass class, jlong group,
+                                               jlong identity, jbyteArray packed) {
+    jsize len = (*env)->GetArrayLength(env, packed);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, packed, NULL);
+
+    struct MlsBuffer commit = {NULL, 0};
+    struct MlsBuffer welcome = mls_group_add_members((Group *) from_handle(group),
+                                                    (const Identity *) from_handle(identity),
+                                                    (const unsigned char *) bytes, (size_t) len,
+                                                    &commit);
+    (*env)->ReleaseByteArrayElements(env, packed, bytes, JNI_ABORT);
+
+    if (welcome.ptr == NULL) {
+        mls_buffer_free(commit);
+        return NULL;
+    }
+
+    jclass arrayClass = (*env)->FindClass(env, "[B");
+    jobjectArray result = (*env)->NewObjectArray(env, 2, arrayClass, NULL);
+    if (result == NULL) {
+        mls_buffer_free(commit);
+        mls_buffer_free(welcome);
+        return NULL;
+    }
+    // Commit first, then welcome - the order addMember already uses, so the
+    // caller reads both the same way whichever it called.
+    (*env)->SetObjectArrayElement(env, result, 0, take(env, commit));
+    (*env)->SetObjectArrayElement(env, result, 1, take(env, welcome));
+    return result;
+}
