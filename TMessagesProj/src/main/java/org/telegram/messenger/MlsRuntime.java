@@ -224,6 +224,49 @@ public class MlsRuntime {
         }
     }
 
+    /** What a message that cannot be opened yet shows instead of its ciphertext.
+     *  A lock rather than mls1:AAEAAh..., because the second is in the chat, the
+     *  chat list and the search results, and it means nothing to anybody. */
+    public static final String LOCKED = "🔒";
+
+    /**
+     * Opens a message where it stands, before anything stores or shows it.
+     *
+     * Done this early, and by rewriting the text in place, because the text is
+     * read by more than the chat: the chat list shows the last one, search
+     * indexes it, a notification quotes it. Decrypting at each of those would be
+     * four chances to miss one.
+     *
+     * A message that cannot be opened yet is usually one that overtook the
+     * welcome letting this device into the conversation - the two travel by
+     * different routes. It gets the lock, and the ciphertext stays in the
+     * message so a later pass can read it once the welcome has arrived.
+     */
+    public boolean open(TLRPC.Message message) {
+        if (message == null || !isCiphertext(message.message)) {
+            return false;
+        }
+        Opened opened = read(message.message);
+        if (opened.reading == Reading.CONTENT) {
+            message.message = opened.text;
+            if (opened.entities != null && !opened.entities.isEmpty()) {
+                message.entities = opened.entities;
+                message.flags |= 128;
+            }
+            return true;
+        }
+        // Not readable here, and not readable *yet*: usually the message
+        // overtook the welcome that lets this device into the conversation,
+        // because the two travel by different routes.
+        //
+        // So the ciphertext stays exactly where it is. Writing the lock over it
+        // would be the last time anybody could read the message - the stored
+        // text is all there is, and a pass after the welcome arrives would find
+        // a lock and nothing to open. The lock belongs where a message is drawn,
+        // over a ciphertext that is still underneath it.
+        return false;
+    }
+
     /**
      * The plaintext is not the text. It is a TL object holding the text and its
      * formatting, because an entity is a pair of offsets into the text and next

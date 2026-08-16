@@ -2578,6 +2578,13 @@ public class MessagesController extends BaseController implements NotificationCe
         //
         // The call goes back the moment sending and receiving are wired up.
         // MlsKeyPackages.getInstance(currentAccount).publish();
+
+        // Receiving is wired up, and it starts here: the invitations waiting on
+        // the server are what let this device into conversations somebody else
+        // began. Asked for at start rather than only when a message arrives,
+        // because a welcome sent while this phone was off has nothing to arrive
+        // behind.
+        MlsRuntime.getInstance(currentAccount).collectWelcomes();
     }
 
     public void loadAppConfig(boolean force) {
@@ -17665,6 +17672,19 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 if (message instanceof TLRPC.TL_messageEmpty) {
                     continue;
+                }
+                // Opened here, before anything stores it or shows it, because
+                // the text is read by more than the chat: the chat list shows
+                // the last one, search indexes it, a notification quotes it.
+                // Decrypting at each of those would be four chances to miss one.
+                //
+                // One that cannot be opened is left exactly as it is - see
+                // MlsRuntime.open - and asked for again once the welcome that
+                // lets this device into the conversation has arrived.
+                if (MlsRuntime.isCiphertext(message.message)) {
+                    if (!MlsRuntime.getInstance(currentAccount).open(message)) {
+                        MlsRuntime.getInstance(currentAccount).collectWelcomes();
+                    }
                 }
                 if (newMessageCallback != null && newMessageCallback.onMessageReceived(message)) {
                     newMessageCallback = null;
