@@ -639,4 +639,59 @@ public class TLRPCMls {
             }
         }
     }
+
+    /**
+     * mls.documentEncrypted flags:# id:long access_hash:long file_reference:bytes date:int mime_type:string size:long thumbs:flags.0?Vector&lt;PhotoSize&gt; video_thumbs:flags.1?Vector&lt;VideoSize&gt; dc_id:int attributes:Vector&lt;DocumentAttribute&gt; key:bytes iv:bytes = Document;
+     *
+     * A file from an encrypted conversation, as this device keeps it.
+     *
+     * Never on the wire. The server was sent an ordinary document full of
+     * noise and that is all it will ever hold; this is the same document with
+     * the key beside it, and it exists because the key has to survive being
+     * written to the database.
+     *
+     * That was the whole fault the first time: the description was put onto a
+     * plain TL_document, which serializes no key - there is nowhere in its
+     * shape to put one - so it was there until the message was stored and gone
+     * afterwards. The file came down and stayed ciphertext.
+     *
+     * Not TL_documentEncrypted, which does carry a key: that one means a
+     * secret chat, and it is fetched through the secret-chat file methods,
+     * which cannot find a document uploaded the ordinary way.
+     */
+    public static class TL_mls_documentEncrypted extends TLRPC.TL_document {
+        public static final int constructor = 1021017368;
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            super.readParams(stream, exception);
+            key = stream.readByteArray(exception);
+            iv = stream.readByteArray(exception);
+        }
+
+        /**
+         * The parent's body written out again, because the first thing it
+         * writes is its own constructor and a subclass cannot ask it to write
+         * a different one.
+         */
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(flags);
+            stream.writeInt64(id);
+            stream.writeInt64(access_hash);
+            stream.writeByteArray(file_reference);
+            stream.writeInt32(date);
+            stream.writeString(mime_type);
+            stream.writeInt64(size);
+            if ((flags & 1) != 0) {
+                Vector.serialize(stream, thumbs);
+            }
+            if ((flags & 2) != 0) {
+                Vector.serialize(stream, video_thumbs);
+            }
+            stream.writeInt32(dc_id);
+            Vector.serialize(stream, attributes);
+            stream.writeByteArray(key);
+            stream.writeByteArray(iv);
+        }
+    }
 }

@@ -176,7 +176,20 @@ public final class MlsMedia {
             return false;
         }
 
-        TLRPC.Document document = carried.document;
+        // Kept as our own kind of document rather than a plain one. A plain
+        // TL_document has nowhere in its shape to write a key, so the key was
+        // there until the message was stored and gone by the time the file was
+        // fetched - and what came down stayed ciphertext.
+        TLRPCMls.TL_mls_documentEncrypted document = new TLRPCMls.TL_mls_documentEncrypted();
+        TLRPC.Document blob = carried.document;
+        document.id = blob.id;
+        document.access_hash = blob.access_hash;
+        document.file_reference = blob.file_reference == null ? new byte[0] : blob.file_reference;
+        document.date = blob.date;
+        document.dc_id = blob.dc_id;
+        document.flags = blob.flags;
+        carried.document = document;
+
         document.mime_type = descriptor.mime == null || descriptor.mime.isEmpty()
                 ? "application/octet-stream" : descriptor.mime;
         // The file's own size, not the padded one the server is holding. It is

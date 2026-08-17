@@ -29261,6 +29261,11 @@ public class TLRPC {
                 case 0xf9a39f4f:
                     result = new TL_document_layer53();
                     break;
+                case 0x3cdb7d18:
+                    // Ours, and never on the wire: a document from an
+                    // encrypted conversation, kept with the key that opens it.
+                    result = new TLRPCMls.TL_mls_documentEncrypted();
+                    break;
             }
             result = TLdeserialize(Document.class, result, stream, constructor, exception);
             if (result != null) {

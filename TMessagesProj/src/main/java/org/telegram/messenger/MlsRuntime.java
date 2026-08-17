@@ -290,7 +290,14 @@ public class MlsRuntime {
                 message.message = written;
                 return true;
             }
-            stash(message);
+            // Nothing on this device will ever open it: MLS does not let a
+            // sender read their own ciphertext, so keeping it buys nothing.
+            // A lock, and where there is a file the path to it is left alone -
+            // attachPath is the only record of where that file is.
+            if (message.media == null) {
+                message.attachPath = message.message;
+            }
+            message.message = LOCKED;
             return false;
         }
         // Either the text is still the ciphertext, or it was put aside behind a
@@ -346,7 +353,6 @@ public class MlsRuntime {
         // will read it. What a person sees becomes a lock instead of
         // mls1:AAEAAh..., which is what the chat, the chat list, the search and
         // a reply quote were all showing.
-        //
         stash(message);
         return false;
     }
