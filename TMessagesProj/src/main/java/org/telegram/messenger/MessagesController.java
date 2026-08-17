@@ -11465,11 +11465,20 @@ public class MessagesController extends BaseController implements NotificationCe
                 anyLocked = true;
             }
         }
-        if (opened != null && !isCache) {
-            // Written back, not merely opened for this screen. What the chat
-            // list shows and what search looks through is the stored copy, and
-            // it still held the ciphertext - so a message read here was words
-            // in the chat and mls1:... one row above it.
+        if (opened != null) {
+            // Written back at once, and whether this came from the cache or the
+            // server. MLS opens a message exactly once: the key moves on as it
+            // is used, and the same ciphertext handed back a second time is
+            // refused with UnableToDecrypt. So the plaintext has to be kept the
+            // moment it exists.
+            //
+            // It was kept only for loads from the server at first, and the one
+            // successful reading happened during a load from the cache - so the
+            // words were shown once, thrown away, and the message was then
+            // unreadable for good. That is the whole cost of getting this wrong:
+            // not a slow path, a lost message.
+            FileLog.d("mls: opened " + opened.size() + " stored messages in " + dialogId
+                    + (isCache ? " from the cache" : " from the server"));
             getMessagesStorage().putMessages(opened, true, true, false, 0, 0, 0);
 
             // And the copy the chat list is holding in memory, which is a third
