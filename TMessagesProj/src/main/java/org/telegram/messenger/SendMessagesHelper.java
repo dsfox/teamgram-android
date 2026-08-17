@@ -4752,6 +4752,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         // protect.
                         String carried = MlsRuntime.getInstance(currentAccount)
                                 .encrypt(peer, message, entities);
+                        if (carried != null) {
+                            // Remembered under the same random id the server
+                            // will echo back, so its copy does not replace what
+                            // was written with base64.
+                            MlsRuntime.getInstance(currentAccount).wrote(newMsg.random_id, message);
+                        }
                         reqSend.message = carried != null ? carried : message;
                         reqSend.clear_draft = retryMessageObject == null;
                         reqSend.silent = newMsg.silent;

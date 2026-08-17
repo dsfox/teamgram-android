@@ -45,6 +45,14 @@ public class MlsRuntime {
     private boolean loaded;
     private boolean collectingWelcomes;
 
+    /** What this device wrote, by the random id it wrote it under.
+     *
+     *  Small and short-lived: it holds a message only between sending it and the
+     *  server's copy of it coming back, which is seconds. What is on disk is
+     *  already the words, because the local copy was stored before the
+     *  ciphertext existed. */
+    private final Map<Long, String> wroteHere = new HashMap<>();
+
     public static MlsRuntime getInstance(int account) {
         synchronized (MlsRuntime.class) {
             if (instances[account] == null) {
@@ -246,6 +254,27 @@ public class MlsRuntime {
         if (message == null) {
             return false;
         }
+        // A message written on this device can never be opened here: MLS does
+        // not let a sender read their own ciphertext, and that is the design
+        // rather than a fault. What the sender has is better than the key - the
+        // words themselves, from before they were encrypted.
+        //
+        // Without this the server's copy of our own message comes back and
+        // replaces what we wrote with mls1:AAEAAh..., and a person watches
+        // their own sentence turn into base64 a second after sending it.
+        if (message.out && isCiphertext(message.message)) {
+            String written;
+            synchronized (this) {
+                written = wroteHere.get(message.random_id);
+            }
+            if (written != null) {
+                message.message = written;
+                return true;
+            }
+            message.attachPath = message.message;
+            message.message = LOCKED;
+            return false;
+        }
         // Either the text is still the ciphertext, or it was put aside behind a
         // lock the last time this was tried.
         String carried = isCiphertext(message.message) ? message.message
@@ -348,6 +377,17 @@ public class MlsRuntime {
      * The formatting goes inside rather than beside it. An entity is a pair of
      * offsets into the text, and next to a ciphertext they point at nothing.
      */
+    /** Remembers what was written, so the server's copy of it does not replace
+     *  the words with base64 when it comes back. */
+    public void wrote(long randomId, String text) {
+        synchronized (this) {
+            if (wroteHere.size() > 200) {
+                wroteHere.clear();     // nothing here is worth keeping for long
+            }
+            wroteHere.put(randomId, text);
+        }
+    }
+
     public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities) {
         if (text == null || text.isEmpty() || !worthEncrypting(peerId)) {
             return null;
