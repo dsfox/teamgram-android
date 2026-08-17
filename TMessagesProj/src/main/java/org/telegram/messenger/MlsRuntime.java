@@ -180,6 +180,10 @@ public class MlsRuntime {
         public final ArrayList<TLRPC.MessageEntity> entities;
         /** Who wrote it first, when this was forwarded. */
         public Forwarded forwarded;
+        /** What the file is, when the message carries one. The server is
+         *  holding it as a blob of noise and this is the only description of
+         *  it that exists. */
+        public TLRPCMls.TL_mls_media media;
 
         Opened(Reading reading, String text, ArrayList<TLRPC.MessageEntity> entities) {
             this.reading = reading;
@@ -356,6 +360,22 @@ public class MlsRuntime {
     private Opened decode(byte[] plaintext) {
         InputSerializedData stream = new SerializedData(plaintext);
         int constructor = stream.readInt32(false);
+        // The shape everything is written in now, and the only one that can
+        // carry a file. The two below it are older and still arrive, because
+        // they are in people's chats.
+        if (constructor == TLRPCMls.TL_mls_message.constructor) {
+            TLRPCMls.TL_mls_message message =
+                    TLRPCMls.TL_mls_message.TLdeserialize(stream, constructor, false);
+            if (message != null) {
+                Opened opened = new Opened(Reading.CONTENT, message.text, message.entities);
+                if (message.forward != null) {
+                    opened.forwarded = new Forwarded(
+                            message.forward.from_id, message.forward.from_name, message.forward.date);
+                }
+                opened.media = message.media;
+                return opened;
+            }
+        }
         if (constructor == TLRPCMls.TL_mls_content.constructor) {
             TLRPCMls.TL_mls_content content =
                     TLRPCMls.TL_mls_content.TLdeserialize(stream, constructor, false);
@@ -446,7 +466,28 @@ public class MlsRuntime {
      */
     public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities,
                           Forwarded from) {
-        if (text == null || text.isEmpty() || !worthEncrypting(peerId)) {
+        return encrypt(peerId, text, entities, from, null);
+    }
+
+    /**
+     * The same, carrying a file.
+     *
+     * The bytes went up encrypted and the server is holding them as a document
+     * with no type, no name and no size that means anything. Everything needed
+     * to turn them back into a picture travels here, inside the ciphertext:
+     * what it is, how big it is on screen, and the key.
+     */
+    public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities,
+                          Forwarded from, TLRPCMls.TL_mls_media media) {
+        // A file with no caption is still a message worth sending, so emptiness
+        // only stops the ones that carry nothing at all.
+        if ((text == null || text.isEmpty()) && media == null) {
+            return null;
+        }
+        if (text == null) {
+            text = "";
+        }
+        if (!worthEncrypting(peerId)) {
             return null;
         }
         loadConversations();
@@ -467,25 +508,29 @@ public class MlsRuntime {
                 return null;
             }
             try {
-                SerializedData out = new SerializedData();
-                if (from != null) {
-                    TLRPCMls.TL_mls_forwarded forwarded = new TLRPCMls.TL_mls_forwarded();
-                    forwarded.text = text;
-                    if (entities != null) {
-                        forwarded.entities.addAll(entities);
-                    }
-                    forwarded.from_id = from.id;
-                    forwarded.from_name = from.name == null ? "" : from.name;
-                    forwarded.date = from.date;
-                    forwarded.serializeToStream(out);
-                } else {
-                    TLRPCMls.TL_mls_content content = new TLRPCMls.TL_mls_content();
-                    content.text = text;
-                    if (entities != null) {
-                        content.entities.addAll(entities);
-                    }
-                    content.serializeToStream(out);
+                // One shape for everything, the same one the other client
+                // writes. It used to be a choice between two older shapes, and
+                // neither of them could carry a file - nor could the client on
+                // the other side read what this one chose to send.
+                TLRPCMls.TL_mls_message content = new TLRPCMls.TL_mls_message();
+                content.text = text;
+                if (entities != null) {
+                    content.entities.addAll(entities);
                 }
+                if (from != null) {
+                    TLRPCMls.TL_mls_forward forward = new TLRPCMls.TL_mls_forward();
+                    forward.from_id = from.id;
+                    forward.from_name = from.name == null ? "" : from.name;
+                    forward.date = from.date;
+                    content.forward = forward;
+                    content.flags |= 1;
+                }
+                if (media != null) {
+                    content.media = media;
+                    content.flags |= 2;
+                }
+                SerializedData out = new SerializedData();
+                content.serializeToStream(out);
 
                 byte[] ciphertext = group.encrypt(identity, out.toByteArray());
                 // The ratchet has moved, so it is written back at once. Saving
