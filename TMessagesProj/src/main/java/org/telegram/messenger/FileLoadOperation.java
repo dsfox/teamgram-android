@@ -430,6 +430,20 @@ public class FileLoadOperation {
                 }
                 initialDatacenterId = datacenterId = documentLocation.dc_id;
                 allowDisordererFileSave = true;
+                // A file from an encrypted conversation. To the server it is an
+                // ordinary document full of noise, so it is fetched the ordinary
+                // way - the secret-chat location above would not find it - and
+                // decrypted the same way one from a secret chat is, because the
+                // bytes were encrypted the same way going up.
+                //
+                // The key came out of the message, not from anything the server
+                // said, which is the whole point of it.
+                if (documentLocation.key != null && documentLocation.iv != null
+                        && documentLocation.iv.length >= 32) {
+                    iv = new byte[32];
+                    System.arraycopy(documentLocation.iv, 0, iv, 0, iv.length);
+                    key = documentLocation.key;
+                }
                 for (int a = 0, N = documentLocation.attributes.size(); a < N; a++) {
                     if (documentLocation.attributes.get(a) instanceof TLRPC.TL_documentAttributeVideo) {
                         supportsPreloading = true;

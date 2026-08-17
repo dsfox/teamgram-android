@@ -57,6 +57,7 @@ import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCMls;
 import org.telegram.tgnet.tl.TL_account;
 import org.telegram.tgnet.tl.TL_stories;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -771,6 +772,11 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         public boolean performCoverUpload;
         public boolean forceReupload;
 
+        /** The bytes went up encrypted and this is not a secret chat, so what
+         *  comes back has to be turned into an ordinary document and described
+         *  inside the message rather than beside it. */
+        public boolean mlsEncrypted;
+
         private boolean retriedToSend;
         public boolean[] retriedToSendArray;
 
@@ -1008,7 +1014,16 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         media = (TLRPC.InputMedia) message.extraHashMap.get(location);
                     }
 
-                    if (file != null && media != null) {
+                    if (message.mlsEncrypted && encryptedFile != null && message.sendRequest != null) {
+                        // Asked for an encrypted upload and got one. What came
+                        // back describes the same uploaded bytes the plain
+                        // methods would have described, so it is sent as an
+                        // ordinary document with everything that says what it
+                        // is moved inside the message.
+                        sendMlsMedia(message, encryptedFile, (byte[]) args[3], (byte[]) args[4], (Long) args[5]);
+                        arr.remove(a);
+                        a--;
+                    } else if (file != null && media != null) {
                         if (message.type == 0) {
                             media.file = file;
                             performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, message, true, null, message.parentObject, null, message.scheduled);
@@ -5840,6 +5855,62 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         return null;
     }
 
+    /**
+     * Sends a file whose bytes went up encrypted.
+     *
+     * What the upload answered with is the secret-chat shape, because that is
+     * the only caller the encrypting upload has ever had. It describes the same
+     * uploaded bytes an ordinary answer would, so the file is sent as a plain
+     * document - one the server sees as noise with no type, no name and no size
+     * that means anything - and everything that says what it really is goes
+     * inside the message, encrypted to the two people in the conversation.
+     */
+    private void sendMlsMedia(DelayedMessage message, TLRPC.InputEncryptedFile uploaded,
+                              byte[] key, byte[] iv, long decryptedSize) {
+        TLRPC.InputFile file = MlsMedia.asPlainFile(uploaded);
+        TLRPCMls.TL_mls_media descriptor = message.obj == null ? null
+                : MlsMedia.describe(message.obj.messageOwner, key, iv, decryptedSize);
+
+        String caption = "";
+        ArrayList<TLRPC.MessageEntity> entities = null;
+        if (message.sendRequest instanceof TLRPC.TL_messages_sendMedia) {
+            TLRPC.TL_messages_sendMedia sending = (TLRPC.TL_messages_sendMedia) message.sendRequest;
+            caption = sending.message == null ? "" : sending.message;
+            entities = sending.entities;
+        }
+
+        String carried = file == null || descriptor == null ? null
+                : MlsRuntime.getInstance(currentAccount)
+                        .encrypt(message.peer, caption, entities, null, descriptor);
+        if (carried == null) {
+            // The bytes are already up there and nobody can read them: the key
+            // never left this device. Sending the document anyway would post
+            // something that can never be opened by anyone, so the message
+            // fails here instead - where a person can see it and send again.
+            FileLog.e("mls: a file went up encrypted and could not be described, so it is not sent");
+            message.markAsError();
+            return;
+        }
+
+        TLRPC.TL_messages_sendMedia request = (TLRPC.TL_messages_sendMedia) message.sendRequest;
+        request.media = MlsMedia.asBlob(file);
+        request.message = carried;
+        // An entity is a pair of offsets into the caption, and beside a
+        // ciphertext they point at nothing. They travelled inside instead.
+        request.entities.clear();
+        request.flags &= ~8;
+        if (message.obj != null) {
+            // Remembered under the random id the server will echo back, so its
+            // copy of this message does not replace the caption with base64.
+            MlsRuntime.getInstance(currentAccount)
+                    .wrote(message.obj.messageOwner.random_id, caption);
+        }
+
+        FileLog.d("mls: sending " + decryptedSize + " encrypted bytes to " + message.peer);
+        performSendMessageRequest(message.sendRequest, message.obj, message.originalPath,
+                message, true, null, message.parentObject, null, message.scheduled);
+    }
+
     private void performSendDelayedMessage(final DelayedMessage message, int index) {
         if (message.type == 0) {
             if (message.httpLocation != null) {
@@ -5849,7 +5920,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 if (message.sendRequest != null) {
                     String location = FileLoader.getInstance(currentAccount).getPathToAttach(message.photoSize).toString();
                     putToDelayedMessages(location, message);
-                    getFileLoader().uploadFile(location, false, true, ConnectionsManager.FileTypePhoto);
+                    // Encrypted on the way up when there is a conversation to
+                    // encrypt into. The same upload either way - it is the same
+                    // code secret chats have used for years - and what differs
+                    // is that the answer comes back with a key.
+                    message.mlsEncrypted = MlsRuntime.getInstance(currentAccount).hasConversation(message.peer);
+                    getFileLoader().uploadFile(location, message.mlsEncrypted, true, ConnectionsManager.FileTypePhoto);
                     putToUploadingMessages(message.obj);
                 } else {
                     String location = FileLoader.getInstance(currentAccount).getPathToAttach(message.photoSize).toString();

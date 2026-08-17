@@ -290,8 +290,7 @@ public class MlsRuntime {
                 message.message = written;
                 return true;
             }
-            message.attachPath = message.message;
-            message.message = LOCKED;
+            stash(message);
             return false;
         }
         // Either the text is still the ciphertext, or it was put aside behind a
@@ -325,6 +324,12 @@ public class MlsRuntime {
                 message.entities = opened.entities;
                 message.flags |= 128;
             }
+            // What arrived beside the message is a document full of noise. The
+            // description of it - what it is, how big, and the key - was inside
+            // the message, and this is where the two are put back together.
+            if (opened.media != null) {
+                MlsMedia.attach(message, opened.media);
+            }
             // The ciphertext has done its work and cannot be used again: MLS
             // opens a message once.
             if (isCiphertext(message.attachPath)) {
@@ -342,14 +347,25 @@ public class MlsRuntime {
         // mls1:AAEAAh..., which is what the chat, the chat list, the search and
         // a reply quote were all showing.
         //
-        // attachPath is where the client keeps things that never leave the
-        // device. It carries a file path when there is a file, so this only
-        // borrows it when there is not - and media is not encrypted yet.
-        if (isCiphertext(message.message) && message.media == null) {
-            message.attachPath = message.message;
-            message.message = LOCKED;
-        }
+        stash(message);
         return false;
+    }
+
+    /**
+     * Puts the ciphertext behind a lock, when there is somewhere to put it.
+     *
+     * attachPath is where the client keeps things that never leave the device,
+     * and it already carries the path to the file when the message has one. A
+     * message with a file keeps its ciphertext in the caption instead: that is
+     * a base64 caption until a later pass opens it, which is worse to look at
+     * and better than overwriting the only path to the file itself.
+     */
+    private void stash(TLRPC.Message message) {
+        if (!isCiphertext(message.message) || message.media != null) {
+            return;
+        }
+        message.attachPath = message.message;
+        message.message = LOCKED;
     }
 
     /**
@@ -446,6 +462,21 @@ public class MlsRuntime {
                 wroteHere.clear();     // nothing here is worth keeping for long
             }
             wroteHere.put(randomId, text);
+        }
+    }
+
+    /**
+     * Whether there is a conversation with this peer to encrypt into, right
+     * now, without asking anybody anything.
+     *
+     * Asked before a file is uploaded, because that decision cannot be taken
+     * back: bytes that went up in the clear are up in the clear, and finding
+     * out afterwards that the conversation exists is too late to help.
+     */
+    public boolean hasConversation(long peerId) {
+        loadConversations();
+        synchronized (this) {
+            return groupIdByPeer.get(peerId) != null;
         }
     }
 
