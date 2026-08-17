@@ -237,7 +237,14 @@ def getProps(String propName) {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
+// Not here. This module is a library, so the plugin has no applicationId to
+// match against and falls back to the namespace - which is still
+// org.telegram.messenger, the Java package the code lives in and not the name
+// this app is installed under. The app module applies the same plugin against
+// the real applicationId, and that is the one whose answer is used.
+//
+// While google-services.json was upstream's, both agreed by accident: it held
+// org.telegram.messenger and nothing else.
 
 task checkVisibility {
     doFirst {

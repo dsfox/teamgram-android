@@ -1,5 +1,26 @@
 apply plugin: 'com.android.application'
 
+// What signs a release, read from the repository's .env rather than from
+// gradle.properties, which is in git. The keystore beside this file is
+// upstream's and its passwords are committed next to it - fine for a debug
+// build, which is what it was for, and not something to sign a release with:
+// anyone can produce an update to an app signed by a key everyone has.
+//
+// Empty when the file is not there, and then a release build stops with a
+// signing error rather than quietly going out under the public key.
+ext.fromEnv = { String name ->
+    def file = rootProject.file('../../.env')
+    if (!file.exists()) {
+        return null
+    }
+    for (String line : file.readLines()) {
+        if (line.startsWith(name + '=')) {
+            return line.substring(name.length() + 1).trim()
+        }
+    }
+    return null
+}
+
 repositories {
     mavenCentral()
     google()
@@ -50,10 +71,20 @@ android {
         }
 
         release {
-            storeFile file("../TMessagesProj/config/release.keystore")
-            storePassword RELEASE_STORE_PASSWORD
-            keyAlias RELEASE_KEY_ALIAS
-            keyPassword RELEASE_KEY_PASSWORD
+            def keystore = fromEnv('ANDROID_KEYSTORE')
+            def password = fromEnv('ANDROID_KEYSTORE_PASSWORD')
+            if (keystore != null && password != null && file(keystore).exists()) {
+                storeFile file(keystore)
+                storePassword password
+                keyAlias fromEnv('ANDROID_KEY_ALIAS')
+                keyPassword password
+            } else {
+                // Left unset on purpose. A release then fails to sign and says
+                // so, which is the right answer to a machine that does not have
+                // the key - the wrong one is to fall back to the public
+                // keystore and produce something that installs.
+                println 'no ANDROID_KEYSTORE in .env - release builds will not sign'
+            }
         }
     }
 
