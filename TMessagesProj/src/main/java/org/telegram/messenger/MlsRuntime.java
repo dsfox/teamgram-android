@@ -161,10 +161,25 @@ public class MlsRuntime {
         UNREADABLE
     }
 
+    /** Who wrote a message first, for a forward. */
+    public static final class Forwarded {
+        public final long id;
+        public final String name;
+        public final int date;
+
+        public Forwarded(long id, String name, int date) {
+            this.id = id;
+            this.name = name;
+            this.date = date;
+        }
+    }
+
     public static final class Opened {
         public final Reading reading;
         public final String text;
         public final ArrayList<TLRPC.MessageEntity> entities;
+        /** Who wrote it first, when this was forwarded. */
+        public Forwarded forwarded;
 
         Opened(Reading reading, String text, ArrayList<TLRPC.MessageEntity> entities) {
             this.reading = reading;
@@ -286,6 +301,22 @@ public class MlsRuntime {
         Opened opened = read(carried);
         if (opened.reading == Reading.CONTENT) {
             message.message = opened.text;
+            // A forward carries who wrote it first inside the ciphertext, since
+            // the server copies by id and cannot copy something it cannot read.
+            // Put back where the client draws it from.
+            if (opened.forwarded != null) {
+                TLRPC.TL_messageFwdHeader header = new TLRPC.TL_messageFwdHeader();
+                header.from_id = MessagesController.getInstance(currentAccount)
+                        .getPeer(opened.forwarded.id);
+                header.from_name = opened.forwarded.name;
+                header.date = opened.forwarded.date;
+                header.flags |= 1;
+                if (header.from_name != null && !header.from_name.isEmpty()) {
+                    header.flags |= 32;
+                }
+                message.fwd_from = header;
+                message.flags |= TLRPC.MESSAGE_FLAG_FWD;
+            }
             if (opened.entities != null && !opened.entities.isEmpty()) {
                 message.entities = opened.entities;
                 message.flags |= 128;
@@ -330,6 +361,16 @@ public class MlsRuntime {
                     TLRPCMls.TL_mls_content.TLdeserialize(stream, constructor, false);
             if (content != null) {
                 return new Opened(Reading.CONTENT, content.text, content.entities);
+            }
+        }
+        if (constructor == TLRPCMls.TL_mls_forwarded.constructor) {
+            TLRPCMls.TL_mls_forwarded forwarded =
+                    TLRPCMls.TL_mls_forwarded.TLdeserialize(stream, constructor, false);
+            if (forwarded != null) {
+                Opened opened = new Opened(Reading.CONTENT, forwarded.text, forwarded.entities);
+                opened.forwarded = new Forwarded(
+                        forwarded.from_id, forwarded.from_name, forwarded.date);
+                return opened;
             }
         }
         FileLog.e("mls: a message opened into something this client does not know");
@@ -389,6 +430,22 @@ public class MlsRuntime {
     }
 
     public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities) {
+        return encrypt(peerId, text, entities, null);
+    }
+
+    /**
+     * The same, carrying who wrote the message first.
+     *
+     * A forward cannot be one on the wire here: the server copies a message by
+     * its id, and a copy of a ciphertext lands where nobody holds the key. So
+     * the client sends a new message and puts "forwarded from" inside it, where
+     * the server cannot read it either.
+     *
+     * Losing that line was a real fault on the other client - a forward arrived
+     * with no sign of who wrote it, which is not a forward at all.
+     */
+    public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities,
+                          Forwarded from) {
         if (text == null || text.isEmpty() || !worthEncrypting(peerId)) {
             return null;
         }
@@ -410,13 +467,25 @@ public class MlsRuntime {
                 return null;
             }
             try {
-                TLRPCMls.TL_mls_content content = new TLRPCMls.TL_mls_content();
-                content.text = text;
-                if (entities != null) {
-                    content.entities.addAll(entities);
-                }
                 SerializedData out = new SerializedData();
-                content.serializeToStream(out);
+                if (from != null) {
+                    TLRPCMls.TL_mls_forwarded forwarded = new TLRPCMls.TL_mls_forwarded();
+                    forwarded.text = text;
+                    if (entities != null) {
+                        forwarded.entities.addAll(entities);
+                    }
+                    forwarded.from_id = from.id;
+                    forwarded.from_name = from.name == null ? "" : from.name;
+                    forwarded.date = from.date;
+                    forwarded.serializeToStream(out);
+                } else {
+                    TLRPCMls.TL_mls_content content = new TLRPCMls.TL_mls_content();
+                    content.text = text;
+                    if (entities != null) {
+                        content.entities.addAll(entities);
+                    }
+                    content.serializeToStream(out);
+                }
 
                 byte[] ciphertext = group.encrypt(identity, out.toByteArray());
                 // The ratchet has moved, so it is written back at once. Saving

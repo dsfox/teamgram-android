@@ -1689,6 +1689,23 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
     }
 
+    /** Who wrote a message first: whoever forwarded it before, or its author. */
+    private MlsRuntime.Forwarded mlsForwardedFrom(MessageObject messageObject) {
+        TLRPC.Message owner = messageObject.messageOwner;
+        if (owner.fwd_from != null) {
+            long id = owner.fwd_from.from_id != null
+                    ? MessageObject.getPeerId(owner.fwd_from.from_id) : 0;
+            return new MlsRuntime.Forwarded(id, owner.fwd_from.from_name, owner.fwd_from.date);
+        }
+        long author = owner.from_id != null ? MessageObject.getPeerId(owner.from_id) : 0;
+        String name = null;
+        TLRPC.User user = getMessagesController().getUser(author);
+        if (user != null) {
+            name = ContactsController.formatName(user.first_name, user.last_name);
+        }
+        return new MlsRuntime.Forwarded(author, name, owner.date);
+    }
+
     public void processForwardFromMyName(MessageObject messageObject, long did, long payStars, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
         if (messageObject == null) {
             return;
@@ -1760,6 +1777,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             fparams.payStars = payStars;
             fparams.monoForumPeer = monoForumPeerId;
             fparams.suggestionParams = suggestionParams;
+            // Who wrote it first, so the ciphertext can carry it. A forward into
+            // an encrypted conversation is a new message - the server copies by
+            // id and cannot copy what it cannot read - so without this the copy
+            // arrives with no sign of where it came from, which is not a forward
+            // at all.
+            fparams.mlsForwarded = mlsForwardedFrom(messageObject);
             sendMessage(fparams);
         } else if (DialogObject.isEncryptedDialog(did)) {
             ArrayList<MessageObject> arrayList = new ArrayList<>();
@@ -4751,7 +4774,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         // will not send is worse than one that sometimes cannot
                         // protect.
                         String carried = MlsRuntime.getInstance(currentAccount)
-                                .encrypt(peer, message, entities);
+                                .encrypt(peer, message, entities, sendMessageParams.mlsForwarded);
                         if (carried != null) {
                             // Remembered under the same random id the server
                             // will echo back, so its copy does not replace what
@@ -10545,6 +10568,8 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         public long effect_id;
         public long stars;
         public long payStars;
+        /** Who wrote a forwarded message first, so the ciphertext can carry it. */
+        public MlsRuntime.Forwarded mlsForwarded;
         public long monoForumPeer;
         public boolean sendingHighQuality;
         public MessageSuggestionParams suggestionParams;
