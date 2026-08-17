@@ -45,6 +45,10 @@ public final class MlsCore {
 
     private static native byte[] messageGroupId0(byte[] ciphertext);
 
+    private static native byte[] recoveryPhrase(int words);
+
+    private static native byte[] recoveryAuthSecret(byte[] phrase);
+
     private static native byte[] encrypt(long group, long identity, byte[] plaintext);
 
     private static native byte[] decrypt(long group, long identity, byte[] ciphertext);
@@ -82,6 +86,32 @@ public final class MlsCore {
             return null;
         }
         return messageGroupId0(ciphertext);
+    }
+
+    /**
+     * Six words for getting an account back when the phone is gone.
+     *
+     * Made here rather than by the server, which is the whole point: the server
+     * is told a one-way derivation of them and never the words, so it can
+     * recognise somebody typing them and cannot sign in as them or read
+     * anything. The words are shown to their owner once and kept on the device.
+     */
+    public static String recoveryPhrase() throws MlsException {
+        byte[] words = recoveryPhrase(6);
+        if (words == null) {
+            throw failure("no recovery phrase was made");
+        }
+        return new String(words, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** What the server is told in place of the words: lower-case hex. */
+    public static String recoveryAuthSecret(String phrase) throws MlsException {
+        byte[] secret = recoveryAuthSecret(
+                phrase.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (secret == null) {
+            throw failure("the phrase did not derive");
+        }
+        return new String(secret, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /** One device's identity: the key it signs with and the name it goes by. */

@@ -241,3 +241,23 @@ Java_org_telegram_messenger_MlsCore_addMembers(JNIEnv *env, jclass class, jlong 
     (*env)->SetObjectArrayElement(env, result, 1, take(env, welcome));
     return result;
 }
+
+// The six words a person writes down, and the one-way derivation the server is
+// told instead of them.
+//
+// The words never leave the device. What the server keeps is the derivation,
+// which is enough to recognise somebody typing them and useless for signing in
+// as them or reading anything.
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_recoveryPhrase(JNIEnv *env, jclass class, jint words) {
+    return take(env, mls_recovery_phrase((size_t) words));
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_recoveryAuthSecret(JNIEnv *env, jclass class, jbyteArray phrase) {
+    jsize len = (*env)->GetArrayLength(env, phrase);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, phrase, NULL);
+    struct MlsBuffer out = mls_recovery_auth_secret((const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, phrase, bytes, JNI_ABORT);
+    return take(env, out);
+}

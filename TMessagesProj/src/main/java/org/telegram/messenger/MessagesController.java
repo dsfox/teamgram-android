@@ -2582,6 +2582,11 @@ public class MessagesController extends BaseController implements NotificationCe
         // rather than only when a message arrives, because a welcome sent while
         // this phone was off has nothing to arrive behind.
         MlsRuntime.getInstance(currentAccount).collectWelcomes();
+
+        // And the six words that get this account back when the phone is gone.
+        // Made on the device: the server is told a one-way derivation of them
+        // and never the words themselves.
+        MlsRecoveryPhrase.getInstance(currentAccount).ensure();
     }
 
     public void loadAppConfig(boolean force) {
