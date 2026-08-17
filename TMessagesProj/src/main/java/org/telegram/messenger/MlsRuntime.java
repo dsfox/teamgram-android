@@ -184,6 +184,10 @@ public class MlsRuntime {
          *  holding it as a blob of noise and this is the only description of
          *  it that exists. */
         public TLRPCMls.TL_mls_media media;
+        /** What came out of the ciphertext, before it was made sense of. Kept
+         *  so the same message can be shown again without asking MLS, which
+         *  would refuse: a message opens exactly once. */
+        public byte[] plaintext;
 
         Opened(Reading reading, String text, ArrayList<TLRPC.MessageEntity> entities) {
             this.reading = reading;
@@ -241,13 +245,106 @@ public class MlsRuntime {
                     // there is nothing to show.
                     return Opened.of(Reading.NOTHING);
                 }
-                return decode(plaintext);
+                Opened opened = decode(plaintext);
+                opened.plaintext = plaintext;
+                return opened;
             } finally {
                 group.close();
             }
         } catch (MlsCore.MlsException e) {
             FileLog.e("mls: cannot read a message in " + shortId(groupId) + ": " + e.getMessage());
             return Opened.of(Reading.UNREADABLE);
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // What has already been opened
+    // ----------------------------------------------------------------------
+    //
+    // A message opens exactly once. The key moves on as it is used, and the
+    // same ciphertext offered a second time is refused - so a second attempt
+    // does not merely fail, it is the moment the message is lost: what is on
+    // screen becomes a lock and there is nothing left to open.
+    //
+    // And the same ciphertext does arrive twice. The server's copy comes back
+    // through the difference after a restart, through a history load, through
+    // a chat being opened - all of them ordinary, none of them a fault. The
+    // first message from an iPhone was lost exactly this way: opened at
+    // 21:40:42, offered again at 21:41:23, and a lock stood where the words
+    // had been.
+    //
+    // So what came out of the ciphertext is kept, and a message that arrives
+    // again is answered from here rather than from MLS. The twin of wroteHere,
+    // which does the same for messages written on this device - except that
+    // this one has to survive being killed, because that is when it is needed.
+
+    /** How many openings to remember. Bounded because it is a safety net for
+     *  the window where the stored copy is still a ciphertext, not an archive:
+     *  once the plaintext is in the database nothing asks here again. */
+    private static final int REMEMBERED = 2000;
+
+    private SharedPreferences openings() {
+        return ApplicationLoader.applicationContext.getSharedPreferences(
+                "mlsopened" + currentAccount, android.content.Context.MODE_PRIVATE);
+    }
+
+    /** Which conversation and which message, because an id alone is only
+     *  unique within one. */
+    private static String openingKey(TLRPC.Message message) {
+        return MessageObject.getDialogId(message) + ":" + message.id;
+    }
+
+    private byte[] alreadyOpened(TLRPC.Message message) {
+        String kept = openings().getString(openingKey(message), null);
+        if (kept == null) {
+            return null;
+        }
+        // date, then what came out of it. The date is only for deciding what to
+        // forget first.
+        int split = kept.indexOf(' ');
+        try {
+            return Base64.decode(split < 0 ? kept : kept.substring(split + 1), Base64.NO_WRAP);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private void rememberOpening(TLRPC.Message message, byte[] plaintext) {
+        if (plaintext == null) {
+            return;
+        }
+        SharedPreferences store = openings();
+        store.edit()
+                .putString(openingKey(message),
+                        message.date + " " + Base64.encodeToString(plaintext, Base64.NO_WRAP))
+                .apply();
+        if (store.getAll().size() > REMEMBERED) {
+            forgetOldestOpenings(store);
+        }
+    }
+
+    /** Drops the oldest quarter, so this happens rarely rather than on every
+     *  message once the limit is reached. */
+    private void forgetOldestOpenings(SharedPreferences store) {
+        java.util.List<Map.Entry<String, ?>> all =
+                new ArrayList<>(store.getAll().entrySet());
+        java.util.Collections.sort(all, (one, two) -> {
+            return Integer.compare(dateOf(one.getValue()), dateOf(two.getValue()));
+        });
+        SharedPreferences.Editor editor = store.edit();
+        for (int i = 0; i < all.size() / 4; i++) {
+            editor.remove(all.get(i).getKey());
+        }
+        editor.apply();
+    }
+
+    private static int dateOf(Object value) {
+        String kept = value instanceof String ? (String) value : "";
+        int split = kept.indexOf(' ');
+        try {
+            return split < 0 ? 0 : Integer.parseInt(kept.substring(0, split));
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
@@ -308,8 +405,15 @@ public class MlsRuntime {
         if (carried == null) {
             return false;
         }
-        Opened opened = read(carried);
+        // Asked here first, and MLS only if this is genuinely new. The same
+        // ciphertext arrives more than once through ordinary routes, and
+        // handing it to MLS a second time is what destroys it.
+        byte[] before = alreadyOpened(message);
+        Opened opened = before != null ? decode(before) : read(carried);
         if (opened.reading == Reading.CONTENT) {
+            if (before == null) {
+                rememberOpening(message, opened.plaintext);
+            }
             message.message = opened.text;
             // A forward carries who wrote it first inside the ciphertext, since
             // the server copies by id and cannot copy something it cannot read.
