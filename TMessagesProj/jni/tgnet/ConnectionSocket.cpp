@@ -679,6 +679,7 @@ void ConnectionSocket::closeSocket(int32_t reason, int32_t error) {
     proxyAuthState = 0;
     tlsState = 0;
     onConnectedSent = false;
+    sentFirstSegment = false;
     outgoingByteStream->clean();
     if (tlsBuffer != nullptr) {
         tlsBuffer->reuse();
@@ -1043,6 +1044,25 @@ void ConnectionSocket::onEvent(uint32_t events) {
                             adjustWriteOp();
                         }
                     } else {
+                        // Measured between this network and our server: a large
+                        // first data packet on a fresh connection is dropped on
+                        // the way - 3 of 8 arrive - while the same payload sent
+                        // after a small one arrives 7 of 8. Plain sockets with
+                        // random bytes behave identically, so it is the path and
+                        // not the protocol.
+                        //
+                        // The client's first write once it has keys is 588-636
+                        // bytes, so it vanished, the response timeout fired, and
+                        // the cycle repeated: "Connecting..." for ever. iOS was
+                        // given a short first segment in MTTcpConnection and this
+                        // is the same thing on this side, which had been left
+                        // without it.
+                        if (!sentFirstSegment && remaining > 64) {
+                            sentFirstSegment = true;
+                            remaining = 64;
+                        } else {
+                            sentFirstSegment = true;
+                        }
                         if ((sentLength = send(socketFd, buffer->bytes(), remaining, 0)) < 0) {
                             if (LOGS_ENABLED) DEBUG_D("connection(%p) send failed", this);
                             closeSocket(1, -1);
