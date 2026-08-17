@@ -496,6 +496,31 @@ public class MlsRuntime {
         });
     }
 
+    /**
+     * Reads again what is already stored for this person.
+     *
+     * Asked for from the server rather than rewritten in the database: the
+     * history load goes through the same door every message does, so the
+     * ciphertext is opened by the one piece of code that knows how, and the
+     * chat, the chat list and the search all end up with the same words. Doing
+     * it by hand in the database would be a second way of opening a message,
+     * and two ways is how they come to disagree.
+     */
+    private void reopen(long peerId) {
+        AndroidUtilities.runOnUIThread(() -> {
+            TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(peerId);
+            if (user == null) {
+                return;
+            }
+            // From the server, not the cache: the cache holds the ciphertext
+            // that could not be opened, and asking it again would hand back the
+            // same thing.
+            MessagesController.getInstance(currentAccount).loadMessages(
+                    peerId, 0L, false, 30, 0, 0, false, 0,
+                    ConnectionsManager.generateClassGuid(), 0, 0, 0, 0L, 0, 0, false);
+        });
+    }
+
     private void join(TLRPCMls.TL_mls_welcomes welcomes) {
         List<Long> joined = new ArrayList<>();
         try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
@@ -512,6 +537,12 @@ public class MlsRuntime {
                     remember(welcome.from_id, groupId);
                     joined.add(welcome.id);
                     FileLog.d("mls: joined " + shortId(groupId) + " with " + welcome.from_id);
+                    // What is already stored for this person was unreadable a
+                    // moment ago and is not any more. A message and the welcome
+                    // that opens it travel by different routes and the message
+                    // usually wins, so without this the first thing anybody
+                    // ever receives stays a ciphertext.
+                    reopen(welcome.from_id);
                 } catch (MlsCore.MlsException e) {
                     // One invitation that cannot be joined must not stop the
                     // others: they are from different people.

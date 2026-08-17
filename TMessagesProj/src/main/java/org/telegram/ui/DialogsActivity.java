@@ -2884,6 +2884,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     public static void loadDialogs(AccountInstance accountInstance) {
         int currentAccount = accountInstance.getCurrentAccount();
+        // Said out loud because an empty chat list has three possible causes -
+        // never asked, asked and answered with nothing, answered and not drawn -
+        // and they look identical from outside.
+        FileLog.d("dialogs: asked to load, already loaded = " + dialogsLoaded[currentAccount]);
         if (!dialogsLoaded[currentAccount]) {
             MessagesController messagesController = accountInstance.getMessagesController();
             messagesController.loadGlobalNotificationsSettings();

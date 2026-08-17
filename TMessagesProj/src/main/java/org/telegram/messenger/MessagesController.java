@@ -9449,8 +9449,17 @@ public class MessagesController extends BaseController implements NotificationCe
         return SharedConfig.archiveHidden && dialogs_dict.get(DialogObject.makeFolderDialogId(1)) != null;
     }
 
+    private int lastReportedDialogs = -1;
+
     public ArrayList<TLRPC.Dialog> getDialogs(int folderId) {
         ArrayList<TLRPC.Dialog> dialogs = dialogsByFolder.get(folderId);
+        // Said once per change: the list can be loaded and still not drawn, and
+        // from outside those look the same.
+        int size = dialogs == null ? -1 : dialogs.size();
+        if (folderId == 0 && size != lastReportedDialogs) {
+            lastReportedDialogs = size;
+            FileLog.d("dialogs: the list the screen asks for holds " + size);
+        }
         if (dialogs == null) {
             return new ArrayList<>();
         }
@@ -11434,6 +11443,69 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         Timer.Task t1 = Timer.start(loaderLogger, "processLoadedMessages");
 
+        // History goes through the same door as an update does. Without this a
+        // message read after a restart, or re-read once the welcome that lets
+        // this device in has arrived, stays a ciphertext for ever - and it is
+        // exactly the re-read that matters, because a message and its welcome
+        // travel by different routes and the message often wins.
+        MlsRuntime mls = MlsRuntime.getInstance(currentAccount);
+        boolean anyLocked = false;
+        ArrayList<TLRPC.Message> opened = null;
+        for (int i = 0; i < messagesRes.messages.size(); i++) {
+            TLRPC.Message message = messagesRes.messages.get(i);
+            if (!MlsRuntime.isCiphertext(message.message)) {
+                continue;
+            }
+            if (mls.open(message)) {
+                if (opened == null) {
+                    opened = new ArrayList<>();
+                }
+                opened.add(message);
+            } else {
+                anyLocked = true;
+            }
+        }
+        if (opened != null && !isCache) {
+            // Written back, not merely opened for this screen. What the chat
+            // list shows and what search looks through is the stored copy, and
+            // it still held the ciphertext - so a message read here was words
+            // in the chat and mls1:... one row above it.
+            getMessagesStorage().putMessages(opened, true, true, false, 0, 0, 0);
+
+            // And the copy the chat list is holding in memory, which is a third
+            // one and the one a person actually looks at. Storage alone leaves
+            // the row saying mls1:... until something else happens to rebuild
+            // it, which may be never.
+            ArrayList<MessageObject> shownInList = dialogMessage.get(dialogId);
+            if (shownInList != null) {
+                boolean changed = false;
+                for (int i = 0; i < shownInList.size(); i++) {
+                    MessageObject shown = shownInList.get(i);
+                    if (shown == null) {
+                        continue;
+                    }
+                    for (int j = 0; j < opened.size(); j++) {
+                        if (opened.get(j).id == shown.getId()) {
+                            shown.messageOwner.message = opened.get(j).message;
+                            shown.messageOwner.entities = opened.get(j).entities;
+                            shown.generateCaption();
+                            shown.setType();
+                            changed = true;
+                        }
+                    }
+                }
+                if (changed) {
+                    AndroidUtilities.runOnUIThread(() ->
+                            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload));
+                }
+            }
+        }
+        if (anyLocked) {
+            // Something here cannot be opened yet, and the invitation that would
+            // open it may be waiting on the server.
+            mls.collectWelcomes();
+        }
+
         long startProcessTime = SystemClock.elapsedRealtime();
         boolean createDialog = false;
         if (messagesRes instanceof TLRPC.TL_messages_channelMessages) {
@@ -11958,6 +12030,8 @@ public class MessagesController extends BaseController implements NotificationCe
             return;
         }
         loadingDialogs.put(folderId, true);
+        FileLog.d("dialogs: loading folder " + folderId + " offset " + offset
+                + " count " + count + (fromCache ? " from the cache" : " from the server"));
         getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("folderId = " + folderId + " load cacheOffset = " + offset + " count = " + count + " cache = " + fromCache);
@@ -12792,6 +12866,7 @@ public class MessagesController extends BaseController implements NotificationCe
     private int DIALOGS_LOAD_TYPE_UNKNOWN = 3;
 
     public void processLoadedDialogs(final TLRPC.messages_Dialogs dialogsRes, ArrayList<TLRPC.EncryptedChat> encChats, ArrayList<TLRPC.UserFull> fullUsers, int folderId, int offset, int count, int loadType, boolean resetEnd, boolean migrate, boolean fromCache) {
+        FileLog.d("dialogs: loaded " + (dialogsRes == null ? -1 : dialogsRes.dialogs.size()) + " from " + (fromCache ? "the cache" : "the server"));
         Utilities.stageQueue.postRunnable(() -> {
             if (!firstGettingTask) {
                 getNewDeleteTask(null, null);
