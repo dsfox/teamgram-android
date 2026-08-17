@@ -243,15 +243,28 @@ public class MlsRuntime {
      * message so a later pass can read it once the welcome has arrived.
      */
     public boolean open(TLRPC.Message message) {
-        if (message == null || !isCiphertext(message.message)) {
+        if (message == null) {
             return false;
         }
-        Opened opened = read(message.message);
+        // Either the text is still the ciphertext, or it was put aside behind a
+        // lock the last time this was tried.
+        String carried = isCiphertext(message.message) ? message.message
+                : (LOCKED.equals(message.message) && isCiphertext(message.attachPath)
+                    ? message.attachPath : null);
+        if (carried == null) {
+            return false;
+        }
+        Opened opened = read(carried);
         if (opened.reading == Reading.CONTENT) {
             message.message = opened.text;
             if (opened.entities != null && !opened.entities.isEmpty()) {
                 message.entities = opened.entities;
                 message.flags |= 128;
+            }
+            // The ciphertext has done its work and cannot be used again: MLS
+            // opens a message once.
+            if (isCiphertext(message.attachPath)) {
+                message.attachPath = "";
             }
             return true;
         }
@@ -259,11 +272,19 @@ public class MlsRuntime {
         // overtook the welcome that lets this device into the conversation,
         // because the two travel by different routes.
         //
-        // So the ciphertext stays exactly where it is. Writing the lock over it
-        // would be the last time anybody could read the message - the stored
-        // text is all there is, and a pass after the welcome arrives would find
-        // a lock and nothing to open. The lock belongs where a message is drawn,
-        // over a ciphertext that is still underneath it.
+        // The ciphertext is put aside rather than thrown away - it has not been
+        // opened, so its key is still good and a pass after the welcome arrives
+        // will read it. What a person sees becomes a lock instead of
+        // mls1:AAEAAh..., which is what the chat, the chat list, the search and
+        // a reply quote were all showing.
+        //
+        // attachPath is where the client keeps things that never leave the
+        // device. It carries a file path when there is a file, so this only
+        // borrows it when there is not - and media is not encrypted yet.
+        if (isCiphertext(message.message) && message.media == null) {
+            message.attachPath = message.message;
+            message.message = LOCKED;
+        }
         return false;
     }
 

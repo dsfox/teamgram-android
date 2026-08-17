@@ -16263,6 +16263,25 @@ public class MessagesController extends BaseController implements NotificationCe
                                     }
                                 }
 
+                                // Everything that arrives while the app was not
+                                // running comes through here, as a list of
+                                // messages rather than as updates - so the hook
+                                // on updateNewMessage never saw any of it, and
+                                // every message received while the phone was
+                                // closed stayed a ciphertext.
+                                MlsRuntime mlsFromDifference = MlsRuntime.getInstance(currentAccount);
+                                boolean lockedInDifference = false;
+                                for (int a = 0; a < res.new_messages.size(); a++) {
+                                    TLRPC.Message message = res.new_messages.get(a);
+                                    if (MlsRuntime.isCiphertext(message.message)
+                                            && !mlsFromDifference.open(message)) {
+                                        lockedInDifference = true;
+                                    }
+                                }
+                                if (lockedInDifference) {
+                                    mlsFromDifference.collectWelcomes();
+                                }
+
                                 ImageLoader.saveMessagesThumbs(res.new_messages);
 
                                 ArrayList<MessageObject> pushMessages = new ArrayList<>();
