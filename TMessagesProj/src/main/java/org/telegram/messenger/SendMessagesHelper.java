@@ -1020,7 +1020,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         // methods would have described, so it is sent as an
                         // ordinary document with everything that says what it
                         // is moved inside the message.
-                        sendMlsMedia(message, encryptedFile, (byte[]) args[3], (byte[]) args[4], (Long) args[5]);
+                        sendMlsMedia(message, encryptedFile, (byte[]) args[3], (byte[]) args[4], (Long) args[5], location);
                         arr.remove(a);
                         a--;
                     } else if (file != null && media != null) {
@@ -5866,10 +5866,10 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
      * inside the message, encrypted to the two people in the conversation.
      */
     private void sendMlsMedia(DelayedMessage message, TLRPC.InputEncryptedFile uploaded,
-                              byte[] key, byte[] iv, long decryptedSize) {
+                              byte[] key, byte[] iv, long decryptedSize, String path) {
         TLRPC.InputFile file = MlsMedia.asPlainFile(uploaded);
         TLRPCMls.TL_mls_media descriptor = message.obj == null ? null
-                : MlsMedia.describe(message.obj.messageOwner, key, iv, decryptedSize);
+                : MlsMedia.describe(message.obj.messageOwner, key, iv, decryptedSize, path);
 
         String caption = "";
         ArrayList<TLRPC.MessageEntity> entities = null;
@@ -5906,7 +5906,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     .wrote(message.obj.messageOwner.random_id, caption);
         }
 
-        FileLog.d("mls: sending " + decryptedSize + " encrypted bytes to " + message.peer);
+        FileLog.d("mls: sending " + decryptedSize + " encrypted bytes to " + message.peer
+                + " as " + descriptor.name + ", placeholder "
+                + (descriptor.thumb == null ? 0 : descriptor.thumb.length) + " bytes");
         performSendMessageRequest(message.sendRequest, message.obj, message.originalPath,
                 message, true, null, message.parentObject, null, message.scheduled);
     }

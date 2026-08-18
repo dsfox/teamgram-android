@@ -51,6 +51,17 @@ public final class MlsMedia {
      */
     public static TLRPCMls.TL_mls_media describe(TLRPC.Message message, byte[] key, byte[] iv,
                                                  long decryptedSize) {
+        return describe(message, key, iv, decryptedSize, null);
+    }
+
+    /**
+     * The same, with the file to make the placeholder from.
+     *
+     * The path is the one that was just uploaded, so the picture is read as it
+     * is going out rather than looked for afterwards.
+     */
+    public static TLRPCMls.TL_mls_media describe(TLRPC.Message message, byte[] key, byte[] iv,
+                                                 long decryptedSize, String path) {
         if (message == null || key == null || iv == null || decryptedSize <= 0) {
             return null;
         }
@@ -74,6 +85,10 @@ public final class MlsMedia {
             if (largest != null) {
                 media.width = largest.w;
                 media.height = largest.h;
+            }
+            byte[] blurred = miniThumbnail(path);
+            if (blurred != null) {
+                media.thumb = blurred;
             }
             return media;
         }
@@ -110,6 +125,155 @@ public final class MlsMedia {
             }
         }
         return media;
+    }
+
+    /**
+     * The blurred placeholder a picture travels with, in the shape the other
+     * client already knows how to read.
+     *
+     * The server makes no preview of an encrypted file and could not: it is
+     * holding noise. So this is made here, and it is small enough - a couple of
+     * hundred bytes - to go inside the message rather than as a file of its own.
+     *
+     * The format is Telegram's stripped thumbnail, and it is a JPEG with its
+     * head cut off: everything up to the scan is the same for every one of
+     * them, so it is not sent, and the reader puts it back. Which means the
+     * bytes here have to be produced with exactly the tables in that template -
+     * ImageLoader.getStrippedPhotoBitmap glues them onto whatever arrives and
+     * does not check. Quality 20 is what the template's quantisation table is,
+     * and the result is compared against it byte for byte rather than trusted:
+     * a thumbnail encoded with different tables is not a worse picture, it is
+     * the wrong colours and blocks.
+     *
+     * Null when it cannot be made, and then the picture simply travels without
+     * one, which is what happened before this existed.
+     *
+     * And on this platform it cannot yet be made at all, which was worth
+     * measuring rather than assuming. Bitmap.compress writes its own optimised
+     * Huffman tables: a 40-pixel thumbnail comes out 951 bytes, of which 494
+     * are a colour profile, leaving less table and scan than the template's
+     * tables alone occupy. The two cannot be made to agree by choosing a
+     * quality - the tables are a different set, not a scaled one. Making one
+     * here means writing a JPEG encoder with the template's tables fixed, or
+     * agreeing a second shape between the two clients: a plain small JPEG
+     * would do, and the two are told apart by their first byte, since a
+     * stripped thumbnail begins with 0x01 and a JPEG with 0xFF. See #79.
+     *
+     * This is left in place because it is self-checking: it compares what it
+     * made against the template and sends nothing rather than something wrong,
+     * so a platform whose encoder does agree would simply start working.
+     */
+    public static byte[] miniThumbnail(String path) {
+        if (path == null || path.isEmpty()) {
+            return no("there is no file to read");
+        }
+        try {
+            android.graphics.BitmapFactory.Options options =
+                    new android.graphics.BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            android.graphics.BitmapFactory.decodeFile(path, options);
+            if (options.outWidth <= 0 || options.outHeight <= 0) {
+                return no("the file is not a picture: " + path);
+            }
+            // Read down first rather than loading a photograph to shrink it.
+            options.inJustDecodeBounds = false;
+            options.inSampleSize = Math.max(1, Math.min(options.outWidth, options.outHeight) / 40);
+            android.graphics.Bitmap full = android.graphics.BitmapFactory.decodeFile(path, options);
+            if (full == null) {
+                return no("the picture would not decode: " + path);
+            }
+
+            // Both sides fit in one byte each, which is the format's own limit.
+            float side = Math.max(full.getWidth(), full.getHeight());
+            float scale = side > 40 ? 40f / side : 1f;
+            android.graphics.Bitmap small = android.graphics.Bitmap.createScaledBitmap(full,
+                    Math.max(1, Math.round(full.getWidth() * scale)),
+                    Math.max(1, Math.round(full.getHeight() * scale)), true);
+            if (small != full) {
+                full.recycle();
+            }
+
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 20, out);
+            small.recycle();
+            byte[] jpeg = out.toByteArray();
+
+            byte[] template = Bitmaps.header;
+            // Compared from the quantisation table rather than from the first
+            // byte, because this encoder puts a colour profile in between: the
+            // template goes JFIF then straight to FF DB, and what comes out
+            // here goes JFIF, FF E2 ICC_PROFILE, then FF DB. Everything the
+            // reader cares about is the same; it starts at a different place.
+            final int tables = 20;                     // where FF DB is in the template
+            int start = markerAt(jpeg, 0xDB);
+            if (start < 0) {
+                return no("the encoder wrote no quantisation table");
+            }
+            if (jpeg.length <= start + (template.length - tables) + Bitmaps.footer.length) {
+                return no("the encoded thumbnail is only " + jpeg.length + " bytes, tables at " + start);
+            }
+            for (int k = 0; k + tables < template.length; k++) {
+                int i = tables + k;
+                // 164 and 166 are where the picture's own size sits, and they
+                // are the two bytes that travel.
+                if (i != 164 && i != 166 && jpeg[start + k] != template[i]) {
+                    StringBuilder made = new StringBuilder();
+                    StringBuilder wanted = new StringBuilder();
+                    for (int j = Math.max(0, start + k - 4); j < Math.min(jpeg.length, start + k + 8); j++) {
+                        made.append(String.format("%02x ", jpeg[j]));
+                    }
+                    for (int j = Math.max(0, i - 4); j < Math.min(template.length, i + 8); j++) {
+                        wanted.append(String.format("%02x ", template[j]));
+                    }
+                    FileLog.e("mls: this device encodes thumbnails differently at byte " + i
+                            + ", so none is sent. made: " + made + "| wanted: " + wanted);
+                    return null;
+                }
+            }
+
+            int after = start + (template.length - tables);
+            int carried = jpeg.length - after - Bitmaps.footer.length;
+            byte[] stripped = new byte[3 + carried];
+            stripped[0] = 1;
+            // Taken from what was actually encoded rather than from what was
+            // asked for, so the two bytes are whatever the reader will glue
+            // back into the same places.
+            stripped[1] = jpeg[start + (164 - tables)];
+            stripped[2] = jpeg[start + (166 - tables)];
+            System.arraycopy(jpeg, after, stripped, 3, carried);
+            return stripped;
+        } catch (Throwable e) {
+            // A picture that cannot be read is not a reason to fail the send.
+            FileLog.e("mls: cannot make a thumbnail: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** Says why there is no placeholder, once, where it can be read later. */
+    private static byte[] no(String why) {
+        // Not an error. On this platform it is the ordinary outcome - see the
+        // note on miniThumbnail - and a picture without a placeholder is a
+        // picture, so this is a note rather than a complaint.
+        FileLog.d("mls: no placeholder - " + why);
+        return null;
+    }
+
+    /** Where a JPEG marker starts, skipping the segments before it. */
+    private static int markerAt(byte[] jpeg, int marker) {
+        for (int i = 2; i + 1 < jpeg.length; ) {
+            if ((jpeg[i] & 0xFF) != 0xFF) {
+                return -1;
+            }
+            int kind = jpeg[i + 1] & 0xFF;
+            if (kind == marker) {
+                return i;
+            }
+            if (i + 3 >= jpeg.length) {
+                return -1;
+            }
+            i += 2 + (((jpeg[i + 2] & 0xFF) << 8) | (jpeg[i + 3] & 0xFF));
+        }
+        return -1;
     }
 
     /**
