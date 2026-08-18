@@ -53,6 +53,9 @@ public class MlsRuntime {
      *  ciphertext existed. */
     private final Map<Long, String> wroteHere = new HashMap<>();
 
+    /** And what the file in it was, for the same reason. */
+    private final Map<Long, TLRPCMls.TL_mls_media> sentMedia = new HashMap<>();
+
     public static MlsRuntime getInstance(int account) {
         synchronized (MlsRuntime.class) {
             if (instances[account] == null) {
@@ -567,11 +570,55 @@ public class MlsRuntime {
     /** Remembers what was written, so the server's copy of it does not replace
      *  the words with base64 when it comes back. */
     public void wrote(long randomId, String text) {
+        wrote(randomId, text, null);
+    }
+
+    /**
+     * The same, for a message carrying a file.
+     *
+     * The description is kept as well as the words, because the server's copy
+     * of a message we sent describes the file as what it was given: a document
+     * with no type, no name and no size that means anything. Handed back and
+     * stored, that copy replaces a local one that was right.
+     */
+    public void wrote(long randomId, String text, TLRPCMls.TL_mls_media media) {
         synchronized (this) {
             if (wroteHere.size() > 200) {
                 wroteHere.clear();     // nothing here is worth keeping for long
+                sentMedia.clear();
             }
             wroteHere.put(randomId, text);
+            if (media != null) {
+                sentMedia.put(randomId, media);
+            }
+        }
+    }
+
+    /**
+     * Puts back what the server could not echo.
+     *
+     * A message this device sent comes back as a ciphertext it can never open
+     * and, if it carried a file, as the blob the server was given. Both are
+     * strictly less than what is already here, so neither is allowed to
+     * replace it - the words come from what was written, and the file is
+     * described from the same descriptor that was sent, over the server's own
+     * id for it, so it stays downloadable.
+     */
+    public void restore(TLRPC.Message echoed, long randomId) {
+        if (echoed == null || !isCiphertext(echoed.message)) {
+            return;
+        }
+        String written;
+        TLRPCMls.TL_mls_media media;
+        synchronized (this) {
+            written = wroteHere.get(randomId);
+            media = sentMedia.get(randomId);
+        }
+        if (written != null) {
+            echoed.message = written;
+        }
+        if (media != null) {
+            MlsMedia.attach(echoed, media);
         }
     }
 

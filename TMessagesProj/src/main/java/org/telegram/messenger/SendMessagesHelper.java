@@ -2579,6 +2579,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                                             newMsgArr.remove(index);
                                             final int oldId = newMsgObj1.id;
                                             final ArrayList<TLRPC.Message> sentMessages = new ArrayList<>();
+                                            // What comes back for one of ours is a
+                                            // ciphertext this device can never open and,
+                                            // where there was a file, the blob the server
+                                            // was given. Both are less than what is
+                                            // already here, so what we sent goes back on
+                                            // before anything stores it.
+                                            MlsRuntime.getInstance(currentAccount)
+                                                    .restore(message, newMsgObj1.random_id);
                                             sentMessages.add(message);
                                             msgObj1.messageOwner.post_author = message.post_author;
                                             if ((message.flags & 33554432) != 0) {
@@ -5925,7 +5933,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             // Remembered under the random id the server will echo back, so its
             // copy of this message does not replace the caption with base64.
             MlsRuntime.getInstance(currentAccount)
-                    .wrote(message.obj.messageOwner.random_id, caption);
+                    .wrote(message.obj.messageOwner.random_id, caption, descriptor);
         }
 
         FileLog.d("mls: sending " + decryptedSize + " encrypted bytes to " + message.peer
@@ -7295,6 +7303,13 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                                     if (newMessage.message.action != null) {
                                         continue;
                                     } else {
+                                        // The server's copy of one of ours is a
+                                        // ciphertext this device can never open, and
+                                        // where there was a file it describes the blob
+                                        // it was given. What we sent goes back on before
+                                        // anything stores it.
+                                        MlsRuntime.getInstance(currentAccount)
+                                                .restore(newMessage.message, newMsgObj.random_id);
                                         sentMessages.add(message = newMessage.message);
                                     }
                                     Utilities.stageQueue.postRunnable(() -> getMessagesController().processNewDifferenceParams(-1, newMessage.pts, -1, newMessage.pts_count));
