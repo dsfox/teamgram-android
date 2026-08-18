@@ -9431,6 +9431,16 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             int count = media.size();
 
             boolean isEncrypted = DialogObject.isEncryptedDialog(dialogId);
+            // A file sent once is normally sent again by name alone, with nothing
+            // uploaded - which is right until the bytes have to be encrypted. Then
+            // the second send points at the first send's blob, encrypted with a key
+            // this conversation may never have been given, and skips the path that
+            // describes it: the message arrives with no type, no name and no key,
+            // and the picture in it can never be opened. That is what an empty
+            // bubble on a repeated picture was - 92 bytes in the database where a
+            // described one takes 276.
+            boolean carriesOwnKey = MlsRuntime.getInstance(accountInstance.getCurrentAccount())
+                    .hasConversation(dialogId);
             if (!forceDocument && groupMediaFinal) {
                 workers = new HashMap<>();
                 for (int a = 0; a < count; a++) {
@@ -9477,7 +9487,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         }
                         TLRPC.TL_photo photo = null;
                         String parentObject = null;
-                        if (!isEncrypted && info.ttl == 0) {
+                        if (!isEncrypted && !carriesOwnKey && info.ttl == 0) {
                             final int sentFileType = info.highQuality ? (!isEncrypted ? MessagesStorage.SENT_FILE_TYPE_PHOTO_HIGH_QUALITY : MessagesStorage.SENT_FILE_TYPE_PHOTO_HIGH_QUALITY_ENCRYPTED) : (!isEncrypted ? MessagesStorage.SENT_FILE_TYPE_PHOTO : MessagesStorage.SENT_FILE_TYPE_PHOTO_ENCRYPTED);
                             Object[] sentData = accountInstance.getMessagesStorage().getSentFile(originalPath, sentFileType);
                             if (sentData != null && sentData[0] instanceof TLRPC.TL_photo) {
@@ -9649,7 +9659,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         if (info.searchImage.photo instanceof TLRPC.TL_photo) {
                             photo = (TLRPC.TL_photo) info.searchImage.photo;
                         } else {
-                            if (!isEncrypted && info.ttl == 0) {
+                            if (!isEncrypted && !carriesOwnKey && info.ttl == 0) {
                                 /*Object[] sentData = getMessagesStorage().getSentFile(info.searchImage.imageUrl, !isEncrypted ? MessagesStorage.SENT_FILE_TYPE_PHOTO : MessagesStorage.SENT_FILE_TYPE_PHOTO_ENCRYPTED);
                                 if (sentData != null) {
                                     photo = (TLRPC.TL_photo) sentData[0];
@@ -10080,7 +10090,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                                     parentObject = worker.parentObject;
                                 }
                             } else {
-                                if (!isEncrypted && info.ttl == 0) {
+                                if (!isEncrypted && !carriesOwnKey && info.ttl == 0) {
                                     final int sentFileType = info.highQuality ? (!isEncrypted ? MessagesStorage.SENT_FILE_TYPE_PHOTO_HIGH_QUALITY : MessagesStorage.SENT_FILE_TYPE_PHOTO_HIGH_QUALITY_ENCRYPTED) : !isEncrypted ? MessagesStorage.SENT_FILE_TYPE_PHOTO : MessagesStorage.SENT_FILE_TYPE_PHOTO_ENCRYPTED;
                                     Object[] sentData = accountInstance.getMessagesStorage().getSentFile(originalPath, sentFileType);
                                     if (sentData != null && sentData[0] instanceof TLRPC.TL_photo) {

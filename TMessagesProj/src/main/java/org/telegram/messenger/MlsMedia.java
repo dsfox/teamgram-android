@@ -443,6 +443,12 @@ public final class MlsMedia {
             asPhoto.flags |= 1;
             // The caption is the message's own text and stays where it is.
             message.media = asPhoto;
+            FileLog.d("mls: message " + message.id + " carries a picture "
+                    + descriptor.width + "x" + descriptor.height
+                    + " of " + descriptor.size + " bytes, document " + document.id
+                    + " at dc " + document.dc_id + ", reference "
+                    + (document.file_reference == null ? -1 : document.file_reference.length)
+                    + " bytes, " + asPhoto.photo.sizes.size() + " sizes");
         }
         return true;
     }
