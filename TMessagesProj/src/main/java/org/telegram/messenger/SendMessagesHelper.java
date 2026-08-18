@@ -5865,6 +5865,28 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
      * that means anything - and everything that says what it really is goes
      * inside the message, encrypted to the two people in the conversation.
      */
+    /**
+     * Whether the bytes of this message have to be encrypted on the way up.
+     *
+     * True for a secret chat, which is what "sendRequest == null" meant at
+     * these call sites before, and now also for a conversation of ours - and
+     * the answer is remembered on the message, because what comes back from an
+     * encrypted upload is a different shape and the other half of the send has
+     * to know which one to expect.
+     *
+     * Asked for every kind of file rather than only for pictures. A photograph
+     * was going up encrypted and a video, a voice message and a document were
+     * going up in the clear, in the same conversation, with nothing said.
+     */
+    private boolean uploadEncrypted(DelayedMessage message) {
+        if (message.sendRequest == null) {
+            return true;
+        }
+        message.mlsEncrypted = MlsRuntime.getInstance(currentAccount)
+                .hasConversation(message.peer);
+        return message.mlsEncrypted;
+    }
+
     private void sendMlsMedia(DelayedMessage message, TLRPC.InputEncryptedFile uploaded,
                               byte[] key, byte[] iv, long decryptedSize, String path) {
         TLRPC.InputFile file = MlsMedia.asPlainFile(uploaded);
@@ -5926,8 +5948,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     // encrypt into. The same upload either way - it is the same
                     // code secret chats have used for years - and what differs
                     // is that the answer comes back with a key.
-                    message.mlsEncrypted = MlsRuntime.getInstance(currentAccount).hasConversation(message.peer);
-                    getFileLoader().uploadFile(location, message.mlsEncrypted, true, ConnectionsManager.FileTypePhoto);
+                    getFileLoader().uploadFile(location, uploadEncrypted(message), true, ConnectionsManager.FileTypePhoto);
                     putToUploadingMessages(message.obj);
                 } else {
                     String location = FileLoader.getInstance(currentAccount).getPathToAttach(message.photoSize).toString();
@@ -6006,9 +6027,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         putToDelayedMessages(location, message);
                         if (message.obj.videoEditedInfo == null || !message.obj.videoEditedInfo.notReadyYet) {
                             if (message.obj.videoEditedInfo != null && message.obj.videoEditedInfo.needConvert()) {
-                                getFileLoader().uploadFile(location, false, false, document.size, ConnectionsManager.FileTypeVideo, false);
+                                getFileLoader().uploadFile(location, uploadEncrypted(message), false, document.size, ConnectionsManager.FileTypeVideo, false);
                             } else {
-                                getFileLoader().uploadFile(location, false, false, ConnectionsManager.FileTypeVideo);
+                                getFileLoader().uploadFile(location, uploadEncrypted(message), false, ConnectionsManager.FileTypeVideo);
                             }
                         }
                         putToUploadingMessages(message.obj);
@@ -6115,7 +6136,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     if (media.file == null) {
                         String location = message.obj.messageOwner.attachPath;
                         putToDelayedMessages(location, message);
-                        getFileLoader().uploadFile(location, message.sendRequest == null, false, ConnectionsManager.FileTypeFile);
+                        getFileLoader().uploadFile(location, uploadEncrypted(message), false, ConnectionsManager.FileTypeFile);
                         putToUploadingMessages(message.obj);
                     } else if (media.thumb == null && message.photoSize != null && !(message.photoSize instanceof TLRPC.TL_photoStrippedSize)) {
                         String location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE) + "/" + message.photoSize.location.volume_id + "_" + message.photoSize.location.local_id + ".jpg";
@@ -6158,7 +6179,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         } else if (message.type == 3) {
             String location = message.obj.messageOwner.attachPath;
             putToDelayedMessages(location, message);
-            getFileLoader().uploadFile(location, message.sendRequest == null, true, ConnectionsManager.FileTypeAudio);
+            getFileLoader().uploadFile(location, uploadEncrypted(message), true, ConnectionsManager.FileTypeAudio);
             putToUploadingMessages(message.obj);
         } else if (message.type == 4) {
             boolean add = index < 0;
