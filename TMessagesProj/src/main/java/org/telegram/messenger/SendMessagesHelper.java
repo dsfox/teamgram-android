@@ -1761,6 +1761,20 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 fparams.payStars = payStars;
                 sendMessage(fparams);
             } else if (!DialogObject.isEncryptedDialog(did)) {
+                // A forward of a file into a conversation that encrypts cannot
+                // be a forward. The server copies by id, so the copy would
+                // point at the original blob - encrypted under a key this
+                // conversation was never given, or not encrypted at all - and
+                // carry neither a description nor a key. Nobody could open it,
+                // and nothing would say so.
+                //
+                // So it is sent again instead: read from disk, encrypted on
+                // the way up, described inside the ciphertext, with the
+                // original author carried in the same place a text forward
+                // carries it. The cost is that the file has to be here first.
+                if (forwardEncryptedFile(messageObject, did, payStars, monoForumPeerId, suggestionParams)) {
+                    return;
+                }
                 ArrayList<MessageObject> arrayList = new ArrayList<>();
                 arrayList.add(messageObject);
                 sendMessage(arrayList, did, true, false, true, 0, 0, null, -1, payStars, monoForumPeerId, suggestionParams);
@@ -1804,6 +1818,69 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             arrayList.add(messageObject);
             sendMessage(arrayList, did, true, false, true, 0, 0, null, -1, payStars, monoForumPeerId, suggestionParams);
         }
+    }
+
+
+    /**
+     * Sends a file again rather than forwarding it, when the conversation it is
+     * going into encrypts.
+     *
+     * True when it has been taken care of. False when this is not that case at
+     * all - no key, or nothing to send - and then the caller forwards as it
+     * always did.
+     *
+     * A file that is not on this device cannot be sent again, because sending
+     * it means reading it. Rather than forward it in the clear, which is the
+     * thing this exists to prevent, the message is refused and says why.
+     */
+    /** Whether any of these carries a file, which is what cannot be forwarded
+     *  into a conversation that encrypts. Asked before the list is split, so a
+     *  list of plain text goes through untouched rather than round again. */
+    private static boolean hasFile(ArrayList<MessageObject> messages) {
+        for (MessageObject each : messages) {
+            if (each != null && each.messageOwner != null && each.messageOwner.media != null
+                    && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty)
+                    && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean forwardEncryptedFile(MessageObject messageObject, long did, long payStars,
+                                         long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+        if (!MlsRuntime.getInstance(currentAccount).hasConversation(did)) {
+            return false;
+        }
+        File file = getFileLoader().getPathToMessage(messageObject.messageOwner);
+        if (file == null || !file.exists() || file.length() == 0) {
+            String path = messageObject.messageOwner.attachPath;
+            file = path == null || path.isEmpty() ? null : new File(path);
+        }
+        if (file == null || !file.exists() || file.length() == 0) {
+            FileLog.e("mls: a file being forwarded to " + did + " is not on this device, "
+                    + "so it is not sent - forwarding it would send it in the clear");
+            AndroidUtilities.runOnUIThread(() -> Toast.makeText(ApplicationLoader.applicationContext,
+                    LocaleController.getString(R.string.ErrorOccurred), Toast.LENGTH_SHORT).show());
+            return true;
+        }
+
+        final String path = file.getAbsolutePath();
+        final String caption = messageObject.messageOwner.message;
+        final MlsRuntime.Forwarded from = mlsForwardedFrom(messageObject);
+        AccountInstance account = AccountInstance.getInstance(currentAccount);
+        if (messageObject.isPhoto()) {
+            prepareSendingPhoto(account, path, null, null, did, null, null, null, null, null,
+                    null, null, 0, null, null, true, 0, 0, 0, false, caption, null, 0, 0,
+                    payStars, monoForumPeerId, suggestionParams);
+        } else {
+            prepareSendingDocument(account, path, path, null, caption,
+                    messageObject.getDocument() == null ? null : messageObject.getDocument().mime_type,
+                    did, null, null, null, null, null, true, 0, null, null, 0, false);
+        }
+        FileLog.d("mls: a file forwarded to " + did + " is sent again rather than copied, "
+                + (from == null ? "with no author" : "from " + from.id));
+        return true;
     }
 
     public void sendScreenshotMessage(TLRPC.User user, int messageId, TLRPC.Message resendMessage) {
@@ -2020,6 +2097,32 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     public int sendMessage(ArrayList<MessageObject> messages, final long peer, boolean forwardFromMyName, boolean hideCaption, boolean notify, int scheduleDate, int scheduleRepeatPeriod, MessageObject replyToTopMsg, int video_timestamp, long payStars, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+        // This is where a forward actually arrives, whatever started it. A
+        // forward of a file into a conversation that encrypts cannot be a
+        // forward at all: the server copies by id, so the copy points at the
+        // original blob - under a key this conversation was never given, or
+        // under none - and carries neither a description nor a key. Nobody
+        // could open it and nothing would say so.
+        if (messages != null && !messages.isEmpty()
+                && MlsRuntime.getInstance(currentAccount).hasConversation(peer)
+                && hasFile(messages)) {
+            ArrayList<MessageObject> plain = new ArrayList<>();
+            for (MessageObject each : messages) {
+                if (each != null && each.messageOwner != null && each.messageOwner.media != null
+                        && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty)
+                        && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage)) {
+                    forwardEncryptedFile(each, peer, payStars, monoForumPeerId, suggestionParams);
+                } else {
+                    plain.add(each);
+                }
+            }
+            if (plain.isEmpty()) {
+                return 0;
+            }
+            return sendMessage(plain, peer, forwardFromMyName, hideCaption, notify, scheduleDate,
+                    scheduleRepeatPeriod, replyToTopMsg, video_timestamp, payStars, monoForumPeerId,
+                    suggestionParams);
+        }
         if (messages == null || messages.isEmpty()) {
             return 0;
         }
