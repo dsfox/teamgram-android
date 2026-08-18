@@ -6034,10 +6034,21 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         }
                         putToDelayedMessages(location, message);
                         if (message.obj.videoEditedInfo == null || !message.obj.videoEditedInfo.notReadyYet) {
-                            if (message.obj.videoEditedInfo != null && message.obj.videoEditedInfo.needConvert()) {
-                                getFileLoader().uploadFile(location, uploadEncrypted(message), false, document.size, ConnectionsManager.FileTypeVideo, false);
+                            boolean encrypted = uploadEncrypted(message);
+                            // The form with a size is the one that starts sending a
+                            // video while it is still being converted, and an
+                            // encrypted upload cannot do that - FileUploadOperation
+                            // turns that mode off for itself when there is a key. It
+                            // then sits waiting to be told about bytes that are
+                            // already on disk, and the send stops at 0 KB with
+                            // nothing said. By here the conversion has finished
+                            // anyway - notReadyYet is what says otherwise - so the
+                            // whole file is read instead.
+                            if (!encrypted && message.obj.videoEditedInfo != null
+                                    && message.obj.videoEditedInfo.needConvert()) {
+                                getFileLoader().uploadFile(location, false, false, document.size, ConnectionsManager.FileTypeVideo, false);
                             } else {
-                                getFileLoader().uploadFile(location, uploadEncrypted(message), false, ConnectionsManager.FileTypeVideo);
+                                getFileLoader().uploadFile(location, encrypted, false, ConnectionsManager.FileTypeVideo);
                             }
                         }
                         putToUploadingMessages(message.obj);
