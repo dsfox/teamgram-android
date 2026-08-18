@@ -5892,6 +5892,8 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
         message.mlsEncrypted = MlsRuntime.getInstance(currentAccount)
                 .hasConversation(message.peer);
+        FileLog.d("mls: a file of type " + message.type + " for " + message.peer
+                + " goes up " + (message.mlsEncrypted ? "encrypted" : "in the clear"));
         return message.mlsEncrypted;
     }
 
@@ -5944,6 +5946,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     private void performSendDelayedMessage(final DelayedMessage message, int index) {
+        FileLog.d("mls: delayed message type " + message.type + " for " + message.peer
+                + ", request " + (message.sendRequest == null ? "none" : message.sendRequest.getClass().getSimpleName())
+                + ", upload now " + message.performMediaUpload);
         if (message.type == 0) {
             if (message.httpLocation != null) {
                 putToDelayedMessages(message.httpLocation, message);
