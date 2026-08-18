@@ -108,6 +108,9 @@ public class TranslateController extends BaseController {
     private Boolean contextTranslateEnabled;
 
     public boolean isChatTranslateEnabled() {
+        if (!Offered.TRANSLATION) {
+            return false;
+        }
         if (!getMessagesController().isTranslationsAutoEnabled()) {
             return false;
         }
@@ -118,6 +121,9 @@ public class TranslateController extends BaseController {
     }
 
     public boolean isContextTranslateEnabled() {
+        if (!Offered.TRANSLATION) {
+            return false;
+        }
         if (!getMessagesController().isTranslationsManualEnabled()) {
             return false;
         }

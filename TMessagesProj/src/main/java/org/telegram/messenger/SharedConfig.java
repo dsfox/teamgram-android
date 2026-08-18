@@ -1598,6 +1598,13 @@ public class SharedConfig {
     }
 
     public static int getChatSwipeAction(int currentAccount) {
+        // Neither of the two things a swipe reaches for by default exists here:
+        // moving a chat to the archive has no handler and folders return
+        // nothing. A swipe that appears to file a chat away and quietly does
+        // not is worse than one that mutes it, which works. See Offered.
+        if (!Offered.ARCHIVE && !Offered.FOLDERS) {
+            return SwipeGestureSettingsView.SWIPE_GESTURE_MUTE;
+        }
         if (chatSwipeAction >= 0) {
             if (chatSwipeAction == SwipeGestureSettingsView.SWIPE_GESTURE_FOLDERS && MessagesController.getInstance(currentAccount).dialogFilters.isEmpty()) {
                 return SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE;
