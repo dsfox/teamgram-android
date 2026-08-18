@@ -210,7 +210,11 @@ public final class MlsMedia {
                 return no("the encoder wrote no quantisation table");
             }
             if (jpeg.length <= start + (template.length - tables) + Bitmaps.footer.length) {
-                return no("the encoded thumbnail is only " + jpeg.length + " bytes, tables at " + start);
+                // This encoder writes its own, shorter tables, so the stripped
+                // shape is out of reach here. A plain small picture says what
+                // it is by itself, and the two are told apart by their first
+                // byte: 0x01 begins a stripped thumbnail, 0xFF a JPEG.
+                return plain(jpeg, start);
             }
             for (int k = 0; k + tables < template.length; k++) {
                 int i = tables + k;
@@ -247,6 +251,23 @@ public final class MlsMedia {
             FileLog.e("mls: cannot make a thumbnail: " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * The thumbnail as an ordinary small JPEG, for readers that cannot be
+     * handed the stripped shape.
+     *
+     * Only the colour profile is dropped - half the bytes of a 40-pixel
+     * picture are a description of sRGB that nothing here needs.
+     */
+    private static byte[] plain(byte[] jpeg, int tables) {
+        int head = markerAt(jpeg, 0xE0);
+        int keep = head < 0 ? 2 : tables;          // SOI, and the JFIF header
+        byte[] small = new byte[keep + (jpeg.length - tables)];
+        System.arraycopy(jpeg, 0, small, 0, keep);
+        System.arraycopy(jpeg, tables, small, keep, jpeg.length - tables);
+        FileLog.d("mls: the placeholder travels as a plain jpeg, " + small.length + " bytes");
+        return small;
     }
 
     /** Says why there is no placeholder, once, where it can be read later. */
@@ -404,11 +425,9 @@ public final class MlsMedia {
         // The blurred placeholder that came inside the message. The server made
         // no preview of this file and could not have: it is holding noise.
         document.thumbs = new ArrayList<>();
-        if (descriptor.thumb != null && descriptor.thumb.length > 0) {
-            TLRPC.TL_photoStrippedSize thumb = new TLRPC.TL_photoStrippedSize();
-            thumb.type = "i";
-            thumb.bytes = descriptor.thumb;
-            document.thumbs.add(thumb);
+        TLRPC.PhotoSize placeholder = placeholderOf(descriptor);
+        if (placeholder != null) {
+            document.thumbs.add(placeholder);
             document.flags |= 1;
         }
 
@@ -428,6 +447,37 @@ public final class MlsMedia {
         return true;
     }
 
+    /**
+     * The placeholder that travelled with the file, in whichever shape it came.
+     *
+     * Two are allowed, and they are told apart by their first byte rather than
+     * by a flag: a stripped thumbnail begins with 0x01, and a JPEG with 0xFF.
+     * The stripped one is what the other client makes and is a couple of
+     * hundred bytes; the plain one is what this platform can make at all, since
+     * its encoder writes tables the stripped shape has no room for. Both are
+     * read here so a picture from either side shows something before the file
+     * has come down.
+     */
+    private static TLRPC.PhotoSize placeholderOf(TLRPCMls.TL_mls_media descriptor) {
+        byte[] bytes = descriptor.thumb;
+        if (bytes == null || bytes.length < 4) {
+            return null;
+        }
+        if ((bytes[0] & 0xFF) == 0xFF) {
+            // A plain picture, which this client sends and does not yet show.
+            // Put into the sizes as a cached one it took the place of the
+            // photograph and the bubble came up empty white - twice, with the
+            // size corrected in between - so it is left out rather than left
+            // in and wrong. The file still arrives and still draws; what is
+            // missing is only the moment before it does.
+            return null;
+        }
+        TLRPC.TL_photoStrippedSize stripped = new TLRPC.TL_photoStrippedSize();
+        stripped.type = "i";
+        stripped.bytes = bytes;
+        return stripped;
+    }
+
     /** The document as a photograph: the same id and place, the size it is on
      *  screen, and the blurred placeholder if one travelled with it. */
     private static TLRPC.Photo asPhotograph(TLRPC.Document document,
@@ -440,10 +490,8 @@ public final class MlsMedia {
         photo.dc_id = document.dc_id;
         photo.document = document;
 
-        if (descriptor.thumb != null && descriptor.thumb.length > 0) {
-            TLRPC.TL_photoStrippedSize blurred = new TLRPC.TL_photoStrippedSize();
-            blurred.type = "i";
-            blurred.bytes = descriptor.thumb;
+        TLRPC.PhotoSize blurred = placeholderOf(descriptor);
+        if (blurred != null) {
             photo.sizes.add(blurred);
         }
         TLRPC.TL_photoSize full = new TLRPC.TL_photoSize();
@@ -451,7 +499,14 @@ public final class MlsMedia {
         full.w = descriptor.width;
         full.h = descriptor.height;
         full.size = (int) descriptor.size;
-        full.location = new TLRPC.TL_fileLocationUnavailable();
+        // A place of its own, taken from the document, because the name this
+        // picture is cached under is built from these two numbers. Left
+        // unavailable they are zero for every picture in every conversation,
+        // so the first one to be cached is the one every later one shows.
+        TLRPC.TL_fileLocationToBeDeprecated where = new TLRPC.TL_fileLocationToBeDeprecated();
+        where.volume_id = document.id;
+        where.local_id = document.dc_id;
+        full.location = where;
         photo.sizes.add(full);
         return photo;
     }
