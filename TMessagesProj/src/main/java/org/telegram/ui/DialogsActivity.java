@@ -8635,7 +8635,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             floatingButton3.setButtonVisible(isVisible, animated);
         }
         if (floatingButtonStories != null) {
-            floatingButtonStories.setButtonVisible(isVisible, animated);
+            // It never asked whether stories were on: it appeared beside the
+            // compose button whatever the answer, which is why switching
+            // stories off left the camera drawn.
+            floatingButtonStories.setButtonVisible(
+                    isVisible && getMessagesController().storiesEnabled(), animated);
         }
     }
 
