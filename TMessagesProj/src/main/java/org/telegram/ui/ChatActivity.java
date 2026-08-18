@@ -33887,6 +33887,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     public boolean canScheduleMessage() {
+        if (!org.telegram.messenger.Offered.SCHEDULED_MESSAGES) return false;
         if (chatMode == MODE_QUICK_REPLIES) return false;
         if (getMessagesController().isMonoForum(getDialogId())) {
             return false;

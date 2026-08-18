@@ -6383,13 +6383,14 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (!SharedConfig.inappCamera) {
             hasRecordVideo = false;
         }
-        // Not in a conversation that encrypts. A round video is the one message
-        // that is uploaded while it is still being recorded, and an encrypted
-        // upload cannot send a file that is still growing - so it either goes
-        // out in the clear or sticks half sent. Offering the button and failing
-        // is worse than not offering it. See the epic on what is switched off.
-        if (org.telegram.messenger.MlsRuntime.getInstance(currentAccount)
-                .hasConversation(dialog_id)) {
+        // A round video is the one message uploaded while it is still being
+        // recorded, and an encrypted upload cannot send a file that is still
+        // growing - so in a conversation that encrypts it either goes out in
+        // the clear or sticks half sent. Both were tried on a phone. See
+        // Offered, which is where everything switched off is written down.
+        if (!org.telegram.messenger.Offered.ROUND_VIDEO_WHEN_ENCRYPTED
+                && org.telegram.messenger.MlsRuntime.getInstance(currentAccount)
+                        .hasConversation(dialog_id)) {
             hasRecordVideo = false;
         }
         boolean currentModeVideo = false;
