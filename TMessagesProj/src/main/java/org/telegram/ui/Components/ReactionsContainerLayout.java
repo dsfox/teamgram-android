@@ -60,6 +60,7 @@ import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.AnimationNotificationsLocker;
@@ -1047,6 +1048,18 @@ public class ReactionsContainerLayout extends FrameLayout implements Notificatio
 
     public void setMessage(MessageObject message, TLRPC.ChatFull chatFull, boolean animated) {
         this.messageObject = message;
+        // Not offered. The server keeps no reactions, so one appears for a
+        // moment on the phone that tapped it and is gone by the next sync.
+        //
+        // Hidden here rather than by not building the strip at all: the menu
+        // that holds reply, forward, copy and delete uses this object sixteen
+        // times without ever checking whether it is there, and taking those
+        // down to hide a row of faces is a bad trade. Gone takes no space and
+        // nothing else changes. See Offered.
+        if (!Offered.REACTIONS) {
+            setVisibility(GONE);
+            return;
+        }
         int chosenCount = 0;
         if (messageObject != null && messageObject.messageOwner != null && messageObject.messageOwner.reactions != null) {
             for (TLRPC.ReactionCount reactionCount : messageObject.messageOwner.reactions.results) {
