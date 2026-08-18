@@ -36390,6 +36390,11 @@ public class TLRPC {
                 case 0xfb197a65:
                     result = new TL_photo();
                     break;
+                case 0x3efaa4fa:
+                    // Ours, and never on the wire: a picture from an encrypted
+                    // conversation, kept as the document it really is.
+                    result = new TLRPCMls.TL_mls_photoEncrypted();
+                    break;
                 case 0x9288dd29:
                     result = new TL_photo_layer82();
                     break;

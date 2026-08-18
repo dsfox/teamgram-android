@@ -411,7 +411,49 @@ public final class MlsMedia {
             document.thumbs.add(thumb);
             document.flags |= 1;
         }
+
+        // A picture is then dressed as a photograph, because that is the only
+        // thing this client draws in a bubble - a document, however plainly it
+        // says it is a JPEG, gets a row with a file name on it. The document
+        // travels inside, since that is what the bytes are actually fetched by.
+        if (descriptor.kind == KIND_IMAGE && descriptor.width > 0 && descriptor.height > 0) {
+            carried.document = null;
+            carried.flags &= ~1;
+            TLRPC.TL_messageMediaPhoto asPhoto = new TLRPC.TL_messageMediaPhoto();
+            asPhoto.photo = asPhotograph(document, descriptor);
+            asPhoto.flags |= 1;
+            // The caption is the message's own text and stays where it is.
+            message.media = asPhoto;
+        }
         return true;
+    }
+
+    /** The document as a photograph: the same id and place, the size it is on
+     *  screen, and the blurred placeholder if one travelled with it. */
+    private static TLRPC.Photo asPhotograph(TLRPC.Document document,
+                                            TLRPCMls.TL_mls_media descriptor) {
+        TLRPCMls.TL_mls_photoEncrypted photo = new TLRPCMls.TL_mls_photoEncrypted();
+        photo.id = document.id;
+        photo.access_hash = document.access_hash;
+        photo.file_reference = document.file_reference;
+        photo.date = document.date;
+        photo.dc_id = document.dc_id;
+        photo.document = document;
+
+        if (descriptor.thumb != null && descriptor.thumb.length > 0) {
+            TLRPC.TL_photoStrippedSize blurred = new TLRPC.TL_photoStrippedSize();
+            blurred.type = "i";
+            blurred.bytes = descriptor.thumb;
+            photo.sizes.add(blurred);
+        }
+        TLRPC.TL_photoSize full = new TLRPC.TL_photoSize();
+        full.type = "x";
+        full.w = descriptor.width;
+        full.h = descriptor.height;
+        full.size = (int) descriptor.size;
+        full.location = new TLRPC.TL_fileLocationUnavailable();
+        photo.sizes.add(full);
+        return photo;
     }
 
     private static void addImageSize(TLRPC.Document document, TLRPCMls.TL_mls_media descriptor) {

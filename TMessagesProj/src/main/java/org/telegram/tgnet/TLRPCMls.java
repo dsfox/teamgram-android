@@ -694,4 +694,49 @@ public class TLRPCMls {
             stream.writeByteArray(iv);
         }
     }
+
+    /**
+     * mls.photoEncrypted flags:# id:long access_hash:long file_reference:bytes date:int sizes:Vector&lt;PhotoSize&gt; dc_id:int document:Document = Photo;
+     *
+     * A picture from an encrypted conversation, as this device keeps it.
+     *
+     * Never on the wire: what the server holds is a document full of noise,
+     * and this is that document dressed as a photograph so the client draws it
+     * the way it draws every other picture - in a bubble rather than as a row
+     * with a file name on it, which is what a document gets.
+     *
+     * The document travels inside it because that is how the bytes are
+     * fetched. A photograph is fetched by a photo id the server would have to
+     * know, and it does not: it was never given a photograph.
+     */
+    public static class TL_mls_photoEncrypted extends TLRPC.TL_photo {
+        public static final int constructor = 1056613626;
+
+        /** The blob the server is holding, with the key that opens it. */
+        public TLRPC.Document document;
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            super.readParams(stream, exception);
+            document = TLRPC.Document.TLdeserialize(stream, stream.readInt32(exception), exception);
+        }
+
+        /**
+         * The parent's body again, because the first thing it writes is its own
+         * constructor and a subclass cannot ask it to write a different one.
+         */
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(flags);
+            stream.writeInt64(id);
+            stream.writeInt64(access_hash);
+            stream.writeByteArray(file_reference);
+            stream.writeInt32(date);
+            Vector.serialize(stream, sizes);
+            if ((flags & 1) != 0) {
+                Vector.serialize(stream, video_sizes);
+            }
+            stream.writeInt32(dc_id);
+            document.serializeToStream(stream);
+        }
+    }
 }
