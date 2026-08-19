@@ -5198,11 +5198,22 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             info.setCheckable(true);
             info.setChecked(true);
         }
+        // The words a screen reader would say, put on the node itself as well.
+        // The event below fires only while a reader is driving; anything that
+        // reads the tree cold - accessibility tooling, the checks on two
+        // phones - was seeing a row with a name it could not ask for.
+        info.setContentDescription(buildAccessibilityDescription());
     }
 
     @Override
     public void onPopulateAccessibilityEvent(AccessibilityEvent event) {
         super.onPopulateAccessibilityEvent(event);
+        CharSequence description = buildAccessibilityDescription();
+        event.setContentDescription(description);
+        setContentDescription(description);
+    }
+
+    private CharSequence buildAccessibilityDescription() {
         StringBuilder sb = new StringBuilder();
         if (titleOverride != null) {
             sb.append(titleOverride);
@@ -5273,9 +5284,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             sb.append(". ");
         }
         if (message == null || currentDialogFolderId != 0) {
-            event.setContentDescription(sb);
-            setContentDescription(sb);
-            return;
+            return sb;
         }
         int lastDate = lastMessageDate;
         if (lastMessageDate == 0) {
@@ -5321,8 +5330,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 sb.append(messageString);
             }
         }
-        event.setContentDescription(sb);
-        setContentDescription(sb);
+        return sb;
     }
 
     private MessageObject getCaptionMessage() {
