@@ -777,6 +777,11 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
          *  inside the message rather than beside it. */
         public boolean mlsEncrypted;
 
+        /** Who wrote a forwarded file first. A text forward hands this to
+         *  encrypt directly; a file is encrypted only after its upload, so
+         *  the author rides here until then. */
+        public MlsRuntime.Forwarded mlsForwarded;
+
         private boolean retriedToSend;
         public boolean[] retriedToSendArray;
 
@@ -1852,14 +1857,13 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         if (!MlsRuntime.getInstance(currentAccount).hasConversation(did)) {
             return false;
         }
-        File file = getFileLoader().getPathToMessage(messageObject.messageOwner);
-        if (file == null || !file.exists() || file.length() == 0) {
-            String path = messageObject.messageOwner.attachPath;
-            file = path == null || path.isEmpty() ? null : new File(path);
-        }
-        if (file == null || !file.exists() || file.length() == 0) {
+        File file = forwardableBytes(messageObject);
+        if (file == null) {
             FileLog.e("mls: a file being forwarded to " + did + " is not on this device, "
-                    + "so it is not sent - forwarding it would send it in the clear");
+                    + "so it is not sent - forwarding it would send it in the clear. "
+                    + "attachPath '" + messageObject.messageOwner.attachPath + "', media "
+                    + (messageObject.messageOwner.media == null ? "none"
+                            : messageObject.messageOwner.media.getClass().getSimpleName()));
             AndroidUtilities.runOnUIThread(() -> Toast.makeText(ApplicationLoader.applicationContext,
                     LocaleController.getString(R.string.ErrorOccurred), Toast.LENGTH_SHORT).show());
             return true;
@@ -1867,20 +1871,136 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
         final String path = file.getAbsolutePath();
         final String caption = messageObject.messageOwner.message;
+        final ArrayList<TLRPC.MessageEntity> entities = messageObject.messageOwner.entities;
         final MlsRuntime.Forwarded from = mlsForwardedFrom(messageObject);
-        AccountInstance account = AccountInstance.getInstance(currentAccount);
-        if (messageObject.isPhoto()) {
-            prepareSendingPhoto(account, path, null, null, did, null, null, null, null, null,
-                    null, null, 0, null, null, true, 0, 0, 0, false, caption, null, 0, 0,
-                    payStars, monoForumPeerId, suggestionParams);
+        final TLRPC.MessageMedia media = messageObject.messageOwner.media;
+        SendMessageParams fparams;
+        if (media.photo instanceof TLRPC.TL_photo) {
+            TLRPC.TL_photo photo = unsent((TLRPC.TL_photo) media.photo);
+            // The upload reads a photograph by the name its largest size
+            // carries, and a message restored after its echo can carry a name
+            // the bytes were never stored under. Put them there, so the upload
+            // finds what the bubble already shows.
+            TLRPC.PhotoSize largest = photo.sizes.get(photo.sizes.size() - 1);
+            File wanted = getFileLoader().getPathToAttach(largest);
+            if (wanted != null && !wanted.exists()) {
+                AndroidUtilities.copyFileSafe(file, wanted);
+            }
+            fparams = SendMessageParams.of(photo, path, did,
+                    null, null, caption, entities, null, null, true, 0, 0, media.ttl_seconds,
+                    null, false);
+        } else if (media.document instanceof TLRPC.TL_document) {
+            // The same document, not a plain file: the attributes are what say
+            // a round video is round and a voice message has a length, and the
+            // descriptor is written from them.
+            fparams = SendMessageParams.of(unsent((TLRPC.TL_document) media.document), null, path,
+                    did, null, null, caption, entities, null, null, true, 0, 0, media.ttl_seconds,
+                    null, null, false);
         } else {
+            AccountInstance account = AccountInstance.getInstance(currentAccount);
             prepareSendingDocument(account, path, path, null, caption,
                     messageObject.getDocument() == null ? null : messageObject.getDocument().mime_type,
                     did, null, null, null, null, null, true, 0, null, null, 0, false);
+            FileLog.d("mls: a file forwarded to " + did + " is sent again rather than copied, "
+                    + "as a plain file with no author");
+            return true;
         }
+        fparams.mlsForwarded = from;
+        fparams.payStars = payStars;
+        fparams.monoForumPeer = monoForumPeerId;
+        fparams.suggestionParams = suggestionParams;
+        sendMessage(fparams);
         FileLog.d("mls: a file forwarded to " + did + " is sent again rather than copied, "
                 + (from == null ? "with no author" : "from " + from.id));
         return true;
+    }
+
+    /**
+     * The bytes of this message on this device, wherever they actually are.
+     *
+     * The message's own idea of where they live is tried first and is often
+     * wrong for a message of ours: after the echo the sender's copy can name a
+     * location the file was never stored under, while the bytes sit beside it
+     * under the blob's name - both for a picture this device sent and for one
+     * it received and decrypted. So the blob is asked too, and only when
+     * nobody holds the bytes is the forward refused.
+     */
+    private File forwardableBytes(MessageObject messageObject) {
+        File file = getFileLoader().getPathToMessage(messageObject.messageOwner);
+        if (file != null && file.exists() && file.length() > 0) {
+            return file;
+        }
+        file = getFileLoader().getPathToMessage(messageObject.messageOwner, true, true);
+        if (file != null && file.exists() && file.length() > 0) {
+            return file;
+        }
+        String path = messageObject.messageOwner.attachPath;
+        if (path != null && !path.isEmpty()) {
+            file = new File(path);
+            if (file.exists() && file.length() > 0) {
+                return file;
+            }
+        }
+        TLRPC.MessageMedia media = messageObject.messageOwner.media;
+        TLRPC.Document blob = null;
+        if (media != null && media.photo instanceof TLRPCMls.TL_mls_photoEncrypted) {
+            blob = ((TLRPCMls.TL_mls_photoEncrypted) media.photo).document;
+        } else if (media != null && media.document != null) {
+            blob = media.document;
+        }
+        if (blob != null) {
+            file = getFileLoader().getPathToAttach(blob, true);
+            if (file != null && file.exists() && file.length() > 0) {
+                return file;
+            }
+            file = getFileLoader().getPathToAttach(blob, false);
+            if (file != null && file.exists() && file.length() > 0) {
+                return file;
+            }
+        }
+        // A sent picture's bytes end up under the photograph's own id - the
+        // name the echo's descriptor gives it - even when the message in the
+        // chat still points at the name it had before the echo.
+        if (media != null && media.photo != null && media.photo.id != 0) {
+            TLRPC.TL_photoSize twin = new TLRPC.TL_photoSize();
+            twin.type = "x";
+            twin.location = new TLRPC.TL_fileLocationToBeDeprecated();
+            twin.location.volume_id = media.photo.id;
+            twin.location.local_id = media.photo.dc_id > 0 ? media.photo.dc_id : 1;
+            file = getFileLoader().getPathToAttach(twin);
+            if (file != null && file.exists() && file.length() > 0) {
+                return file;
+            }
+            file = getFileLoader().getPathToAttach(twin, true);
+            if (file != null && file.exists() && file.length() > 0) {
+                return file;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A copy the server has never been told about, so the send uploads the
+     * bytes again rather than pointing at the original blob - which is the
+     * leak this path exists to close. The thumbnails stay behind too: they
+     * name files this device may not hold, and the descriptor makes its own.
+     */
+    private static TLRPC.TL_photo unsent(TLRPC.TL_photo photo) {
+        TLRPC.TL_photo copy = new TLRPC.TL_photo();
+        copy.date = photo.date;
+        copy.sizes.addAll(photo.sizes);
+        copy.file_reference = new byte[0];
+        return copy;
+    }
+
+    private static TLRPC.TL_document unsent(TLRPC.TL_document document) {
+        TLRPC.TL_document copy = new TLRPC.TL_document();
+        copy.date = document.date;
+        copy.mime_type = document.mime_type;
+        copy.size = document.size;
+        copy.attributes.addAll(document.attributes);
+        copy.file_reference = new byte[0];
+        return copy;
     }
 
     public void sendScreenshotMessage(TLRPC.User user, int messageId, TLRPC.Message resendMessage) {
@@ -5314,6 +5434,10 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         inputMedia = inputPaidMedia;
                     }
 
+                    if (delayedMessage != null) {
+                        delayedMessage.mlsForwarded = sendMessageParams.mlsForwarded;
+                    }
+
                     TLObject reqSend;
 
                     if (groupId != 0) {
@@ -6016,7 +6140,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
         String carried = file == null || descriptor == null ? null
                 : MlsRuntime.getInstance(currentAccount)
-                        .encrypt(message.peer, caption, entities, null, descriptor);
+                        .encrypt(message.peer, caption, entities, message.mlsForwarded, descriptor);
         if (carried == null) {
             // The bytes are already up there and nobody can read them: the key
             // never left this device. Sending the document anyway would post
