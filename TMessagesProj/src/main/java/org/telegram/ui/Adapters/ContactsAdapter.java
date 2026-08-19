@@ -28,6 +28,7 @@ import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
@@ -248,7 +249,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 } else if (needPhonebook) {
                     return row < 2;
                 } else {
-                    return row < 3;
+                    return row < (Offered.CHANNELS ? 3 : 1);
                 }
             } else {
                 if (isEmpty) {
@@ -339,8 +340,12 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
             }
         } else {
             if (section == 0) {
+                // Without channels the compose rows are one shorter, and the
+                // shadow and header behind them move up with the count - the
+                // rows here are asked for by position, so the count and the
+                // positions have to change together or the list draws wrong.
                 if (isEmpty) {
-                    return (includeSearch ? 1 : 0) + 2;
+                    return (includeSearch ? 1 : 0) + (Offered.CHANNELS ? 2 : 1);
                 }
 
                 if (isAdmin) {
@@ -348,7 +353,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 } else if (needPhonebook) {
                     return (includeSearch ? 1 : 0) + 4;
                 } else {
-                    return (includeSearch ? 1 : 0) + 4;
+                    return (includeSearch ? 1 : 0) + (Offered.CHANNELS ? 4 : 3);
                 }
             } else {
                 if (isEmpty) {
@@ -575,7 +580,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                     } else {
                         if (position == 0) {
                             textCell.setTextAndValueAndColorfulIcon(getString(R.string.NewGroup), "", false, R.drawable.settings_group, 0xFF1CA5ED, 0xFF1488E1, false);
-                        } else if (position == 1) {
+                        } else if (Offered.CHANNELS && position == 1) {
                             textCell.setTextAndValueAndColorfulIcon(getString(R.string.NewChannel), "", false, R.drawable.settings_channel, 0xFF55CA47, 0xFF27B434, false);
                         }
                     }
@@ -662,10 +667,10 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                         return isEmpty ? SHADOW_CELL : (sortType == SORT_TYPE_BY_NAME || sortType == SORT_TYPE_BY_TIME ? HEADER_CELL : GRAY_CELL);
                     }
                 } else {
-                    if (position == 2) {
+                    if (position == (Offered.CHANNELS ? 2 : 1)) {
                         return SHADOW_CELL;
                     }
-                    if (position == 3) {
+                    if (position == (Offered.CHANNELS ? 3 : 2)) {
                         return isEmpty ? SHADOW_CELL : (sortType == SORT_TYPE_BY_NAME || sortType == SORT_TYPE_BY_TIME ? HEADER_CELL : GRAY_CELL);
                     }
                 }

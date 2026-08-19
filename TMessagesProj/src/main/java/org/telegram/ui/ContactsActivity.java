@@ -65,6 +65,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -697,7 +698,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                             }
                             Bundle args = new Bundle();
                             presentFragment(new GroupCreateActivity(args), false);
-                        } else if (row == 1) {
+                        } else if (Offered.CHANNELS && row == 1) {
                             if (MessagesController.getInstance(currentAccount).isFrozen()) {
                                 AccountFrozenAlert.show(currentAccount);
                                 return;
