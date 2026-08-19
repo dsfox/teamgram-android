@@ -1916,6 +1916,40 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     /**
+     * A send that was parked until its recording finished is started now.
+     *
+     * A round video in a conversation that encrypts gives up its head start:
+     * nothing is uploaded while the file is still growing, so the message
+     * sits in delayedMessages with notReadyYet on its videoEditedInfo. The
+     * recorder calls this when the file is whole; the same re-entry the
+     * convert pipeline uses then reads the finished file and uploads it
+     * encrypted.
+     */
+    public void videoFileFinished(String location) {
+        AndroidUtilities.runOnUIThread(() -> {
+            ArrayList<DelayedMessage> arr = delayedMessages.remove(location);
+            FileLog.d("mls: waking " + (arr == null ? "no" : arr.size())
+                    + " parked send(s) at " + location);
+            if (arr == null) {
+                return;
+            }
+            // Taken off the map before anything is re-entered: the send parks
+            // itself again under the same key while it uploads, and walking
+            // the live list while it grows is a loop that never ends.
+            for (DelayedMessage message : arr) {
+                if (message.obj != null && message.obj.videoEditedInfo != null) {
+                    // The recorder's own copy of this flag was cleared, but the
+                    // message carries a copy of a copy - and the caller is the
+                    // one who knows the file is whole.
+                    message.obj.videoEditedInfo.notReadyYet = false;
+                }
+                message.videoEditedInfo = null;
+                performSendDelayedMessage(message);
+            }
+        });
+    }
+
+    /**
      * The bytes of this message on this device, wherever they actually are.
      *
      * The message's own idea of where they live is tried first and is often

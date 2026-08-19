@@ -94,13 +94,11 @@ public final class Offered {
      */
     public static final boolean REACTIONS = false;
 
-    /**
-     * A round video message, in a conversation that encrypts.
-     *
-     * It is the one message uploaded while it is still being recorded, and an
-     * encrypted upload cannot send a file that is still growing. Elsewhere it
-     * works and is offered - this is the only switch here that is not
-     * all-or-nothing, and it lives in ChatActivityEnterView.checkRoundVideo.
-     */
-    public static final boolean ROUND_VIDEO_WHEN_ENCRYPTED = false;
+    // A round video in a conversation that encrypts used to be switched off
+    // here: the one message uploaded while it was still being recorded, which
+    // an encrypted upload cannot take. It is offered again since #80 - the
+    // head start is given up in InstantCameraView, the recording goes to a
+    // file first, and the send uploads it whole and encrypted the way an
+    // ordinary video goes. Kept as a note rather than a switch, so the next
+    // person looking for the row finds where it went.
 }

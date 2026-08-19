@@ -6383,16 +6383,6 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (!SharedConfig.inappCamera) {
             hasRecordVideo = false;
         }
-        // A round video is the one message uploaded while it is still being
-        // recorded, and an encrypted upload cannot send a file that is still
-        // growing - so in a conversation that encrypts it either goes out in
-        // the clear or sticks half sent. Both were tried on a phone. See
-        // Offered, which is where everything switched off is written down.
-        if (!org.telegram.messenger.Offered.ROUND_VIDEO_WHEN_ENCRYPTED
-                && org.telegram.messenger.MlsRuntime.getInstance(currentAccount)
-                        .hasConversation(dialog_id)) {
-            hasRecordVideo = false;
-        }
         boolean currentModeVideo = false;
         if (hasRecordVideo) {
             if (SharedConfig.hasCameraCache) {
