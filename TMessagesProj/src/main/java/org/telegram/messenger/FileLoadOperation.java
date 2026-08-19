@@ -443,6 +443,14 @@ public class FileLoadOperation {
                     iv = new byte[32];
                     System.arraycopy(documentLocation.iv, 0, iv, 0, iv.length);
                     key = documentLocation.key;
+                    // The bytes decrypt as a chain: each block's iv is the
+                    // ciphertext before it. Chunks fetched in parallel and
+                    // saved wherever they land decrypt everything after the
+                    // first chunk with the wrong state - a file bigger than
+                    // one chunk came down as 32 KB of video and 100 KB of
+                    // noise, and nothing said so. Fetched one chunk after
+                    // another instead, the way a secret chat's file is.
+                    allowDisordererFileSave = false;
                 }
                 for (int a = 0, N = documentLocation.attributes.size(); a < N; a++) {
                     if (documentLocation.attributes.get(a) instanceof TLRPC.TL_documentAttributeVideo) {
