@@ -117,6 +117,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -8940,6 +8941,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         int count = selectedDialogs.size();
         int pinnedActionCount = 0;
         if (action == archive || action == archive2) {
+            if (!Offered.ARCHIVE) {
+                return;
+            }
             ArrayList<Long> copy = new ArrayList<>(selectedDialogs);
             getMessagesController().addDialogToFolder(copy, canUnarchiveCount == 0 ? 1 : 0, -1, null, 0);
             if (canUnarchiveCount == 0) {
@@ -9628,7 +9632,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
         }
         if (archiveItem != null && archive2Item != null) {
-            if (canUnarchiveCount != 0) {
+            // The archive is not offered: moving a chat there has no handler
+            // on the server, so it slides away and comes back on the next
+            // sync. The swipe is already a mute; this hides the other doors -
+            // the box on the selection bar and the row in its menu.
+            if (!Offered.ARCHIVE) {
+                archiveItem.setVisibility(View.GONE);
+                archive2Item.setVisibility(View.GONE);
+            } else if (canUnarchiveCount != 0) {
                 final String contentDescription = LocaleController.getString(R.string.Unarchive);
                 archiveItem.setTextAndIcon(contentDescription, R.drawable.msg_unarchive);
                 archive2Item.setIcon(R.drawable.msg_unarchive);
@@ -10623,6 +10634,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private void showFiltersHint() {
+        // Folders are not offered - the hint would lead to a screen that can
+        // create nothing. See Offered.
+        if (!Offered.FOLDERS) {
+            return;
+        }
         if (askingForPermissions || !getMessagesController().dialogFiltersLoaded || !getMessagesController().showFiltersTooltip || filterTabsView == null || !getMessagesController().getDialogFilters().isEmpty() || isPaused || !getUserConfig().filtersLoaded || inPreviewMode) {
             return;
         }

@@ -60,6 +60,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.Utilities;
@@ -656,7 +657,11 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
             textSizeHeaderRow = rowCount++;
             textSizeRow = rowCount++;
             backgroundRow = rowCount++;
-            changeUserColor = rowCount++;
+            // Name colours are not offered: the picker would open empty, the
+            // server has no palette to give it. See Offered.
+            if (Offered.NAME_COLOURS) {
+                changeUserColor = rowCount++;
+            }
             newThemeInfoRow = rowCount++;
             themeHeaderRow = rowCount++;
 

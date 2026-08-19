@@ -152,6 +152,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
@@ -6016,6 +6017,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 VoIPHelper.startCall(user, isVideoCall, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
             }
         } else if (chatId != 0) {
+            // The entries that lead here are hidden, and this holds the door
+            // for any that were missed: a video chat cannot be started.
+            if (!Offered.VIDEO_CHATS) {
+                return;
+            }
             ChatObject.Call call = getMessagesController().getGroupCall(chatId, false);
             if (call == null) {
                 VoIPHelper.showGroupCallAlert(ProfileActivity.this, currentChat, null, false, getAccountInstance());
@@ -11854,8 +11860,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         otherItem.addSubItem(add_photo, R.drawable.msg_addphoto, LocaleController.getString(R.string.AddPhoto));
                     }
                 }
-                editColorItem = otherItem.addSubItem(edit_color, R.drawable.menu_profile_colors, LocaleController.getString(R.string.ProfileColorEdit));
-                updateEditColorIcon();
+                // Name colours are not offered - the picker would open empty.
+                if (Offered.NAME_COLOURS) {
+                    editColorItem = otherItem.addSubItem(edit_color, R.drawable.menu_profile_colors, LocaleController.getString(R.string.ProfileColorEdit));
+                    updateEditColorIcon();
+                }
                 if (myProfile) {
                     setUsernameItem = otherItem.addSubItem(set_username, R.drawable.menu_username_change, getString(R.string.ProfileUsernameEdit));
                     linkItem = otherItem.addSubItem(copy_link_profile, R.drawable.msg_link2, getString(R.string.ProfileCopyLink));
@@ -11959,7 +11968,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }
                 }
                 if (chatInfo != null) {
-                    if (ChatObject.canManageCalls(chat) && chatInfo.call == null) {
+                    // Video chats are not offered: nothing implements them on
+                    // the server, and the button would open a room nobody can
+                    // enter. See Offered.
+                    if (Offered.VIDEO_CHATS && ChatObject.canManageCalls(chat) && chatInfo.call == null) {
                         otherItem.addSubItem(call_item, R.drawable.msg_voicechat, chat.megagroup && !chat.gigagroup ? LocaleController.getString(R.string.StartVoipChat) : LocaleController.getString(R.string.StartVoipChannel));
                         hasVoiceChatItem = true;
                         if (chat.megagroup && !chat.gigagroup) {
@@ -12035,7 +12047,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
             } else {
                 if (chatInfo != null) {
-                    if (ChatObject.canManageCalls(chat) && chatInfo.call == null) {
+                    if (Offered.VIDEO_CHATS && ChatObject.canManageCalls(chat) && chatInfo.call == null) {
                         otherItem.addSubItem(call_item, R.drawable.msg_voicechat, LocaleController.getString(R.string.StartVoipChat));
                         hasVoiceChatItem = true;
                         voiceChatAction = true;
@@ -14359,8 +14371,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(610, getString(R.string.FeaturedEmojiPacks), "featuredStickersHeaderRow", getString(R.string.StickersName), getString(R.string.Emoji), R.drawable.input_smile, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_EMOJIPACKS, null))),
                     new SearchResult(611, getString(R.string.DoubleTapSetting), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new ReactionsDoubleTapManageActivity())).withLink("tg://settings/appearance/stickers-and-emoji/emoji/quick-reaction"),
 
-                    new SearchResult(700, getString(R.string.Filters), null, R.drawable.msg2_folder, () -> f.presentFragment(new FiltersSetupActivity())).withLink("tg://settings/folders"),
-                    new SearchResult(701, getString(R.string.CreateNewFilter), "createFilterRow", getString(R.string.Filters), R.drawable.msg2_folder, () -> f.presentFragment(new FiltersSetupActivity())).withLink("tg://settings/folders/create"),
+                    // Folders are not offered, and settings search must not
+                    // find what the settings screens no longer show.
+                    Offered.FOLDERS ? new SearchResult(700, getString(R.string.Filters), null, R.drawable.msg2_folder, () -> f.presentFragment(new FiltersSetupActivity())).withLink("tg://settings/folders") : null,
+                    Offered.FOLDERS ? new SearchResult(701, getString(R.string.CreateNewFilter), "createFilterRow", getString(R.string.Filters), R.drawable.msg2_folder, () -> f.presentFragment(new FiltersSetupActivity())).withLink("tg://settings/folders/create") : null,
 
                     isPremiumFeatureAvailable(currentAccount, -1) ? new SearchResult(800, getString(R.string.TelegramPremium), R.drawable.msg_settings_premium, () -> f.presentFragment(new PremiumPreviewFragment("settings"))) : null,
                     isPremiumFeatureAvailable(currentAccount, PremiumPreviewFragment.PREMIUM_FEATURE_LIMITS) ? new SearchResult(801, getString(R.string.PremiumPreviewLimits), getString(R.string.TelegramPremium), R.drawable.msg_settings_premium, () -> f.showDialog(new PremiumFeatureBottomSheet(f, PremiumPreviewFragment.PREMIUM_FEATURE_LIMITS, false).setForceAbout())) : null,
