@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class RLottieDrawable extends BitmapDrawable implements Animatable, BitmapsCache.Cacheable {
 
@@ -316,6 +317,12 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable, Bitma
     private boolean genCacheSend;
     private boolean allowDrawFramesWhileCacheGenerating;
     private long lastDrawnTime;
+    // Aggregate cost of native frame decodes, over every animation at once.
+    // The average is the number issue #30 asks for; adb logcat -s ice9.rlottie
+    // reads it without a debug build.
+    private static final AtomicLong decodedFrames = new AtomicLong();
+    private static final AtomicLong decodeNanos = new AtomicLong();
+
     protected Runnable loadFrameRunnable = new Runnable() {
         private long lastUpdate = 0;
 
@@ -379,7 +386,13 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable, Bitma
                             FileLog.e(e);
                         }
                     } else {
+                        final long decodeStart = System.nanoTime();
                         result = getFrame(ptrToUse, currentFrame, backgroundBitmap, width, height, backgroundBitmap.getRowBytes(), true);
+                        final long nanos = decodeNanos.addAndGet(System.nanoTime() - decodeStart);
+                        final long frames = decodedFrames.incrementAndGet();
+                        if (frames % 100 == 0) {
+                            android.util.Log.d("ice9.rlottie", frames + " frames decoded, " + (nanos / frames / 1000) + " us each on average");
+                        }
                     }
                     if (bitmapsCache != null && bitmapsCache.needGenCache()) {
                         if (!genCacheSend) {

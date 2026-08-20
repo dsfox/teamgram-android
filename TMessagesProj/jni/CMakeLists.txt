@@ -276,25 +276,35 @@ set_target_properties(rlottie PROPERTIES
 target_compile_definitions(rlottie PUBLIC
         HAVE_PTHREAD NDEBUG)
 
-# rlottie's NEON path calls hand-written pixman assembly, and that assembly is
-# not in this build: the NDK dropped GNU binutils in r23, and clang's integrated
-# assembler rejects the pixman macros. That was decided in #30, which also says
-# rlottie has a C path for both entry points, so the only cost is slower
-# stickers.
+# rlottie's NEON path calls hand-written pixman assembly. It used to be out of
+# this build entirely - the NDK dropped GNU binutils in r23 and clang's
+# integrated assembler rejected the pixman macros (.func, .if over a macro
+# argument) - so both ABIs took the slower C path, and on armeabi-v7a the
+# compiler's own __ARM_NEON__ still chose the assembly branch and the link
+# died on a symbol nobody had built.
 #
-# What the decision missed is that the branch is chosen by __ARM_NEON__, which
-# the compiler defines by itself on armeabi-v7a. So on that ABI the NEON path
-# was still compiled, still called pixman_composite_src_n_8888_asm_neon, and the
-# link failed on a symbol nobody had built. arm64 was fine because the guard
-# there is __ARM64_NEON__, which is ours and is not set.
+# On arm64 the assembly is back: upstream pixman ported these files to the
+# integrated assembler, and ours are now upstream's, taken whole (#30). The
+# branch is chosen by __ARM64_NEON__, which is ours to set, on exactly the
+# two files that choose.
 #
-# Undone for the two files that choose between the two paths, and only those:
-# __ARM_NEON__ elsewhere is a real answer to a real question, and taking it away
-# from libyuv would cost speed for nothing.
-set_source_files_properties(
-        rlottie/src/vector/vdrawhelper.cpp
-        rlottie/src/vector/vdrawhelper_neon.cpp
-        PROPERTIES COMPILE_OPTIONS "-U__ARM_NEON__")
+# armeabi-v7a keeps the C path: its assembly is a different file nobody has
+# ported, so __ARM_NEON__ is undone there for the same two files and only
+# those - __ARM_NEON__ elsewhere is a real answer to a real question, and
+# taking it away from libyuv would cost speed for nothing.
+if (${ANDROID_ABI} STREQUAL "arm64-v8a")
+    target_sources(rlottie PRIVATE
+            rlottie/src/vector/pixman/pixman-arma64-neon-asm.S)
+    set_source_files_properties(
+            rlottie/src/vector/vdrawhelper.cpp
+            rlottie/src/vector/vdrawhelper_neon.cpp
+            PROPERTIES COMPILE_OPTIONS "-D__ARM64_NEON__")
+else()
+    set_source_files_properties(
+            rlottie/src/vector/vdrawhelper.cpp
+            rlottie/src/vector/vdrawhelper_neon.cpp
+            PROPERTIES COMPILE_OPTIONS "-U__ARM_NEON__")
+endif()
 target_include_directories(rlottie PUBLIC
         ./
         rlottie/inc
