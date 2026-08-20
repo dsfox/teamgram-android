@@ -101,6 +101,39 @@ public class MlsKeyPackages {
             publishing = true;
         }
 
+        // It asks first. Publishing thirty every few minutes whatever the
+        // answer said filled the hundred a device may hold within the hour,
+        // and every publish after that was refused with a FLOOD_WAIT that
+        // burned in the server's log for days. An empty publish is the
+        // question "how many are left"; packages are made only when the
+        // answer says to - the shape the other client already took, and the
+        // server holds it with a test of its own.
+        TLRPCMls.TL_mls_publishKeyPackages ask = new TLRPCMls.TL_mls_publishKeyPackages();
+        ConnectionsManager.getInstance(currentAccount).sendRequest(ask, (response, error) -> {
+            if (error != null || !(response instanceof TLRPCMls.TL_mls_publishResult)) {
+                synchronized (MlsKeyPackages.this) {
+                    publishing = false;
+                }
+                if (error != null) {
+                    FileLog.e("mls: cannot ask how many key packages are left: " + error.text);
+                }
+                return;
+            }
+            int available = ((TLRPCMls.TL_mls_publishResult) response).available;
+            if (available >= PACKAGES_PER_REFILL) {
+                synchronized (MlsKeyPackages.this) {
+                    publishing = false;
+                }
+                FileLog.d("mls: " + available + " key packages left, none made");
+                return;
+            }
+            refill();
+        });
+    }
+
+    /** Makes a fresh supply and hands it over. Only reached when the server
+     *  said the shelf is running low. */
+    private void refill() {
         Utilities.globalQueue.postRunnable(() -> {
             try (MlsCore.Identity identity = identity()) {
                 TLRPCMls.TL_mls_publishKeyPackages request = new TLRPCMls.TL_mls_publishKeyPackages();
