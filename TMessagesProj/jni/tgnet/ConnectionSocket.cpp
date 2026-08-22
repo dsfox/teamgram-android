@@ -288,7 +288,11 @@ public:
                             Op::string("\x11\xec\x00\x1d\x00\x17\x00\x18", 8)
                         },
                         { Op::string("\x00\x0b\x00\x02\x01\x00", 6) },
-                        { Op::string("\x00\x0d\x00\x12\x00\x10\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01",22) },
+                        // signature_algorithms, with the three rsa_pss_pss entries
+                        // (0904, 0905, 0906) a current browser offers. A list that
+                        // is shorter than everyone else's is a fingerprint, and
+                        // fingerprints are what filtering runs on.
+                        { Op::string("\x00\x0d\x00\x18\x00\x16\x09\x04\x09\x05\x09\x06\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01",28) },
                         { Op::string("\x00\x10\x00\x0e\x00\x0c\x02\x68\x32\x08\x68\x74\x74\x70\x2f\x31\x2e\x31", 18) },
                         { Op::string("\x00\x12\x00\x00", 4) },
                         { Op::string("\x00\x17\x00\x00", 4) },
@@ -311,12 +315,18 @@ public:
                         },
                         { Op::string("\x44\xcd\x00\x05\x00\x03\x02\x68\x32", 9) },
                         {
-                            Op::string("\xfe\x02", 2),
+                            // Encrypted client hello. Two things were wrong here
+                            // and both are visible from outside: fe02 is the draft
+                            // codepoint nobody sends any more - the assigned one is
+                            // fe0d - and the field that announces 0x20 bytes of key
+                            // was followed by twenty random ones, so the extension
+                            // did not even parse as what it claimed to be.
+                            Op::string("\xfe\x0d", 2),
                             Op::begin_scope(),
                             Op::string("\x00\x00\x01\x00\x01", 5),
                             Op::random(1),
                             Op::string("\x00\x20", 2),
-                            Op::random(20),
+                            Op::K(),
                             Op::begin_scope(),
                             Op::E(),
                             Op::end_scope(),
