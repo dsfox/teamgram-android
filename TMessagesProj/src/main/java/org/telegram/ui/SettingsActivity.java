@@ -730,12 +730,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
 
         // Of the four entries here, three led to Telegram: a support chat that is
-        // not ours, their FAQ and their features page. The policy is the one that
-        // belongs, and it now points at ice9.app/privacy - the stores want it
-        // reachable from inside the app, so hiding the section outright would
-        // cost more than it saves.
-        items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
-        items.add(SettingCell.Factory.of(19, 0xFF55CA47, 0xFF27B434, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
+        // not ours, their FAQ and their features page. The policy pointed at
+        // ice9.app/privacy and was kept for the stores - but it opened
+        // telegram.org anyway, because the Russian language pack our own server
+        // serves carries a PrivacyPolicyUrl of its own and a pack overrides what
+        // the app was compiled with. The pack no longer carries links; the row is
+        // gone until there is a page of ours worth opening from inside the app.
+        // The stores are given the address directly and do not need this row.
 
         if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
             items.add(UItem.asShadow(null));

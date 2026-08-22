@@ -783,7 +783,9 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         lastSeenRow = rowCount++;
         profilePhotoRow = rowCount++;
         forwardsRow = rowCount++;
-        callsRow = rowCount++;
+        // Who may call you is not a choice worth offering while nobody can call
+        // anybody (#14). -1 because an unassigned int is 0, a real position.
+        callsRow = -1;
         groupsDetailRow = -1;
         if (!getMessagesController().premiumFeaturesBlocked() || getUserConfig().isPremium()) {
             voicesRow = rowCount++;
