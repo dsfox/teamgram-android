@@ -1984,7 +1984,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             AccountInstance account = AccountInstance.getInstance(currentAccount);
             prepareSendingDocument(account, path, path, null, caption,
                     messageObject.getDocument() == null ? null : messageObject.getDocument().mime_type,
-                    did, null, null, null, null, null, true, 0, null, null, 0, false);
+                    did, null, null, null, null, null, true, 0, null, null, false);
             FileLog.d("mls: a file forwarded to " + did + " is sent again rather than copied, "
                     + "as a plain file with no author");
             return true;

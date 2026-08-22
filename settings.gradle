@@ -4,3 +4,9 @@ include ':TMessagesProj_App'
 // include ':TMessagesProj_AppHockeyApp'
 // include ':TMessagesProj_AppStandalone'
 // include ':TMessagesProj_AppTests'
+
+// Upstream moved jlatexmath into a submodule and refers to it as a project;
+// its settings.gradle never gained the include, so a fresh clone of theirs
+// fails the same way ours did. Pointed at the submodule by hand.
+include ':jlatexmath'
+project(':jlatexmath').projectDir = new File(rootDir, 'TMessagesProj/lib/jlatexmath/jlatexmath')

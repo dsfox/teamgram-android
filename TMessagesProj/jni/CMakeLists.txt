@@ -295,6 +295,17 @@ target_include_directories(${NATIVE_LIB} PUBLIC
 
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
+# Two Rust static libraries now meet in this one shared object: ours, the MLS
+# core, and upstream's tlottie, which replaced rlottie in 12.10. Each carries
+# its own copy of the Rust runtime, and the two collide on rust_eh_personality
+# and its neighbours. They are the same functions from the same runtime, so the
+# first definition is as good as the second.
+#
+# The tidier-looking fixes are both worse. panic = "abort" does not remove the
+# symbol, which comes from a precompiled std; localising it inside our archive
+# breaks the references the archive's own objects make to it, and the link then
+# fails on a hundred drop_glue symbols instead of one personality.
+target_link_options(${NATIVE_LIB} PRIVATE "-Wl,--allow-multiple-definition")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
 target_link_libraries(${NATIVE_LIB}
         -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
