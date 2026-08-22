@@ -839,7 +839,11 @@ public class ChangeUsernameActivity extends BaseFragment {
             tme.setLines(1);
             tme.setPadding(0, 0, 0, 0);
             tme.setSingleLine(true);
-            tme.setText(getMessagesController().linkPrefix + "/");
+            // An at sign, not a domain. Upstream puts its own address in front
+            // of the box, and the address arrives from the server - so ours
+            // offered a name at somebody else's domain, one we do not own and
+            // whose links go nowhere near this app.
+            tme.setText("@");
             tme.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
             tme.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
             tme.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);

@@ -13304,7 +13304,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             }
                             if (ChatObject.isPublic(chat)) {
                                 containsQr = !myProfile;
-                                text = getMessagesController().linkPrefix + "/" + username + (topicId != 0 ? "/" + topicId : "");
+                                // The name, the way a person's own row above says
+                                // it, rather than a name hung off a domain that
+                                // is not ours.
+                                text = "@" + username + (topicId != 0 ? "/" + topicId : "");
                                 value = LocaleController.getString(R.string.InviteLink);
                             } else {
                                 text = getMessagesController().linkPrefix + "/c/" + chatId + (topicId != 0 ? "/" + topicId : "");

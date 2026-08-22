@@ -390,7 +390,9 @@ public class ChatEditTypeActivity extends BaseFragment implements NotificationCe
         linkContainer.addView(publicContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 36, 23, 7, 23, 0));
 
         editText = new EditTextBoldCursor(context);
-        editText.setText(getMessagesController().linkPrefix + "/");
+        // An at sign, not a domain - the same reason as on the username screen:
+        // the address in front of the box comes from the server and is not ours.
+        editText.setText("@");
         editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         editText.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
         editText.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
@@ -1285,10 +1287,11 @@ public class ChatEditTypeActivity extends BaseFragment implements NotificationCe
                         final TLRPC.Chat channel = cell.getCurrentChannel();
                         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
                         builder.setTitle(LocaleController.getString(R.string.AppName));
+                        final String name = "@" + ChatObject.getPublicUsername(channel);
                         if (isChannel) {
-                            builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("RevokeLinkAlertChannel", R.string.RevokeLinkAlertChannel, getMessagesController().linkPrefix + "/" + ChatObject.getPublicUsername(channel), channel.title)));
+                            builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("RevokeLinkAlertChannel", R.string.RevokeLinkAlertChannel, name, channel.title)));
                         } else {
-                            builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("RevokeLinkAlert", R.string.RevokeLinkAlert, getMessagesController().linkPrefix + "/" + ChatObject.getPublicUsername(channel), channel.title)));
+                            builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("RevokeLinkAlert", R.string.RevokeLinkAlert, name, channel.title)));
                         }
                         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
                         builder.setPositiveButton(LocaleController.getString(R.string.RevokeButton), (dialogInterface, i) -> {
