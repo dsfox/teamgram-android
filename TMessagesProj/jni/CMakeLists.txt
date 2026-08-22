@@ -6,30 +6,11 @@ cmake_minimum_required(VERSION 3.10.2)
 # only as flags, and wiping them makes clang build for the host - the assembler
 # then fails on "mach-o section specifier" in the middle of opus.
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -DANDROID -g")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g -Wno-error=implicit-function-declaration")
 set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
-# Everything after the first item of this -Wl, group is a link input, not an
-# exclusion: -Wl,a,b,c hands the linker three separate arguments, and only the
-# one right after --exclude-libs is its value. So the archives below are how
-# ffmpeg, boringssl and tde2e get linked in - do not "tidy" them into names.
-# --exclude-libs,ALL below is the real exclusion. Without it the ffmpeg symbols
-# stay exported, become preemptible in a shared object, and the lld shipped
-# since NDK 23 rejects the ADRP+ADD relocations against them, blaming -fPIC.
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--exclude-libs,libtgvoip.a,libtgcalls.a,libtgcalls_tp.a,libtgnet.a,libflac.a,librlottie.a,libsqlite.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libswscale.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavformat.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavcodec.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavresample.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavutil.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libswresample.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libvpx.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libdav1d.a,
-${CMAKE_HOME_DIRECTORY}/boringssl/lib/${ANDROID_ABI}/libssl.a,
-${CMAKE_HOME_DIRECTORY}/boringssl/lib/${ANDROID_ABI}/libcrypto.a,
-${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtde2e.a,
-${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtdutils.a -Wl,--exclude-libs,ALL")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden -flto=full")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden -fvisibility-inlines-hidden -flto=full")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -flto=full -Wl,--gc-sections -Wl,--icf=safe -Wl,-Bsymbolic")
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     enable_language(ASM)
@@ -54,9 +35,6 @@ set_target_properties(avformat PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTO
 add_library(avcodec STATIC IMPORTED)
 set_target_properties(avcodec PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavcodec.a)
 
-add_library(avresample STATIC IMPORTED)
-set_target_properties(avresample PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libavresample.a)
-
 add_library(swresample STATIC IMPORTED)
 set_target_properties(swresample PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libswresample.a)
 
@@ -75,134 +53,14 @@ set_target_properties(libvpx PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY
 add_library(libdav1d STATIC IMPORTED)
 set_target_properties(libdav1d PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libdav1d.a)
 
+add_library(libopus STATIC IMPORTED)
+set_target_properties(libopus PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/ffmpeg/${ANDROID_ABI}/libopus.a)
+
 add_library(tde2e STATIC IMPORTED)
 set_target_properties(tde2e PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtde2e.a)
 
 add_library(tdutils STATIC IMPORTED)
 set_target_properties(tdutils PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtdutils.a)
-
-#tgnet
-#add_library(mozjpeg STATIC
-#        mozjpeg/cjpeg.c mozjpeg/cdjpeg.c mozjpeg/rdgif.c mozjpeg/rdppm.c mozjpeg/rdjpeg.c mozjpeg/rdswitch.c mozjpeg/rdbmp.c
-#        mozjpeg/rdtarga.c mozjpeg/wrbmp.c mozjpeg/wrtarga.c mozjpeg/djpeg.c mozjpeg/cdjpeg.c mozjpeg/rdcolmap.c mozjpeg/rdswitch.c
-#        mozjpeg/wrgif.c mozjpeg/wrppm.c mozjpeg/jpegtran.c mozjpeg/cdjpeg.c mozjpeg/rdswitch.c mozjpeg/transupp.c mozjpeg/turbojpeg.c
-#        mozjpeg/jdatadst-tj.c mozjpeg/jdatasrc-tj.c mozjpeg/jcapimin.c mozjpeg/jcapistd.c mozjpeg/jccoefct.c mozjpeg/jccolor.c
-#        mozjpeg/jcdctmgr.c mozjpeg/jchuff.c mozjpeg/jcext.c mozjpeg/jcicc.c mozjpeg/jcinit.c mozjpeg/jcmainct.c mozjpeg/jcmarker.c
-#        mozjpeg/jcmaster.c mozjpeg/jcomapi.c mozjpeg/jcparam.c mozjpeg/jcphuff.c mozjpeg/jcprepct.c mozjpeg/jcsample.c
-#        mozjpeg/jctrans.c mozjpeg/jdapimin.c mozjpeg/jdapistd.c mozjpeg/jdatadst.c mozjpeg/jdatasrc.c
-#        mozjpeg/jdcoefct.c mozjpeg/jdcolor.c mozjpeg/jddctmgr.c mozjpeg/jdhuff.c mozjpeg/jdicc.c mozjpeg/jdinput.c
-#        mozjpeg/jdmainct.c mozjpeg/jdmarker.c mozjpeg/jdmaster.c mozjpeg/jdmerge.c mozjpeg/jdphuff.c mozjpeg/jdpostct.c mozjpeg/jdsample.c
-#        mozjpeg/jdtrans.c mozjpeg/jerror.c mozjpeg/jfdctflt.c mozjpeg/jfdctfst.c mozjpeg/jfdctint.c mozjpeg/jidctflt.c mozjpeg/jidctfst.c
-#        mozjpeg/jidctint.c mozjpeg/jidctred.c mozjpeg/jquant1.c mozjpeg/jquant2.c mozjpeg/jutils.c mozjpeg/jmemmgr.c mozjpeg/jmemnobs.c)
-#target_compile_options(mozjpeg PUBLIC
-#        -Os)
-#set_target_properties(mozjpeg PROPERTIES
-#        ANDROID_ARM_MODE arm)
-#target_compile_definitions(mozjpeg PUBLIC
-#        BMP_SUPPORTED GIF_SUPPORTED PPM_SUPPORTED TARGA_SUPPORTED)
-#target_include_directories(mozjpeg PUBLIC
-#        mozjpeg
-#        mozjpeg/simd/nasm)
-#
-#if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
-#    target_sources(mozjpeg PRIVATE
-#            mozjpeg/simd/arm/jsimd_neon.S
-#            mozjpeg/simd/arm/jsimd.c)
-#    target_compile_definitions(mozjpeg PUBLIC
-#            SIZEOF_SIZE_T=4)
-#elseif(${ANDROID_ABI} STREQUAL "arm64-v8a")
-#    target_sources(mozjpeg PRIVATE
-#            mozjpeg/simd/arm64/jsimd_neon.S
-#            mozjpeg/simd/arm64/jsimd.c)
-#    target_compile_definitions(mozjpeg PUBLIC
-#            SIZEOF_SIZE_T=8)
-#elseif(${ANDROID_ABI} STREQUAL "x86")
-#    set(CMAKE_ASM_NASM_COMPILER_ARG1 "${CMAKE_ASM_NASM_COMPILER_ARG1} -DPIC")
-#    target_sources(mozjpeg PRIVATE
-#            mozjpeg/simd/i386/jsimd.c
-#            mozjpeg/simd/i386/jsimdcpu.asm
-#            mozjpeg/simd/i386/jfdctflt-3dn.asm
-#            mozjpeg/simd/i386/jidctflt-3dn.asm
-#            mozjpeg/simd/i386/jquant-3dn.asm
-#            mozjpeg/simd/i386/jccolor-mmx.asm
-#            mozjpeg/simd/i386/jcgray-mmx.asm
-#            mozjpeg/simd/i386/jcsample-mmx.asm
-#            mozjpeg/simd/i386/jdcolor-mmx.asm
-#            mozjpeg/simd/i386/jdmerge-mmx.asm
-#            mozjpeg/simd/i386/jdsample-mmx.asm
-#            mozjpeg/simd/i386/jfdctfst-mmx.asm
-#            mozjpeg/simd/i386/jfdctint-mmx.asm
-#            mozjpeg/simd/i386/jidctfst-mmx.asm
-#            mozjpeg/simd/i386/jidctint-mmx.asm
-#            mozjpeg/simd/i386/jidctred-mmx.asm
-#            mozjpeg/simd/i386/jquant-mmx.asm
-#            mozjpeg/simd/i386/jfdctflt-sse.asm
-#            mozjpeg/simd/i386/jidctflt-sse.asm
-#            mozjpeg/simd/i386/jquant-sse.asm
-#            mozjpeg/simd/i386/jccolor-sse2.asm
-#            mozjpeg/simd/i386/jcgray-sse2.asm
-#            mozjpeg/simd/i386/jchuff-sse2.asm
-#            mozjpeg/simd/i386/jcphuff-sse2.asm
-#            mozjpeg/simd/i386/jcsample-sse2.asm
-#            mozjpeg/simd/i386/jdcolor-sse2.asm
-#            mozjpeg/simd/i386/jdmerge-sse2.asm
-#            mozjpeg/simd/i386/jdsample-sse2.asm
-#            mozjpeg/simd/i386/jfdctfst-sse2.asm
-#            mozjpeg/simd/i386/jfdctint-sse2.asm
-#            mozjpeg/simd/i386/jidctflt-sse2.asm
-#            mozjpeg/simd/i386/jidctfst-sse2.asm
-#            mozjpeg/simd/i386/jidctint-sse2.asm
-#            mozjpeg/simd/i386/jidctred-sse2.asm
-#            mozjpeg/simd/i386/jquantf-sse2.asm
-#            mozjpeg/simd/i386/jquanti-sse2.asm
-#            mozjpeg/simd/i386/jccolor-avx2.asm
-#            mozjpeg/simd/i386/jcgray-avx2.asm
-#            mozjpeg/simd/i386/jcsample-avx2.asm
-#            mozjpeg/simd/i386/jdcolor-avx2.asm
-#            mozjpeg/simd/i386/jdmerge-avx2.asm
-#            mozjpeg/simd/i386/jdsample-avx2.asm
-#            mozjpeg/simd/i386/jfdctint-avx2.asm
-#            mozjpeg/simd/i386/jidctint-avx2.asm
-#            mozjpeg/simd/i386/jquanti-avx2.asm)
-#    target_compile_definitions(mozjpeg PUBLIC
-#            SIZEOF_SIZE_T=4)
-#elseif(${ANDROID_ABI} STREQUAL "x86_64")
-#    set(CMAKE_ASM_NASM_COMPILER_ARG1 "${CMAKE_ASM_NASM_COMPILER_ARG1} -DPIC")
-#    set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DELF")
-#    set(CMAKE_ASM_NASM_DEBUG_FORMAT "dwarf2")
-#    set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -D__x86_64__")
-#    target_sources(mozjpeg PRIVATE
-#            mozjpeg/simd/x86_64/jsimd.c
-#            mozjpeg/simd/x86_64/jsimdcpu.asm
-#            mozjpeg/simd/x86_64/jfdctflt-sse.asm
-#            mozjpeg/simd/x86_64/jccolor-sse2.asm
-#            mozjpeg/simd/x86_64/jcgray-sse2.asm
-#            mozjpeg/simd/x86_64/jchuff-sse2.asm
-#            mozjpeg/simd/x86_64/jcphuff-sse2.asm
-#            mozjpeg/simd/x86_64/jcsample-sse2.asm
-#            mozjpeg/simd/x86_64/jdcolor-sse2.asm
-#            mozjpeg/simd/x86_64/jdmerge-sse2.asm
-#            mozjpeg/simd/x86_64/jdsample-sse2.asm
-#            mozjpeg/simd/x86_64/jfdctfst-sse2.asm
-#            mozjpeg/simd/x86_64/jfdctint-sse2.asm
-#            mozjpeg/simd/x86_64/jidctflt-sse2.asm
-#            mozjpeg/simd/x86_64/jidctfst-sse2.asm
-#            mozjpeg/simd/x86_64/jidctint-sse2.asm
-#            mozjpeg/simd/x86_64/jidctred-sse2.asm
-#            mozjpeg/simd/x86_64/jquantf-sse2.asm
-#            mozjpeg/simd/x86_64/jquanti-sse2.asm
-#            mozjpeg/simd/x86_64/jccolor-avx2.asm
-#            mozjpeg/simd/x86_64/jcgray-avx2.asm
-#            mozjpeg/simd/x86_64/jcsample-avx2.asm
-#            mozjpeg/simd/x86_64/jdcolor-avx2.asm
-#            mozjpeg/simd/x86_64/jdmerge-avx2.asm
-#            mozjpeg/simd/x86_64/jdsample-avx2.asm
-#            mozjpeg/simd/x86_64/jfdctint-avx2.asm
-#            mozjpeg/simd/x86_64/jidctint-avx2.asm
-#            mozjpeg/simd/x86_64/jquanti-avx2.asm)
-#    target_compile_definitions(mozjpeg PUBLIC
-#            SIZEOF_SIZE_T=8)
-#endif()
 
 #tgnet
 add_library(tgnet STATIC
@@ -226,7 +84,7 @@ add_library(tgnet STATIC
         tgnet/Handshake.cpp
         tgnet/Config.cpp)
 target_compile_options(tgnet PUBLIC
-        -Wall -frtti -finline-functions -ffast-math -Os)
+        -Wall -frtti -finline-functions -ffast-math -Oz)
 set_target_properties(tgnet PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(tgnet PUBLIC
@@ -236,134 +94,16 @@ target_include_directories(tgnet PUBLIC
 target_link_libraries(tgnet
         crypto)
 
-#rlottie
-add_library(rlottie STATIC
-        rlottie/src/lottie/lottieanimation.cpp
-        rlottie/src/lottie/lottieitem.cpp
-        rlottie/src/lottie/lottiekeypath.cpp
-        rlottie/src/lottie/lottieloader.cpp
-        rlottie/src/lottie/lottiemodel.cpp
-        rlottie/src/lottie/lottieparser.cpp
-        rlottie/src/lottie/lottieproxymodel.cpp
-        rlottie/src/vector/freetype/v_ft_math.cpp
-        rlottie/src/vector/freetype/v_ft_raster.cpp
-        rlottie/src/vector/freetype/v_ft_stroker.cpp
-        rlottie/src/vector/pixman/vregion.cpp
-        rlottie/src/vector/stb/stb_image.cpp
-        rlottie/src/vector/vbezier.cpp
-        rlottie/src/vector/vbitmap.cpp
-        rlottie/src/vector/vbrush.cpp
-        rlottie/src/vector/vcompositionfunctions.cpp
-        rlottie/src/vector/vdasher.cpp
-        rlottie/src/vector/vdebug.cpp
-        rlottie/src/vector/vdrawable.cpp
-        rlottie/src/vector/vdrawhelper.cpp
-        rlottie/src/vector/vdrawhelper_neon.cpp
-        rlottie/src/vector/velapsedtimer.cpp
-        rlottie/src/vector/vimageloader.cpp
-        rlottie/src/vector/vinterpolator.cpp
-        rlottie/src/vector/vmatrix.cpp
-        rlottie/src/vector/vpainter.cpp
-        rlottie/src/vector/vpath.cpp
-        rlottie/src/vector/vpathmesure.cpp
-        rlottie/src/vector/vraster.cpp
-        rlottie/src/vector/vrect.cpp
-        rlottie/src/vector/vrle.cpp)
-target_compile_options(rlottie PUBLIC
-        -Wall -fno-rtti -finline-functions -ffast-math -Os -fno-unwind-tables -fno-asynchronous-unwind-tables -Wnon-virtual-dtor -Woverloaded-virtual -Wno-unused-parameter -fvisibility=hidden)
-set_target_properties(rlottie PROPERTIES
-        ANDROID_ARM_MODE arm)
-target_compile_definitions(rlottie PUBLIC
-        HAVE_PTHREAD NDEBUG)
-
-# rlottie's NEON path calls hand-written pixman assembly. It used to be out of
-# this build entirely - the NDK dropped GNU binutils in r23 and clang's
-# integrated assembler rejected the pixman macros (.func, .if over a macro
-# argument) - so both ABIs took the slower C path, and on armeabi-v7a the
-# compiler's own __ARM_NEON__ still chose the assembly branch and the link
-# died on a symbol nobody had built.
-#
-# On arm64 the assembly is back: upstream pixman ported these files to the
-# integrated assembler, and ours are now upstream's, taken whole (#30). The
-# branch is chosen by __ARM64_NEON__, which is ours to set, on exactly the
-# two files that choose.
-#
-# armeabi-v7a keeps the C path: its assembly is a different file nobody has
-# ported, so __ARM_NEON__ is undone there for the same two files and only
-# those - __ARM_NEON__ elsewhere is a real answer to a real question, and
-# taking it away from libyuv would cost speed for nothing.
-if (${ANDROID_ABI} STREQUAL "arm64-v8a")
-    target_sources(rlottie PRIVATE
-            rlottie/src/vector/pixman/pixman-arma64-neon-asm.S)
-    set_source_files_properties(
-            rlottie/src/vector/vdrawhelper.cpp
-            rlottie/src/vector/vdrawhelper_neon.cpp
-            PROPERTIES COMPILE_OPTIONS "-D__ARM64_NEON__")
-else()
-    set_source_files_properties(
-            rlottie/src/vector/vdrawhelper.cpp
-            rlottie/src/vector/vdrawhelper_neon.cpp
-            PROPERTIES COMPILE_OPTIONS "-U__ARM_NEON__")
-endif()
-target_include_directories(rlottie PUBLIC
-        ./
-        rlottie/inc
-        rlottie/src/vector/
-        rlottie/src/vector/pixman
-        rlottie/src/vector/freetype
-        rlottie/src/vector/stb)
-
-# The hand-written pixman NEON path is off. It needs the GNU assembler, which the
-# NDK dropped in r23, and clang's integrated assembler chokes on the pixman macros
-# (.func, and .if over a macro argument). Worse, -fno-integrated-as was PUBLIC here,
-# so every target that links rlottie inherited it and the whole build fell back to
-# the host assembler. rlottie has a C path for both entry points it replaces
-# (memfill32 and the SrcOver solid blend), so this costs sticker rendering speed and
-# nothing else. Porting the asm - or moving to a newer rlottie - is issue #30.
-
-
-#flac
-add_library(flac STATIC
-        exoplayer/libFLAC/bitmath.c
-        exoplayer/libFLAC/bitreader.c
-        exoplayer/libFLAC/bitwriter.c
-        exoplayer/libFLAC/cpu.c
-        exoplayer/libFLAC/crc.c
-        exoplayer/libFLAC/fixed.c
-        exoplayer/libFLAC/fixed_intrin_sse2.c
-        exoplayer/libFLAC/fixed_intrin_ssse3.c
-        exoplayer/libFLAC/float.c
-        exoplayer/libFLAC/format.c
-        exoplayer/libFLAC/lpc.c
-        exoplayer/libFLAC/lpc_intrin_avx2.c
-        exoplayer/libFLAC/lpc_intrin_sse2.c
-        exoplayer/libFLAC/lpc_intrin_sse41.c
-        exoplayer/libFLAC/lpc_intrin_sse.c
-        exoplayer/libFLAC/md5.c
-        exoplayer/libFLAC/memory.c
-        exoplayer/libFLAC/metadata_iterators.c
-        exoplayer/libFLAC/metadata_object.c
-        exoplayer/libFLAC/stream_decoder.c
-        exoplayer/libFLAC/stream_encoder.c
-        exoplayer/libFLAC/stream_encoder_framing.c
-        exoplayer/libFLAC/stream_encoder_intrin_avx2.c
-        exoplayer/libFLAC/stream_encoder_intrin_sse2.c
-        exoplayer/libFLAC/stream_encoder_intrin_ssse3.c
-        exoplayer/libFLAC/window.c)
-target_compile_options(flac PUBLIC
-        -O3 -funroll-loops -finline-functions -fPIC -frtti)
-set_target_properties(flac PROPERTIES
-        ANDROID_ARM_MODE arm)
-target_compile_definitions(flac PUBLIC
-        _REENTRANT PIC U_COMMON_IMPLEMENTATION HAVE_SYS_PARAM_H VERSION="1.3.1" FLAC__NO_MD5 FLAC__INTEGER_ONLY_LIBRARY FLAC__NO_ASM)
-target_include_directories(flac PUBLIC
-        exoplayer/libFLAC/include)
+# tlottie (prebuilt Rust static library)
+add_library(tlottie STATIC IMPORTED)
+set_target_properties(tlottie PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/tlottie_lib/${ANDROID_ABI}/libtlottie.a)
 
 #sqlite
 add_library(sqlite STATIC
         sqlite/sqlite3.c)
 target_compile_options(sqlite PUBLIC
-        -fno-strict-aliasing -Os)
+        -fno-strict-aliasing -Oz)
 set_target_properties(sqlite PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(sqlite PUBLIC
@@ -411,17 +151,12 @@ add_library(${NATIVE_LIB} SHARED
         audio.c
         webm_encoder.c
         image.cpp
-        video.c
         intro/IntroRenderer.c
         SqliteWrapper.cpp
         utilities.cpp
         gifvideo.cpp
         lottie.cpp
         TgNetWrapper.cpp
-        NativeLoader.cpp
-        exoplayer/flac_jni.cc
-        exoplayer/flac_parser.cc
-        exoplayer/opus_jni.cc
         exoplayer/ffmpeg_jni.cc
         fast-edge.cpp
         genann.c
@@ -431,7 +166,7 @@ add_library(${NATIVE_LIB} SHARED
 )
 
 target_compile_options(${NATIVE_LIB} PUBLIC
-        -ffast-math -Os -funroll-loops -ffast-math -fno-strict-aliasing -fno-math-errno)
+        -ffast-math -Oz -funroll-loops -ffast-math -fno-strict-aliasing -fno-math-errno)
 
 # opusfile calls fseeko and ftello, and on a 32-bit ABI bionic only declares
 # those when _FILE_OFFSET_BITS is 64 *and* the platform is API 24 or later. Ours
@@ -480,18 +215,7 @@ endif()
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     target_compile_definitions(${NATIVE_LIB} PUBLIC
-            LIBYUV_NEON OPUS_HAVE_RTCD OPUS_ARM_ASM)
-
-    target_sources(${NATIVE_LIB} PRIVATE
-            opus/celt/arm/celt_neon_intr.c
-            opus/celt/arm/pitch_neon_intr.c
-            opus/silk/arm/NSQ_neon.c
-            opus/silk/arm/arm_silk_map.c
-            opus/silk/arm/LPC_inv_pred_gain_neon_intr.c
-            opus/silk/arm/NSQ_del_dec_neon_intr.c
-            opus/silk/arm/biquad_alt_neon_intr.c
-            opus/silk/fixed/arm/warped_autocorrelation_FIX_neon_intr.c
-            )
+            LIBYUV_NEON)
 
 elseif(${ANDROID_ABI} STREQUAL "x86")
     target_compile_definitions(${NATIVE_LIB} PUBLIC
@@ -500,150 +224,12 @@ endif()
 
 target_sources(${NATIVE_LIB} PRIVATE
 
-        opus/src/opus.c
-        opus/src/opus_decoder.c
-        opus/src/opus_encoder.c
-        opus/src/opus_multistream.c
-        opus/src/opus_multistream_encoder.c
-        opus/src/opus_multistream_decoder.c
-        opus/src/repacketizer.c
-        opus/src/analysis.c
-        opus/src/mlp.c
-        opus/src/mlp_data.c
-        opus/src/opus_projection_encoder.c
-        opus/src/opus_projection_decoder.c
-        opus/src/mapping_matrix.c
-
-        opus/silk/CNG.c
-        opus/silk/code_signs.c
-        opus/silk/init_decoder.c
-        opus/silk/decode_core.c
-        opus/silk/decode_frame.c
-        opus/silk/decode_parameters.c
-        opus/silk/decode_indices.c
-        opus/silk/decode_pulses.c
-        opus/silk/decoder_set_fs.c
-        opus/silk/dec_API.c
-        opus/silk/enc_API.c
-        opus/silk/encode_indices.c
-        opus/silk/encode_pulses.c
-        opus/silk/gain_quant.c
-        opus/silk/interpolate.c
-        opus/silk/LP_variable_cutoff.c
-        opus/silk/NLSF_decode.c
-        opus/silk/NSQ.c
-        opus/silk/NSQ_del_dec.c
-        opus/silk/PLC.c
-        opus/silk/shell_coder.c
-        opus/silk/tables_gain.c
-        opus/silk/tables_LTP.c
-        opus/silk/tables_NLSF_CB_NB_MB.c
-        opus/silk/tables_NLSF_CB_WB.c
-        opus/silk/tables_other.c
-        opus/silk/tables_pitch_lag.c
-        opus/silk/tables_pulses_per_block.c
-        opus/silk/VAD.c
-        opus/silk/control_audio_bandwidth.c
-        opus/silk/quant_LTP_gains.c
-        opus/silk/VQ_WMat_EC.c
-        opus/silk/HP_variable_cutoff.c
-        opus/silk/NLSF_encode.c
-        opus/silk/NLSF_VQ.c
-        opus/silk/NLSF_unpack.c
-        opus/silk/NLSF_del_dec_quant.c
-        opus/silk/process_NLSFs.c
-        opus/silk/stereo_LR_to_MS.c
-        opus/silk/stereo_MS_to_LR.c
-        opus/silk/check_control_input.c
-        opus/silk/control_SNR.c
-        opus/silk/init_encoder.c
-        opus/silk/control_codec.c
-        opus/silk/A2NLSF.c
-        opus/silk/ana_filt_bank_1.c
-        opus/silk/biquad_alt.c
-        opus/silk/bwexpander_32.c
-        opus/silk/bwexpander.c
-        opus/silk/debug.c
-        opus/silk/decode_pitch.c
-        opus/silk/inner_prod_aligned.c
-        opus/silk/lin2log.c
-        opus/silk/log2lin.c
-        opus/silk/LPC_analysis_filter.c
-        opus/silk/LPC_inv_pred_gain.c
-        opus/silk/table_LSF_cos.c
-        opus/silk/NLSF2A.c
-        opus/silk/NLSF_stabilize.c
-        opus/silk/NLSF_VQ_weights_laroia.c
-        opus/silk/pitch_est_tables.c
-        opus/silk/resampler.c
-        opus/silk/resampler_down2_3.c
-        opus/silk/resampler_down2.c
-        opus/silk/resampler_private_AR2.c
-        opus/silk/resampler_private_down_FIR.c
-        opus/silk/resampler_private_IIR_FIR.c
-        opus/silk/resampler_private_up2_HQ.c
-        opus/silk/resampler_rom.c
-        opus/silk/sigm_Q15.c
-        opus/silk/sort.c
-        opus/silk/sum_sqr_shift.c
-        opus/silk/stereo_decode_pred.c
-        opus/silk/stereo_encode_pred.c
-        opus/silk/stereo_find_predictor.c
-        opus/silk/stereo_quant_pred.c
-        opus/silk/LPC_fit.c
-
-        opus/silk/fixed/LTP_analysis_filter_FIX.c
-        opus/silk/fixed/LTP_scale_ctrl_FIX.c
-        opus/silk/fixed/corrMatrix_FIX.c
-        opus/silk/fixed/encode_frame_FIX.c
-        opus/silk/fixed/find_LPC_FIX.c
-        opus/silk/fixed/find_LTP_FIX.c
-        opus/silk/fixed/find_pitch_lags_FIX.c
-        opus/silk/fixed/find_pred_coefs_FIX.c
-        opus/silk/fixed/noise_shape_analysis_FIX.c
-        opus/silk/fixed/process_gains_FIX.c
-        opus/silk/fixed/regularize_correlations_FIX.c
-        opus/silk/fixed/residual_energy16_FIX.c
-        opus/silk/fixed/residual_energy_FIX.c
-        opus/silk/fixed/warped_autocorrelation_FIX.c
-        opus/silk/fixed/apply_sine_window_FIX.c
-        opus/silk/fixed/autocorr_FIX.c
-        opus/silk/fixed/burg_modified_FIX.c
-        opus/silk/fixed/k2a_FIX.c
-        opus/silk/fixed/k2a_Q16_FIX.c
-        opus/silk/fixed/pitch_analysis_core_FIX.c
-        opus/silk/fixed/vector_ops_FIX.c
-        opus/silk/fixed/schur64_FIX.c
-        opus/silk/fixed/schur_FIX.c
-
-        opus/celt/bands.c
-        opus/celt/celt.c
-        opus/celt/celt_encoder.c
-        opus/celt/celt_decoder.c
-        opus/celt/cwrs.c
-        opus/celt/entcode.c
-        opus/celt/entdec.c
-        opus/celt/entenc.c
-        opus/celt/kiss_fft.c
-        opus/celt/laplace.c
-        opus/celt/mathops.c
-        opus/celt/mdct.c
-        opus/celt/modes.c
-        opus/celt/pitch.c
-        opus/celt/celt_lpc.c
-        opus/celt/quant_bands.c
-        opus/celt/rate.c
-        opus/celt/vq.c
-        opus/celt/arm/armcpu.c
-        opus/celt/arm/arm_celt_map.c
-
-        opus/ogg/bitwise.c
-        opus/ogg/framing.c
-        opus/opusfile/info.c
-        opus/opusfile/internal.c
-        opus/opusfile/opusfile.c
-        opus/opusfile/stream.c
-
+        third_party/xiph/opusfile/src/info.c
+        third_party/xiph/opusfile/src/internal.c
+        third_party/xiph/opusfile/src/opusfile.c
+        third_party/xiph/opusfile/src/stream.c
+        third_party/xiph/ogg/src/bitwise.c
+        third_party/xiph/ogg/src/framing.c
         third_party/libyuv/source/compare_common.cc
         third_party/libyuv/source/compare_gcc.cc
         third_party/libyuv/source/compare_neon64.cc
@@ -688,20 +274,20 @@ target_sources(${NATIVE_LIB} PRIVATE
         third_party/libyuv/source/scale_rgb.cc)
 
 target_include_directories(${NATIVE_LIB} PUBLIC
-        opus/include
-        opus/silk
-        opus/silk/fixed
-        opus/celt
-        opus/
-        opus/opusfile
+        third_party/xiph/opus/include
+        third_party/xiph/opus/silk
+        third_party/xiph/opus/silk/fixed
+        third_party/xiph/opus/celt
+        third_party/xiph/opus
+        third_party/xiph/opusfile/include
+        third_party/xiph/ogg/include
         third_party/libyuv/include
         boringssl/include
         ffmpeg/include
         emoji
         exoplayer/include
-        exoplayer/libFLAC/include
         intro
-        rlottie/inc
+        tlottie/include
         tgcalls/
         webrtc/
         tde2e/include
@@ -709,24 +295,23 @@ target_include_directories(${NATIVE_LIB} PUBLIC
 
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
+target_link_options(${NATIVE_LIB} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
 target_link_libraries(${NATIVE_LIB}
         -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
         mls
         tgvoip
         tgcalls
         tgcalls_tp
-#        mozjpeg
         tgnet
-        flac
-        rlottie
+        tlottie
         sqlite
         swscale
         avformat
         avcodec
-        avresample
         swresample
         libvpx
         libdav1d
+        libopus
         tde2e
         tdutils
         avutil

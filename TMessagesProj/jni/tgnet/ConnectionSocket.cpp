@@ -288,10 +288,6 @@ public:
                             Op::string("\x11\xec\x00\x1d\x00\x17\x00\x18", 8)
                         },
                         { Op::string("\x00\x0b\x00\x02\x01\x00", 6) },
-                        // signature_algorithms, with the three rsa_pss_pss entries
-                        // (0904, 0905, 0906) a current browser offers. A list that
-                        // is shorter than everyone else's is a fingerprint, and
-                        // fingerprints are what filtering runs on.
                         { Op::string("\x00\x0d\x00\x18\x00\x16\x09\x04\x09\x05\x09\x06\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01",28) },
                         { Op::string("\x00\x10\x00\x0e\x00\x0c\x02\x68\x32\x08\x68\x74\x74\x70\x2f\x31\x2e\x31", 18) },
                         { Op::string("\x00\x12\x00\x00", 4) },
@@ -315,12 +311,6 @@ public:
                         },
                         { Op::string("\x44\xcd\x00\x05\x00\x03\x02\x68\x32", 9) },
                         {
-                            // Encrypted client hello. Two things were wrong here
-                            // and both are visible from outside: fe02 is the draft
-                            // codepoint nobody sends any more - the assigned one is
-                            // fe0d - and the field that announces 0x20 bytes of key
-                            // was followed by twenty random ones, so the extension
-                            // did not even parse as what it claimed to be.
                             Op::string("\xfe\x0d", 2),
                             Op::begin_scope(),
                             Op::string("\x00\x00\x01\x00\x01", 5),
@@ -689,7 +679,6 @@ void ConnectionSocket::closeSocket(int32_t reason, int32_t error) {
     proxyAuthState = 0;
     tlsState = 0;
     onConnectedSent = false;
-    sentFirstSegment = false;
     outgoingByteStream->clean();
     if (tlsBuffer != nullptr) {
         tlsBuffer->reuse();
@@ -1054,25 +1043,6 @@ void ConnectionSocket::onEvent(uint32_t events) {
                             adjustWriteOp();
                         }
                     } else {
-                        // Measured between this network and our server: a large
-                        // first data packet on a fresh connection is dropped on
-                        // the way - 3 of 8 arrive - while the same payload sent
-                        // after a small one arrives 7 of 8. Plain sockets with
-                        // random bytes behave identically, so it is the path and
-                        // not the protocol.
-                        //
-                        // The client's first write once it has keys is 588-636
-                        // bytes, so it vanished, the response timeout fired, and
-                        // the cycle repeated: "Connecting..." for ever. iOS was
-                        // given a short first segment in MTTcpConnection and this
-                        // is the same thing on this side, which had been left
-                        // without it.
-                        if (!sentFirstSegment && remaining > 64) {
-                            sentFirstSegment = true;
-                            remaining = 64;
-                        } else {
-                            sentFirstSegment = true;
-                        }
                         if ((sentLength = send(socketFd, buffer->bytes(), remaining, 0)) < 0) {
                             if (LOGS_ENABLED) DEBUG_D("connection(%p) send failed", this);
                             closeSocket(1, -1);

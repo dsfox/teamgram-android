@@ -49,12 +49,11 @@ target_compile_definitions(tgvoip PUBLIC
 target_include_directories(tgvoip PUBLIC
         ./
         voip
-        opus/include
-        opus/silk
-        opus/silk/fixed
-        opus/celt
-        opus
-        opus/opusfile
+        third_party/xiph/opus/include
+        third_party/xiph/opus/silk
+        third_party/xiph/opus/silk/fixed
+        third_party/xiph/opus/celt
+        third_party/xiph/opus
         boringssl/include
         voip/webrtc
         voip/tgcalls
@@ -471,12 +470,11 @@ target_include_directories(tgcalls_tp PUBLIC
         boringssl/include/
         voip/tgcalls/
         voip/webrtc/
-        opus/include
-        opus/silk
-        opus/silk/fixed
-        opus/celt
-        opus/
-        opus/opusfile
+        third_party/xiph/opus/include
+        third_party/xiph/opus/silk
+        third_party/xiph/opus/silk/fixed
+        third_party/xiph/opus/celt
+        third_party/xiph/opus/
         third_party/libyuv/include
         third_party/usrsctplib
         third_party/libsrtp/include
@@ -1836,12 +1834,11 @@ target_include_directories(tgcalls PUBLIC
         voip/tgcalls
         voip/rnnoise/include
         voip/webrtc
-        opus/include
-        opus/silk
-        opus/silk/fixed
-        opus/celt
-        opus
-        opus/opusfile
+        third_party/xiph/opus/include
+        third_party/xiph/opus/silk
+        third_party/xiph/opus/silk/fixed
+        third_party/xiph/opus/celt
+        third_party/xiph/opus
         third_party/libyuv/include
         third_party/libsrtp/include
         third_party/libsrtp/config
@@ -2020,12 +2017,11 @@ target_include_directories(voipandroid PUBLIC
         boringssl/include
         voip/tgcalls
         voip/webrtc
-        opus/include
-        opus/silk
-        opus/silk/fixed
-        opus/celt
-        opus
-        opus/opusfile
+        third_party/xiph/opus/include
+        third_party/xiph/opus/silk
+        third_party/xiph/opus/silk/fixed
+        third_party/xiph/opus/celt
+        third_party/xiph/opus
         third_party/libyuv/include
         third_party/libsrtp/include
         third_party/libsrtp/config
