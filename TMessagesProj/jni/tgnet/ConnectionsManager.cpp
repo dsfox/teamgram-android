@@ -1069,6 +1069,12 @@ TLObject *ConnectionsManager::TLdeserialize(TLObject *request, uint32_t bytes, N
                 object = apiRequest->deserializeResponse(data, bytes, instanceNum, error);
                 if (LOGS_ENABLED) DEBUG_D("api request constructor 0x%x, don't parse", constructor);
             } else {
+                // A reply the store does not know is about to be handed to the
+                // request that asked for it, and most of those parsers answer a
+                // constructor they did not expect with DEBUG_FATAL. Name the
+                // request and the size first, so the log says what was being
+                // parsed rather than only that parsing died.
+                if (LOGS_ENABLED) DEBUG_D("reply 0x%x to %s, %u bytes declared, %u in the buffer", constructor, typeid(*request).name(), bytes, data->limit() - position);
                 object = request->deserializeResponse(data, constructor, instanceNum, error);
                 if (object != nullptr && error) {
                     delete object;

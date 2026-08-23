@@ -560,6 +560,16 @@ void TL_msgs_all_info::readParams(NativeByteBuffer *stream, int32_t instanceNum,
 
 void TL_rpc_result::readParamsEx(NativeByteBuffer *stream, uint32_t bytes, int32_t instanceNum, bool &error) {
     req_msg_id = stream->readInt64(&error);
+    // A reply that declares no result at all. What follows in the buffer is the
+    // padding every encrypted message carries, and handing that to the parser
+    // of whatever was asked for means a random constructor - which most of the
+    // generated parsers answer with DEBUG_FATAL, so a server writing an empty
+    // body takes the app down with it. Ours did, for a while: see ice9 #57.
+    if (bytes < 12 + 4) {
+        error = true;
+        if (LOGS_ENABLED) DEBUG_E("rpc_result for 0x%llx declares %u bytes, too few to hold an answer", (long long) req_msg_id, bytes);
+        return;
+    }
     ConnectionsManager &connectionsManager = ConnectionsManager::getInstance(instanceNum);
     TLObject *object = connectionsManager.TLdeserialize(connectionsManager.getRequestWithMessageId(req_msg_id), bytes - 12, stream);
     if (object != nullptr) {
