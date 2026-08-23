@@ -6349,7 +6349,7 @@
     <string name="NextMediaTapInfo">Tap near the edge of the screen while viewing media to navigate between photos</string>
     <string name="MediaAndSoundSettings">Media and Sound</string>
     <string name="OtherSettings">Other Settings</string>
-    <string name="StickersNameInfo2">Manage stickers, emoji and reactions</string>
+    <string name="StickersNameInfo2">Manage stickers and emoji</string>
     <string name="FilterShare">Share Folder</string>
     <string name="FilterInviteLinks">Invite Links</string>
     <string name="FilterShareFolder">Share folder</string>
@@ -10574,9 +10574,9 @@
     <string name="SettingsChat">Chat Settings</string>
     <string name="SettingsChatInfo">Wallpaper, Night Mode, Animations</string>
     <string name="SettingsPrivacySecurity">Privacy &amp; Security</string>
-    <string name="SettingsPrivacySecurityInfo">Last Seen, Devices, Passkeys</string>
+    <string name="SettingsPrivacySecurityInfo">Last Seen, Devices, Blocked Users</string>
     <string name="SettingsNotifications">Notifications</string>
-    <string name="SettingsNotificationsInfo">Sounds, Calls, Badges</string>
+    <string name="SettingsNotificationsInfo">Sounds, Badges, Exceptions</string>
     <string name="SettingsData">Data and Storage</string>
     <string name="SettingsDataInfo">Media download settings</string>
     <string name="SettingsFolders">Chat Folders</string>

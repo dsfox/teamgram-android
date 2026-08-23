@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -169,7 +170,13 @@ public class DefaultThemesPreviewCell extends LinearLayout {
             browseThemesCell = new TextCell(context);
             browseThemesCell.setTextAndIcon(LocaleController.getString(R.string.SettingsBrowseThemes), R.drawable.msg_colors, false);
 
-            addView(browseThemesCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            // The browser it opens has nothing to show: account.getThemes is
+            // answered with an empty list (#23). Built either way, because the
+            // colours are reapplied to it from several places and a null there
+            // is a crash rather than a missing row. See Offered.
+            if (Offered.CHAT_THEMES) {
+                addView(browseThemesCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            }
 
             dayNightCell.setOnClickListener(new OnClickListener() {
                 @SuppressLint("NotifyDataSetChanged")

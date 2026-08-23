@@ -87,6 +87,15 @@ public final class Offered {
     public static final boolean CHANNELS = false;
 
     /**
+     * Sticker packs.
+     *
+     * messages.getAllStickers is answered with an empty list and installing one
+     * has no handler (#20), so every list of packs opens empty. The emoji and
+     * animation settings that live on the same screen work and stay.
+     */
+    public static final boolean STICKER_PACKS = false;
+
+    /**
      * A cloud password - the second step asked for when signing in.
      *
      * account.getPassword is answered with "there is no password" and nothing

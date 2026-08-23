@@ -52,6 +52,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.UserConfig;
@@ -355,8 +356,15 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
         final int emojiCount    = mediaDataController.getStickerSets(TYPE_EMOJIPACKS).size();
 
         if (currentType == TYPE_IMAGE) {
-            featuredRow = items.size();
-            items.add(UItem.asButton(ID_FEATURED, R.drawable.msg2_trending, getString(R.string.FeaturedStickers), featuredCount > 0 ? formatNumber(featuredCount, ',') : ""));
+            // Trending packs, from a server that has none to trend:
+            // messages.getFeaturedStickers is answered with an empty list (#20).
+            // See Offered.
+            if (Offered.STICKER_PACKS) {
+                featuredRow = items.size();
+                items.add(UItem.asButton(ID_FEATURED, R.drawable.msg2_trending, getString(R.string.FeaturedStickers), featuredCount > 0 ? formatNumber(featuredCount, ',') : ""));
+            } else {
+                featuredRow = -1;
+            }
             if (archivedCount > 0) {
                 archivedRow = items.size();
                 if (currentType == TYPE_IMAGE) {
@@ -382,9 +390,19 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
         }
 
         if (currentType == TYPE_IMAGE) {
-            reactionsDoubleTapRow = items.size();
-            items.add(UItem.asSettingsCell(ID_QUICK_REACTION, R.drawable.msg2_reactions2, getString(R.string.DoubleTapSetting)).onBind(this::setQuickReactionImage));
-            items.add(UItem.asShadow(addStickersBotSpan(getString(currentType == TYPE_EMOJIPACKS ? R.string.EmojiBotInfo : R.string.StickersBotInfo))));
+            // The reaction a double tap sends, in a client whose reactions are
+            // switched off - the server keeps none. And the line under it points
+            // at a @stickers bot that does not exist here, over a list of packs
+            // that is always empty (#20). See Offered.
+            if (Offered.REACTIONS) {
+                reactionsDoubleTapRow = items.size();
+                items.add(UItem.asSettingsCell(ID_QUICK_REACTION, R.drawable.msg2_reactions2, getString(R.string.DoubleTapSetting)).onBind(this::setQuickReactionImage));
+            } else {
+                reactionsDoubleTapRow = -1;
+            }
+            if (Offered.STICKER_PACKS) {
+                items.add(UItem.asShadow(addStickersBotSpan(getString(currentType == TYPE_EMOJIPACKS ? R.string.EmojiBotInfo : R.string.StickersBotInfo))));
+            }
 
             items.add(UItem.asHeader(getString(R.string.StickersSettings)));
             suggestRow = items.size();

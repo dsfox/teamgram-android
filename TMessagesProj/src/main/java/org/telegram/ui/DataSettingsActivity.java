@@ -33,6 +33,7 @@ import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.SaveToGallerySettingsHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.StatsController;
@@ -171,7 +172,9 @@ public class DataSettingsActivity extends BaseFragment {
         saveToGallerySectionRow = rowCount++;
         saveToGalleryPeerRow = rowCount++;
         saveToGalleryGroupsRow = rowCount++;
-        saveToGalleryChannelsRow = rowCount++;
+        // Saving media out of channels, in a messenger with no channels (#16).
+        // -1 rather than unassigned: 0 is a real position. See Offered.
+        saveToGalleryChannelsRow = Offered.CHANNELS ? rowCount++ : -1;
         saveToGalleryDividerRow = rowCount++;
 
 //        autoplayHeaderRow = rowCount++;

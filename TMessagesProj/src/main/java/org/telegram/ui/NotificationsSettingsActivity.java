@@ -43,6 +43,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -179,9 +180,14 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         notificationsSectionRow = rowCount++;
         privateRow = rowCount++;
         groupRow = rowCount++;
-        channelsRow = rowCount++;
-        storiesRow = rowCount++;
-        reactionsRow = rowCount++;
+        // Three kinds of notification for three things that do not exist here:
+        // no channels (#16), no stories, and a server that keeps no reactions.
+        // -1 rather than merely unassigned, because an int field starts at 0 -
+        // a real position - and every "position == channelsRow" would then be
+        // true for the first row on the screen. See Offered.
+        channelsRow = Offered.CHANNELS ? rowCount++ : -1;
+        storiesRow = Offered.STORIES ? rowCount++ : -1;
+        reactionsRow = Offered.REACTIONS ? rowCount++ : -1;
         notificationsSection2Row = rowCount++;
 
         // No ringtone for calls this fork cannot place or receive (#14). Left at
@@ -435,8 +441,12 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 if (adapter != null) {
                     adapter.notifyItemChanged(privateRow);
                     adapter.notifyItemChanged(groupRow);
-                    adapter.notifyItemChanged(channelsRow);
-                    adapter.notifyItemChanged(storiesRow);
+                    if (channelsRow >= 0) {
+                        adapter.notifyItemChanged(channelsRow);
+                    }
+                    if (storiesRow >= 0) {
+                        adapter.notifyItemChanged(storiesRow);
+                    }
                 }
 
                 if (onDone != null) {
