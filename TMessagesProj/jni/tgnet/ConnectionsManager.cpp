@@ -1823,12 +1823,18 @@ void ConnectionsManager::initDatacenters() {
     if (!testBackend) {
         if (datacenters.find(1) == datacenters.end()) {
             datacenter = new Datacenter(instanceNum, 1);
-            // Our server, and only ours. The old address was kept here as a
-            // fallback while it was still bound; it is not any more, so the
-            // client rotated onto a dead endpoint, waited out an eight-second
-            // timeout and showed "Connecting" for as long as it took to come
-            // back round. A fallback that does not answer is worse than none.
-            datacenter->addAddressAndPort("5.23.53.210", 10443, 0, "");
+            // Whichever server this phone was told to talk to, and only that
+            // one. The old address was kept here as a fallback while it was
+            // still bound; it is not any more, so the client rotated onto a
+            // dead endpoint, waited out an eight-second timeout and showed
+            // "Connecting" for as long as it took to come back round. A
+            // fallback that does not answer is worse than none, which is why
+            // there is one address here and never two.
+            if (!seedAddress.empty()) {
+                datacenter->addAddressAndPort(seedAddress, seedPort, 0, "");
+            } else {
+                datacenter->addAddressAndPort(DEFAULT_SERVER_ADDRESS, DEFAULT_SERVER_PORT, 0, "");
+            }
             // datacenter->addAddressAndPort("149.154.175.50", 443, 0, "");
             // datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000a", 443, 1, "");
             datacenters[1] = datacenter;
@@ -1867,12 +1873,18 @@ void ConnectionsManager::initDatacenters() {
     } else {
         if (datacenters.find(1) == datacenters.end()) {
             datacenter = new Datacenter(instanceNum, 1);
-            // Our server, and only ours. The old address was kept here as a
-            // fallback while it was still bound; it is not any more, so the
-            // client rotated onto a dead endpoint, waited out an eight-second
-            // timeout and showed "Connecting" for as long as it took to come
-            // back round. A fallback that does not answer is worse than none.
-            datacenter->addAddressAndPort("5.23.53.210", 10443, 0, "");
+            // Whichever server this phone was told to talk to, and only that
+            // one. The old address was kept here as a fallback while it was
+            // still bound; it is not any more, so the client rotated onto a
+            // dead endpoint, waited out an eight-second timeout and showed
+            // "Connecting" for as long as it took to come back round. A
+            // fallback that does not answer is worse than none, which is why
+            // there is one address here and never two.
+            if (!seedAddress.empty()) {
+                datacenter->addAddressAndPort(seedAddress, seedPort, 0, "");
+            } else {
+                datacenter->addAddressAndPort(DEFAULT_SERVER_ADDRESS, DEFAULT_SERVER_PORT, 0, "");
+            }
             // datacenter->addAddressAndPort("149.154.175.40", 443, 0, "");
             // datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000e", 443, 1, "");
             datacenters[1] = datacenter;
@@ -2058,6 +2070,29 @@ void ConnectionsManager::setUserId(int64_t userId) {
             processRequestQueue(0, 0);
             waitingLoginRequests.clear();
         }
+    });
+}
+
+// Said before init(), from the value the app has kept since somebody typed it.
+// Nothing is dialled here: initDatacenters() reads it when it seeds, and the
+// seed happens once, on a client that has no stored address list yet.
+void ConnectionsManager::setSeedAddress(std::string address, uint32_t port) {
+    seedAddress = std::move(address);
+    seedPort = port > 0 ? port : DEFAULT_SERVER_PORT;
+}
+
+// The way back for somebody who typed the address wrong. Their client cannot
+// connect, so nothing can arrive to correct it; the stored list has to be
+// thrown away and seeded again from what they just typed. This is the shape
+// switchBackend has used for years for the same reason, minus the flag.
+void ConnectionsManager::reseedFromAddress() {
+    scheduleTask([&] {
+        currentDatacenterId = 1;
+        Handshake::cleanupServerKeys();
+        datacenters.clear();
+        initDatacenters();
+        saveConfig();
+        exit(1);
     });
 }
 

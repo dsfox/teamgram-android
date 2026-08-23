@@ -88,6 +88,13 @@ public:
     void receivedCaptchaResult(int32_t requestTokensCount, int32_t* requestTokens, std::string token);
     void moveToDatacenter(uint32_t datacenterId);
 
+    // Which server this phone was told to talk to (ice9 #65). Said before
+    // init(), because it decides what the very first datacenter is seeded
+    // with; said again, with reseed, when somebody corrects a typo and there
+    // is no other way back to a client that cannot connect.
+    void setSeedAddress(std::string address, uint32_t port);
+    void reseedFromAddress();
+
 private:
     static void *ThreadProc(void *data);
 
@@ -147,6 +154,10 @@ private:
     int32_t pingTime;
     int64_t pingTimeMs;
     bool testBackend = false;
+    // Empty until somebody says otherwise, and then initDatacenters() seeds
+    // from this instead of the address compiled in.
+    std::string seedAddress = "";
+    uint32_t seedPort = 0;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
     std::atomic<uint32_t> lastRequestToken{50000000};

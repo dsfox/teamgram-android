@@ -667,8 +667,25 @@ public class ConnectionsManager extends BaseController {
             packageId = "";
         }
 
+        // Before native_init, always: it decides what the first datacenter is
+        // seeded with, and the seeding happens inside it. Said even when nobody
+        // has chosen anything, so that the value and the default live in one
+        // place rather than two that can disagree.
+        native_setSeedAddress(currentAccount, ServerAddress.host(), ServerAddress.port());
+
         native_init(currentAccount, version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, systemLangCode, configPath, logPath, regId, cFingerprint, installer, packageId, timezoneOffset, userId, userPremium, enablePushConnection, ApplicationLoader.isNetworkOnline(), ApplicationLoader.getCurrentNetworkType(), SharedConfig.measureDevicePerformanceClass());
         checkConnection();
+    }
+
+    // Somebody corrected the address. The stored list is thrown away, seeded
+    // again from what they typed, and the app stops so it comes back holding
+    // it - there is no gentler way, because a client that cannot connect can
+    // receive nothing that would tell it where to go instead.
+    public static void reseedFromAddress() {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            native_setSeedAddress(a, ServerAddress.host(), ServerAddress.port());
+        }
+        native_reseedFromAddress(0);
     }
 
     public static void setLangCode(String langCode) {
@@ -967,6 +984,10 @@ public class ConnectionsManager extends BaseController {
     }
 
     public static native void native_switchBackend(int currentAccount, boolean restart);
+
+    public static native void native_setSeedAddress(int currentAccount, String address, int port);
+
+    public static native void native_reseedFromAddress(int currentAccount);
     public static native int native_isTestBackend(int currentAccount);
     public static native void native_pauseNetwork(int currentAccount);
     public static native void native_setIpStrategy(int currentAccount, byte value);

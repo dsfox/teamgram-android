@@ -21,6 +21,12 @@
 #define DEBUG_VERSION
 #define PFS_ENABLED 1
 #define DEFAULT_DATACENTER_ID INT_MAX
+// The server offered before anybody chooses one (ice9 #65). A name and not an
+// address, so that the server can move without a release: an address baked
+// into a shipped build and then given up is a phone that shows "Connecting"
+// every other minute with no way to tell it otherwise.
+#define DEFAULT_SERVER_ADDRESS "common.ice9.app"
+#define DEFAULT_SERVER_PORT 10443
 #define DC_UPDATE_TIME 60 * 60
 #define TEMP_AUTH_KEY_EXPIRE_TIME 24 * 60 * 60
 #define PROXY_CONNECTIONS_COUNT 4

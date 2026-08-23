@@ -263,6 +263,23 @@ void switchBackend(JNIEnv *env, jclass c, jint instanceNum, jboolean restart) {
     ConnectionsManager::getInstance(instanceNum).switchBackend(restart);
 }
 
+// The server this phone was told to talk to (ice9 #65).
+void setSeedAddress(JNIEnv *env, jclass c, jint instanceNum, jstring address, jint port) {
+    const char *addressStr = env->GetStringUTFChars(address, nullptr);
+    ConnectionsManager::getInstance(instanceNum).setSeedAddress(
+            addressStr == nullptr ? "" : std::string(addressStr), (uint32_t) port);
+    if (addressStr != nullptr) {
+        env->ReleaseStringUTFChars(address, addressStr);
+    }
+}
+
+// Throws away the stored address list and seeds it again, then stops the app so
+// it comes back holding the new one. For the person who typed the address wrong
+// and whose client can therefore reach nothing that might correct it.
+void reseedFromAddress(JNIEnv *env, jclass c, jint instanceNum) {
+    ConnectionsManager::getInstance(instanceNum).reseedFromAddress();
+}
+
 void pauseNetwork(JNIEnv *env, jclass c, jint instanceNum) {
     ConnectionsManager::getInstance(instanceNum).pauseNetwork();
 }
@@ -548,6 +565,8 @@ static JNINativeMethod ConnectionsManagerMethods[] = {
         {"native_setRegId", "(ILjava/lang/String;)V", (void *) setRegId},
         {"native_setSystemLangCode", "(ILjava/lang/String;)V", (void *) setSystemLangCode},
         {"native_switchBackend", "(IZ)V", (void *) switchBackend},
+        {"native_setSeedAddress", "(ILjava/lang/String;I)V", (void *) setSeedAddress},
+        {"native_reseedFromAddress", "(I)V", (void *) reseedFromAddress},
         {"native_pauseNetwork", "(I)V", (void *) pauseNetwork},
         {"native_resumeNetwork", "(IZ)V", (void *) resumeNetwork},
         {"native_updateDcSettings", "(I)V", (void *) updateDcSettings},
