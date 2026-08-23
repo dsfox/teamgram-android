@@ -33,6 +33,7 @@ public class ServerAddress {
     private static final String PREFS = "serveraddress";
     private static final String HOST = "host";
     private static final String PORT = "port";
+    private static final String CHOSEN = "chosen";
 
     private ServerAddress() {
     }
@@ -81,6 +82,25 @@ public class ServerAddress {
                 .putString(HOST, host == null || host.isEmpty() ? DEFAULT_HOST : host)
                 .putInt(PORT, port > 0 && port <= 65535 ? port : DEFAULT_PORT)
                 .apply();
+    }
+
+    /**
+     * Whether anybody has answered the question yet. False on a fresh install
+     * and true ever after, which is what decides whether the first screen is
+     * shown — asking again at every sign-in would be a question with the same
+     * answer every time. Note that this is not "is it ours": somebody who
+     * looked at the screen and kept the default has still chosen.
+     */
+    public static boolean wasChosen() {
+        try {
+            return preferences().getBoolean(CHOSEN, false);
+        } catch (Throwable ignore) {
+            return false;
+        }
+    }
+
+    public static void markChosen() {
+        preferences().edit().putBoolean(CHOSEN, true).apply();
     }
 
     /**

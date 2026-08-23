@@ -93,7 +93,7 @@ public:
     // with; said again, with reseed, when somebody corrects a typo and there
     // is no other way back to a client that cannot connect.
     void setSeedAddress(std::string address, uint32_t port);
-    void reseedFromAddress();
+    void reseedFromAddress(bool restart);
 
 private:
     static void *ThreadProc(void *data);

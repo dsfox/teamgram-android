@@ -677,15 +677,20 @@ public class ConnectionsManager extends BaseController {
         checkConnection();
     }
 
-    // Somebody corrected the address. The stored list is thrown away, seeded
-    // again from what they typed, and the app stops so it comes back holding
-    // it - there is no gentler way, because a client that cannot connect can
-    // receive nothing that would tell it where to go instead.
-    public static void reseedFromAddress() {
+    // Somebody named a different server. The stored address list is thrown
+    // away and seeded again from what they typed, because a client that cannot
+    // connect can receive nothing that would tell it where to go instead.
+    //
+    // restart is false while an address is only being tried out, before
+    // anything has been signed into: stopping the app under somebody who has
+    // typed one line would be its own bug. It is true once an account exists,
+    // because the caches are keyed to the old server's ids and the only safe
+    // thing to do with them is not to have them.
+    public static void reseedFromAddress(boolean restart) {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             native_setSeedAddress(a, ServerAddress.host(), ServerAddress.port());
         }
-        native_reseedFromAddress(0);
+        native_reseedFromAddress(0, restart);
     }
 
     public static void setLangCode(String langCode) {
@@ -987,7 +992,7 @@ public class ConnectionsManager extends BaseController {
 
     public static native void native_setSeedAddress(int currentAccount, String address, int port);
 
-    public static native void native_reseedFromAddress(int currentAccount);
+    public static native void native_reseedFromAddress(int currentAccount, boolean restart);
     public static native int native_isTestBackend(int currentAccount);
     public static native void native_pauseNetwork(int currentAccount);
     public static native void native_setIpStrategy(int currentAccount, byte value);

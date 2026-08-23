@@ -276,8 +276,8 @@ void setSeedAddress(JNIEnv *env, jclass c, jint instanceNum, jstring address, ji
 // Throws away the stored address list and seeds it again, then stops the app so
 // it comes back holding the new one. For the person who typed the address wrong
 // and whose client can therefore reach nothing that might correct it.
-void reseedFromAddress(JNIEnv *env, jclass c, jint instanceNum) {
-    ConnectionsManager::getInstance(instanceNum).reseedFromAddress();
+void reseedFromAddress(JNIEnv *env, jclass c, jint instanceNum, jboolean restart) {
+    ConnectionsManager::getInstance(instanceNum).reseedFromAddress(restart);
 }
 
 void pauseNetwork(JNIEnv *env, jclass c, jint instanceNum) {
@@ -566,7 +566,7 @@ static JNINativeMethod ConnectionsManagerMethods[] = {
         {"native_setSystemLangCode", "(ILjava/lang/String;)V", (void *) setSystemLangCode},
         {"native_switchBackend", "(IZ)V", (void *) switchBackend},
         {"native_setSeedAddress", "(ILjava/lang/String;I)V", (void *) setSeedAddress},
-        {"native_reseedFromAddress", "(I)V", (void *) reseedFromAddress},
+        {"native_reseedFromAddress", "(IZ)V", (void *) reseedFromAddress},
         {"native_pauseNetwork", "(I)V", (void *) pauseNetwork},
         {"native_resumeNetwork", "(IZ)V", (void *) resumeNetwork},
         {"native_updateDcSettings", "(I)V", (void *) updateDcSettings},

@@ -2085,14 +2085,22 @@ void ConnectionsManager::setSeedAddress(std::string address, uint32_t port) {
 // connect, so nothing can arrive to correct it; the stored list has to be
 // thrown away and seeded again from what they just typed. This is the shape
 // switchBackend has used for years for the same reason, minus the flag.
-void ConnectionsManager::reseedFromAddress() {
-    scheduleTask([&] {
+//
+// restart is false while somebody is still signing in and only trying an
+// address out: killing the app under a person who has typed nothing yet would
+// be its own bug. It is true when the address changes under an account that
+// exists, because by then there are caches keyed to the old server and the
+// only safe thing to do with them is not to have them.
+void ConnectionsManager::reseedFromAddress(bool restart) {
+    scheduleTask([&, restart] {
         currentDatacenterId = 1;
         Handshake::cleanupServerKeys();
         datacenters.clear();
         initDatacenters();
         saveConfig();
-        exit(1);
+        if (restart) {
+            exit(1);
+        }
     });
 }
 

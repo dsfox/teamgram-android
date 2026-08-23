@@ -10575,6 +10575,19 @@
     <string name="SettingsChatInfo">Wallpaper, Night Mode, Animations</string>
     <string name="SettingsPrivacySecurity">Privacy &amp; Security</string>
     <string name="SettingsPrivacySecurityInfo">Last Seen, Devices, Blocked Users</string>
+
+    <!-- Which server this app talks to (ice9 #65). The first screen after
+         installation, and a row in Settings afterwards. -->
+    <string name="Ice9Server">ice9 server</string>
+    <string name="Ice9ServerTitle">Choose your server</string>
+    <string name="Ice9ServerInfo">Your messages live on the server you name here. Ours is filled in — put in another and this app talks to that one instead.</string>
+    <string name="Ice9ServerAddress">Server address</string>
+    <string name="Ice9ServerSetDefault">Use the default server</string>
+    <string name="Ice9ServerMalformed">That is not an address. A name or an IP, and a port after a colon if it is not the usual one.</string>
+    <string name="Ice9ServerNoAnswer">No answer from that address. Check it and try again.</string>
+    <string name="Ice9ServerChangeTitle">Change server?</string>
+    <string name="Ice9ServerChangeInfo">You will be signed out and everything on this device will be erased: messages, chats and keys belong to the server that issued them and mean nothing on another. Your account on the old server stays where it is.</string>
+    <string name="Ice9ServerChange">Change and sign out</string>
     <string name="SettingsNotifications">Notifications</string>
     <string name="SettingsNotificationsInfo">Sounds, Badges, Exceptions</string>
     <string name="SettingsData">Data and Storage</string>

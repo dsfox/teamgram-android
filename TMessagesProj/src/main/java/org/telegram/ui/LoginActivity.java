@@ -147,6 +147,7 @@ import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
+import org.telegram.tgnet.ServerAddress;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
@@ -258,7 +259,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             VIEW_CODE_FRAGMENT_SMS = 15,
             VIEW_CODE_WORD = 16,
             VIEW_CODE_PHRASE = 17,
-            VIEW_PAY = 18;
+            VIEW_PAY = 18,
+            // Added at the end rather than in front of VIEW_PHONE_INPUT: the
+            // numbers are saved with the activity's state and compared in
+            // ranges, so renumbering the others would send a restored session
+            // to the wrong screen. Its place in the sequence is decided by
+            // which page is shown first, not by its number. See ice9 #65.
+            VIEW_SERVER = 19;
 
     public final static int COUNTRY_STATE_NOT_SET_OR_VALID = 0,
             COUNTRY_STATE_EMPTY = 1,
@@ -288,6 +295,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
+            VIEW_SERVER,
             VIEW_PHONE_INPUT,
             VIEW_CODE_MESSAGE,
             VIEW_CODE_SMS,
@@ -319,7 +327,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     @ViewNumber
     private int currentViewNum;
-    private final SlideView[] views = new SlideView[19];
+    private final SlideView[] views = new SlideView[20];
     private CustomPhoneKeyboardView keyboardView;
     private ValueAnimator keyboardAnimator;
     private boolean paid;
@@ -666,6 +674,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         keyboardView.setViewToFindFocus(slideViewsContainer);
         keyboardLinearLayout.addView(keyboardView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, CustomPhoneKeyboardView.KEYBOARD_HEIGHT_DP));
 
+        views[VIEW_SERVER] = new LoginActivityServerView(context);
         views[VIEW_PHONE_INPUT] = new PhoneView(context);
         views[VIEW_CODE_MESSAGE] = new LoginActivitySmsView(context, AUTH_TYPE_MESSAGE);
         views[VIEW_CODE_SMS] = new LoginActivitySmsView(context, AUTH_TYPE_SMS);
@@ -788,6 +797,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         floatingButton.addView(floatingButtonIcon, LayoutHelper.createFrame(56, 56, Gravity.CENTER));
         floatingButton.addAdditionalView(floatingButtonIcon);
 
+        // Which server this app talks to, asked once and before anything else:
+        // a code cannot be sent for until it is answered. Not on a later
+        // sign-in, not when a second account is added and not when a phone
+        // number changes - those all happen against the server already chosen,
+        // and Settings is where it is changed afterwards. See ice9 #65.
+        if (savedInstanceState == null && activityMode == MODE_LOGIN && !newAccount
+                && !ServerAddress.wasChosen()) {
+            currentViewNum = VIEW_SERVER;
+        }
         if (savedInstanceState != null) {
             restoringState = true;
         }
@@ -810,7 +828,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 setCustomKeyboardVisible(v.hasCustomKeyboard(), false);
 
                 currentDoneType = DONE_TYPE_FLOATING;
-                boolean needFloatingButton = a == VIEW_PHONE_INPUT || a == VIEW_REGISTER ||
+                boolean needFloatingButton = a == VIEW_SERVER || a == VIEW_PHONE_INPUT || a == VIEW_REGISTER ||
                         a == VIEW_PASSWORD || a == VIEW_NEW_PASSWORD_STAGE_1 || a == VIEW_NEW_PASSWORD_STAGE_2 ||
                         a == VIEW_ADD_EMAIL;
                 showDoneButton(needFloatingButton, false);
@@ -1500,7 +1518,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     }
 
     public void setPage(@ViewNumber int page, boolean animated, Bundle params, boolean back) {
-        boolean needFloatingButton = page == VIEW_PHONE_INPUT || page == VIEW_REGISTER || page == VIEW_PASSWORD ||
+        boolean needFloatingButton = page == VIEW_SERVER || page == VIEW_PHONE_INPUT || page == VIEW_REGISTER || page == VIEW_PASSWORD ||
                 page == VIEW_NEW_PASSWORD_STAGE_1 || page == VIEW_NEW_PASSWORD_STAGE_2 || page == VIEW_ADD_EMAIL || page == VIEW_CODE_PHRASE || page == VIEW_CODE_WORD;
         if (page == currentViewNum) {
             animated = false;
@@ -8839,6 +8857,245 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
     }
 
+
+    /**
+     * The first screen after installation: which server this app talks to.
+     *
+     * It stands before the phone number rather than beside the name, where it
+     * was first wanted, because the name is asked after the code and the code
+     * comes from the server. Nothing at all can happen until this is answered.
+     *
+     * Ours is filled in, so that the common case is one tap. Anything else is
+     * accepted - but only after it has answered a real handshake, because an
+     * address stored without that is a person carrying an app that will never
+     * connect and cannot be told why. See ice9 #65.
+     */
+    public class LoginActivityServerView extends SlideView {
+
+        private final OutlineTextContainerView outlineField;
+        private final EditTextBoldCursor addressField;
+        private final TextView titleTextView;
+        private final TextView descriptionTextView;
+        private final TextView errorTextView;
+        private final TextView defaultButton;
+
+        private int checkingRequest = 0;
+        private Runnable giveUp;
+        private boolean nextPressed;
+
+        public LoginActivityServerView(Context context) {
+            super(context);
+            setOrientation(VERTICAL);
+
+            titleTextView = new TextView(context);
+            titleTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+            titleTextView.setTypeface(AndroidUtilities.bold());
+            titleTextView.setGravity(Gravity.CENTER_HORIZONTAL);
+            titleTextView.setText(getString(R.string.Ice9ServerTitle));
+            addView(titleTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 8, 24, 8, 0));
+
+            descriptionTextView = new TextView(context);
+            descriptionTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            descriptionTextView.setGravity(Gravity.CENTER_HORIZONTAL);
+            descriptionTextView.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
+            descriptionTextView.setText(getString(R.string.Ice9ServerInfo));
+            addView(descriptionTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 8, 16, 20));
+
+            outlineField = new OutlineTextContainerView(context);
+            outlineField.setText(getString(R.string.Ice9ServerAddress));
+
+            addressField = new EditTextBoldCursor(context);
+            addressField.setSingleLine();
+            addressField.setLines(1);
+            addressField.setMaxLines(1);
+            addressField.setBackground(null);
+            addressField.setCursorSize(AndroidUtilities.dp(20));
+            addressField.setCursorWidth(1.5f);
+            addressField.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+            addressField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+            addressField.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+            addressField.setText(ServerAddress.describe());
+            addressField.setOnFocusChangeListener((v, hasFocus) -> outlineField.animateSelection(hasFocus ? 1f : 0f));
+            addressField.setOnEditorActionListener((textView, i, keyEvent) -> {
+                if (i == EditorInfo.IME_ACTION_NEXT) {
+                    onNextPressed(null);
+                    return true;
+                }
+                return false;
+            });
+            addressField.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+                @Override
+                public void afterTextChanged(Editable s) {
+                    // The old complaint is about the old address; leaving it up
+                    // makes a corrected one look refused too.
+                    showError(null);
+                    updateDefaultButton();
+                }
+            });
+            outlineField.attachEditText(addressField);
+            outlineField.addView(addressField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.FILL_HORIZONTAL, 16, 1, 16, 0));
+            addView(outlineField, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 58, 16, 0, 16, 0));
+
+            errorTextView = new TextView(context);
+            errorTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            errorTextView.setGravity(Gravity.CENTER_HORIZONTAL);
+            errorTextView.setVisibility(GONE);
+            addView(errorTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 12, 16, 0));
+
+            defaultButton = new TextView(context);
+            defaultButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            defaultButton.setGravity(Gravity.CENTER);
+            defaultButton.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(10), AndroidUtilities.dp(12), AndroidUtilities.dp(10));
+            defaultButton.setText(getString(R.string.Ice9ServerSetDefault));
+            defaultButton.setOnClickListener(v -> {
+                addressField.setText(ServerAddress.DEFAULT_HOST);
+                addressField.setSelection(addressField.length());
+                showError(null);
+            });
+            addView(defaultButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 8, 16, 0));
+
+            updateColors();
+            updateDefaultButton();
+        }
+
+        private void updateDefaultButton() {
+            // Nothing to put back when what is typed is already ours.
+            boolean ours = ServerAddress.DEFAULT_HOST.contentEquals(addressField.getText().toString().trim());
+            defaultButton.setVisibility(ours ? INVISIBLE : VISIBLE);
+        }
+
+        private void showError(String text) {
+            if (text == null) {
+                errorTextView.setVisibility(GONE);
+                return;
+            }
+            errorTextView.setText(text);
+            errorTextView.setVisibility(VISIBLE);
+            outlineField.animateError(1f);
+            AndroidUtilities.shakeView(outlineField);
+        }
+
+        @Override
+        public void updateColors() {
+            if (titleTextView == null) {
+                return;
+            }
+            titleTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            descriptionTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText6));
+            addressField.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            addressField.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
+            addressField.setCursorColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            errorTextView.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+            defaultButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+            outlineField.updateColor();
+        }
+
+        @Override
+        public String getHeaderName() {
+            return getString(R.string.Ice9Server);
+        }
+
+        @Override
+        public boolean needBackButton() {
+            // The first screen. There is nowhere behind it.
+            return false;
+        }
+
+        @Override
+        public void onShow() {
+            super.onShow();
+            addressField.setText(ServerAddress.describe());
+            addressField.setSelection(addressField.length());
+            updateDefaultButton();
+        }
+
+        @Override
+        public void onNextPressed(String code) {
+            if (nextPressed) {
+                return;
+            }
+            String[] parsed = ServerAddress.parse(addressField.getText().toString());
+            if (parsed == null) {
+                showError(getString(R.string.Ice9ServerMalformed));
+                return;
+            }
+
+            nextPressed = true;
+            AndroidUtilities.hideKeyboard(addressField);
+
+            // Try it before keeping it. Seeding costs nothing to undo here -
+            // nobody has signed in yet, so there is no stored history keyed to
+            // an address, and a refusal simply leaves the screen as it was.
+            ServerAddress.set(parsed[0], Integer.parseInt(parsed[1]));
+            ConnectionsManager.reseedFromAddress(false);
+
+            needShowProgress(0);
+            checkingRequest = getConnectionsManager().sendRequest(new TLRPC.TL_help_getConfig(),
+                    (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                        if (!nextPressed) {
+                            return;
+                        }
+                        answered(response != null, error == null ? null : error.text);
+                    }),
+                    ConnectionsManager.RequestFlagWithoutLogin |
+                            ConnectionsManager.RequestFlagEnableUnauthorized |
+                            ConnectionsManager.RequestFlagFailOnServerErrors);
+
+            // A wrong address does not refuse, it says nothing at all, and the
+            // request would wait for as long as somebody is willing to look at
+            // a spinner. Fifteen seconds is longer than any handshake we have
+            // measured and short enough to be an answer.
+            giveUp = () -> answered(false, null);
+            AndroidUtilities.runOnUIThread(giveUp, 15000);
+        }
+
+        private void answered(boolean reached, String errorText) {
+            if (!nextPressed) {
+                return;
+            }
+            nextPressed = false;
+            if (giveUp != null) {
+                AndroidUtilities.cancelRunOnUIThread(giveUp);
+                giveUp = null;
+            }
+            needHideProgress(false);
+
+            if (reached) {
+                showError(null);
+                ServerAddress.markChosen();
+                setPage(VIEW_PHONE_INPUT, true, null, false);
+                return;
+            }
+
+            if (checkingRequest != 0) {
+                getConnectionsManager().cancelRequest(checkingRequest, true);
+                checkingRequest = 0;
+            }
+            // Put back what was there, so that a phone left at this screen is
+            // still pointing somewhere real.
+            ServerAddress.set(ServerAddress.DEFAULT_HOST, ServerAddress.DEFAULT_PORT);
+            ConnectionsManager.reseedFromAddress(false);
+            showError(errorText != null && errorText.length() > 0
+                    ? errorText
+                    : getString(R.string.Ice9ServerNoAnswer));
+        }
+
+        @Override
+        public void onHide() {
+            super.onHide();
+            nextPressed = false;
+            if (giveUp != null) {
+                AndroidUtilities.cancelRunOnUIThread(giveUp);
+                giveUp = null;
+            }
+        }
+    }
 
     public class LoginActivityPhraseView extends SlideView {
 
