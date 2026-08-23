@@ -35,6 +35,7 @@ import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
@@ -393,11 +394,18 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
         }
         items.add(UItem.asShadow(birthdayInfo));
 
-        channelRow = items.size();
-        if (channel == null) {
-            items.add(SettingsActivity.SettingCell.Factory.of(BUTTON_CHANNEL, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.msg_filled_menu_channels, getString(R.string.EditProfileChannelTitle), null, getString(R.string.EditProfileChannelAdd)));
+        // A personal channel to put on your profile, in a messenger with no
+        // channels in it (see Offered). The row offered to add one and the
+        // screen behind it offered to create one, and neither can happen.
+        if (Offered.CHANNELS) {
+            channelRow = items.size();
+            if (channel == null) {
+                items.add(SettingsActivity.SettingCell.Factory.of(BUTTON_CHANNEL, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.msg_filled_menu_channels, getString(R.string.EditProfileChannelTitle), null, getString(R.string.EditProfileChannelAdd)));
+            } else {
+                items.add(SettingsActivity.SettingCell.Factory.of(BUTTON_CHANNEL, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.msg_filled_menu_channels, getString(R.string.EditProfileChannelTitle), channel.title));
+            }
         } else {
-            items.add(SettingsActivity.SettingCell.Factory.of(BUTTON_CHANNEL, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.msg_filled_menu_channels, getString(R.string.EditProfileChannelTitle), channel.title));
+            channelRow = -1;
         }
         if (hadHours) {
             items.add(SettingsActivity.SettingCell.Factory.of(BUTTON_HOURS, IconBackgroundColors.ORANGE_DEEP.top, IconBackgroundColors.ORANGE_DEEP.bottom, R.drawable.filled_premium_hours, getString(R.string.EditProfileHours)));

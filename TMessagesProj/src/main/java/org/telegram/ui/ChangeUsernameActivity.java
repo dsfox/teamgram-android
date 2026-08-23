@@ -859,9 +859,16 @@ public class ChangeUsernameActivity extends BaseFragment {
             tme.setText("@");
             tme.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
             tme.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-            tme.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
+            // The whole row height, with the line centred in it, rather than a
+            // box the height of one line. The at sign's tail is drawn below the
+            // descent, so in a box that ends at the descent its bottom left came
+            // out sliced flat - measured at one pixel from the edge. Upstream
+            // never saw it: "t.me/" has no glyph that reaches down there.
+            tme.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
+            // Upstream's lift, kept so the sign sits where it did against the
+            // name beside it. It is the box that changed, not the position.
             tme.setTranslationY(-dp(3));
-            content.addView(tme, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, Gravity.CENTER_VERTICAL, 21, 15, 0, 15));
+            content.addView(tme, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, 0, Gravity.CENTER_VERTICAL, 21, 0, 0, 0));
             content.addView(field, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 1, Gravity.CENTER_VERTICAL, 0, 15, 21, 15));
             addView(content, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP));
 

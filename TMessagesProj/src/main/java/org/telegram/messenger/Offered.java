@@ -87,6 +87,24 @@ public final class Offered {
     public static final boolean CHANNELS = false;
 
     /**
+     * A cloud password - the second step asked for when signing in.
+     *
+     * account.getPassword is answered with "there is no password" and nothing
+     * handles setting one, so the screen would take a password, send it, and
+     * leave the account exactly as open as it was. Worse than absent: it reads
+     * as a lock that is on.
+     */
+    public static final boolean CLOUD_PASSWORD = false;
+
+    /**
+     * Gifts.
+     *
+     * The catalogue is answered with an empty list and nothing can be bought or
+     * sent, so a setting for who may send you one governs nothing.
+     */
+    public static final boolean GIFTS = false;
+
+    /**
      * Reactions to a message.
      *
      * The server keeps none, so a tapped reaction appears for a moment on the

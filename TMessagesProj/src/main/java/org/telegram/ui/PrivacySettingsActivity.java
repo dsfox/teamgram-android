@@ -45,6 +45,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.ConnectionsManager;
@@ -736,7 +737,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         } else if (id == NotificationCenter.didSetOrRemoveTwoStepPassword) {
             if (args.length > 0) {
                 currentPassword = (TL_account.Password) args[0];
-                if (listAdapter != null) {
+                if (listAdapter != null && passwordRow >= 0) {
                     listAdapter.notifyItemChanged(passwordRow);
                 }
             } else {
@@ -760,7 +761,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         rowCount = 0;
 
         securitySectionRow = rowCount++;
-        passwordRow = rowCount++;
+        // A cloud password protects nothing here: the server answers
+        // account.getPassword with "there is no password" and has no handler
+        // for setting one, so the screen would take a password and leave the
+        // account exactly as open as before. See Offered.
+        passwordRow = Offered.CLOUD_PASSWORD ? rowCount++ : -1;
         autoDeleteMesages = rowCount++;
         passcodeRow = rowCount++;
         if (getMessagesController().config.settingsDisplayPasskeys.get() && Build.VERSION.SDK_INT >= 28 && BuildVars.SUPPORTS_PASSKEYS) {
@@ -799,7 +804,10 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             noncontactsRow = -1;
         }
         birthdayRow = rowCount++;
-        giftsRow = rowCount++;
+        // Who may send you a gift, in a messenger where nobody can send one:
+        // the catalogue is answered with an empty list and nothing can be
+        // bought. See Offered.
+        giftsRow = Offered.GIFTS ? rowCount++ : -1;
         bioRow = rowCount++;
         musicRow = rowCount++;
         groupsRow = rowCount++;
@@ -885,7 +893,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 }
             }
 
-            if (listAdapter != null) {
+            if (listAdapter != null && passwordRow >= 0) {
                 listAdapter.notifyItemChanged(passwordRow);
             }
         }
