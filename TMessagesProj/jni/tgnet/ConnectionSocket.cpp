@@ -679,6 +679,7 @@ void ConnectionSocket::closeSocket(int32_t reason, int32_t error) {
     proxyAuthState = 0;
     tlsState = 0;
     onConnectedSent = false;
+    sentFirstSegment = false;
     outgoingByteStream->clean();
     if (tlsBuffer != nullptr) {
         tlsBuffer->reuse();
@@ -1043,6 +1044,28 @@ void ConnectionSocket::onEvent(uint32_t events) {
                             adjustWriteOp();
                         }
                     } else {
+                        // Measured between this network and our server, again on
+                        // 24 August with tools/first-packet-probe.py: a first
+                        // data packet of 400 bytes or more on a fresh connection
+                        // is dropped on the way - 588 bytes arrived 0 times in 6
+                        // - while the same payload sent after a 64-byte segment
+                        // arrived 8 times in 8, at 400, 588 and 1024. Plain
+                        // sockets with random bytes behave identically, so it is
+                        // the path and not the protocol.
+                        //
+                        // The client's first write once it has keys is 588-636
+                        // bytes, so it vanished, the response timeout fired, and
+                        // the cycle repeated: "Connecting..." for ever. iOS does
+                        // the same thing in MTTcpConnection.
+                        //
+                        // The rest is not lost by capping this: what is not sent
+                        // stays in outgoingByteStream, adjustWriteOp keeps
+                        // EPOLLOUT armed, and the next event carries it. That is
+                        // the same path a partial send already takes.
+                        if (!sentFirstSegment && remaining > 64) {
+                            remaining = 64;
+                        }
+                        sentFirstSegment = true;
                         if ((sentLength = send(socketFd, buffer->bytes(), remaining, 0)) < 0) {
                             if (LOGS_ENABLED) DEBUG_D("connection(%p) send failed", this);
                             closeSocket(1, -1);
