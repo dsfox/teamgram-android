@@ -19,7 +19,8 @@ import org.telegram.messenger.ApplicationLoader;
  * What it holds is only the <i>seed</i>. Once the client has connected it keeps
  * its own address list, refreshed by help.getConfig, and that list is what it
  * dials from then on. Changing what is kept here therefore does nothing on its
- * own — {@link ConnectionsManager#reseedFromAddress()} is what makes it take.
+ * own — {@link ConnectionsManager#reseedFromAddress(boolean)} is what makes it
+ * take.
  */
 public class ServerAddress {
 
