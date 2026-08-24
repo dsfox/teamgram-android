@@ -607,14 +607,12 @@ public class LocaleController {
         // enough to make the interface look broken rather than translated.
         // Russian arrives from the server, where a full pack lives.
 
-        localeInfo = new LocaleInfo();
-        localeInfo.name = "Українська";
-        localeInfo.nameEnglish = "Ukrainian";
-        localeInfo.shortName = localeInfo.pluralLangCode = "uk";
-        localeInfo.pathToFile = null;
-        localeInfo.builtIn = true;
-        languages.add(localeInfo);
-        languagesDict.put(localeInfo.shortName, localeInfo);
+        // Ukrainian used to be added here, marked built in, and it survived the
+        // trimming above by sitting under the comment rather than in the list it
+        // describes. There is no values-uk in this app and no pack for it on the
+        // server, so choosing it left the interface in English while the picker
+        // insisted it was Ukrainian. Offering a language whose strings do not
+        // exist is the one thing the server's own list refuses to do.
 
         localeInfo = new LocaleInfo();
         localeInfo.name = "Русский";
