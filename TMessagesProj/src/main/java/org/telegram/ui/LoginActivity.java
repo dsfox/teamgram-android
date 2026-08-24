@@ -144,6 +144,7 @@ import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
@@ -8878,10 +8879,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private final TextView descriptionTextView;
         private final TextView errorTextView;
         private final TextView defaultButton;
+        private final TextView cancelButton;
+        private final TextView ownServerView;
 
         private int checkingRequest = 0;
         private Runnable giveUp;
         private boolean nextPressed;
+        /// What the checking is interrupting, kept while it runs so that giving
+        /// up can put it back.
+        private String[] checkingFrom;
 
         public LoginActivityServerView(Context context) {
             super(context);
@@ -8960,14 +8966,72 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             });
             addView(defaultButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 8, 16, 0));
 
+            // Fifteen seconds is a long time to be sure you have mistyped and
+            // have no way to say so. It stands where the default button stands
+            // and only while the checking runs, so the screen never offers both.
+            cancelButton = new TextView(context);
+            cancelButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            cancelButton.setGravity(Gravity.CENTER);
+            cancelButton.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(10), AndroidUtilities.dp(12), AndroidUtilities.dp(10));
+            cancelButton.setText(getString(R.string.Cancel));
+            cancelButton.setVisibility(GONE);
+            cancelButton.setOnClickListener(v -> giveUpChecking());
+            addView(cancelButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 8, 16, 0));
+
+            // Said here, where it can be acted on, rather than on a page somebody
+            // would have to go looking for. Most people will keep ours and
+            // should - but a messenger that offers a server of your own and
+            // never says how is offering it the way a form offers a tick box.
+            ownServerView = new TextView(context);
+            ownServerView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            ownServerView.setGravity(Gravity.CENTER_HORIZONTAL);
+            ownServerView.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
+            ownServerView.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(10), AndroidUtilities.dp(12), AndroidUtilities.dp(10));
+            ownServerView.setText(getString(R.string.Ice9ServerOwn));
+            ownServerView.setOnClickListener(v -> Browser.openUrl(getParentActivity(), getString(R.string.Ice9ServerInstructions)));
+            addView(ownServerView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 12, 16, 0));
+
             updateColors();
             updateDefaultButton();
         }
 
         private void updateDefaultButton() {
+            if (nextPressed) {
+                // Checking. The screen offers one thing at a time.
+                defaultButton.setVisibility(INVISIBLE);
+                cancelButton.setVisibility(VISIBLE);
+                return;
+            }
+            cancelButton.setVisibility(GONE);
             // Nothing to put back when what is typed is already ours.
             boolean ours = ServerAddress.DEFAULT_HOST.contentEquals(addressField.getText().toString().trim());
             defaultButton.setVisibility(ours ? INVISIBLE : VISIBLE);
+        }
+
+        /// Stops waiting. The address goes back to where it was and the screen
+        /// says nothing about it: somebody who changed their mind has not been
+        /// refused, and a complaint in front of them would read as one.
+        private void giveUpChecking() {
+            if (!nextPressed) {
+                return;
+            }
+            nextPressed = false;
+            if (giveUp != null) {
+                AndroidUtilities.cancelRunOnUIThread(giveUp);
+                giveUp = null;
+            }
+            if (checkingRequest != 0) {
+                getConnectionsManager().cancelRequest(checkingRequest, true);
+                checkingRequest = 0;
+            }
+            needHideProgress(false);
+            if (checkingFrom != null) {
+                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]));
+                ConnectionsManager.reseedFromAddress(false);
+                checkingFrom = null;
+            }
+            showError(null);
+            updateDefaultButton();
         }
 
         private void showError(String text) {
@@ -8993,6 +9057,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             addressField.setCursorColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
             errorTextView.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
             defaultButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+            cancelButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+            ownServerView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
             outlineField.updateColor();
         }
 
@@ -9028,12 +9094,26 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
             nextPressed = true;
             AndroidUtilities.hideKeyboard(addressField);
+            updateDefaultButton();
 
             // Try it before keeping it. Seeding costs nothing to undo here -
             // nobody has signed in yet, so there is no stored history keyed to
             // an address, and a refusal simply leaves the screen as it was.
-            ServerAddress.set(parsed[0], Integer.parseInt(parsed[1]));
-            ConnectionsManager.reseedFromAddress(false);
+            //
+            // Unless it is where the client is already pointed, which is the
+            // common case: the field is filled in with ours and the answer is
+            // one tap. Seeding then would throw away a key just agreed with
+            // this very server and make somebody wait through a second
+            // handshake to be told what the client already knew.
+            boolean moved = !parsed[0].equals(ServerAddress.host())
+                    || Integer.parseInt(parsed[1]) != ServerAddress.port();
+            checkingFrom = moved
+                    ? new String[]{ServerAddress.host(), String.valueOf(ServerAddress.port())}
+                    : null;
+            if (moved) {
+                ServerAddress.set(parsed[0], Integer.parseInt(parsed[1]));
+                ConnectionsManager.reseedFromAddress(false);
+            }
 
             needShowProgress(0);
             checkingRequest = getConnectionsManager().sendRequest(new TLRPC.TL_help_getConfig(),
@@ -9068,6 +9148,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
             if (reached) {
                 showError(null);
+                checkingFrom = null;
                 ServerAddress.markChosen();
                 setPage(VIEW_PHONE_INPUT, true, null, false);
                 return;
@@ -9077,19 +9158,26 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 getConnectionsManager().cancelRequest(checkingRequest, true);
                 checkingRequest = 0;
             }
-            // Put back what was there, so that a phone left at this screen is
-            // still pointing somewhere real.
-            ServerAddress.set(ServerAddress.DEFAULT_HOST, ServerAddress.DEFAULT_PORT);
-            ConnectionsManager.reseedFromAddress(false);
+            // Put back what was there - what was there, not the default: from
+            // Settings this screen is reached with somebody's own server behind
+            // it, and answering the wrong one by moving them to ours would be a
+            // change they did not ask for.
+            if (checkingFrom != null) {
+                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]));
+                ConnectionsManager.reseedFromAddress(false);
+                checkingFrom = null;
+            }
             showError(errorText != null && errorText.length() > 0
                     ? errorText
                     : getString(R.string.Ice9ServerNoAnswer));
+            updateDefaultButton();
         }
 
         @Override
         public void onHide() {
             super.onHide();
             nextPressed = false;
+            checkingFrom = null;
             if (giveUp != null) {
                 AndroidUtilities.cancelRunOnUIThread(giveUp);
                 giveUp = null;

@@ -4208,7 +4208,7 @@
     <string name="Page4Title">Secure</string>
     <string name="Page5Title">Powerful</string>
     <string name="Page6Title">Cloud-Based</string>
-    <string name="Page1Message">The world\'s **fastest** messaging app.\nIt is **free** and **secure**.</string>
+    <string name="Page1Message">Lightweight, simple and secure opensource messenger for teams and businesses.</string>
     <string name="Page2Message">**ice9** delivers messages faster than\nany other application.</string>
     <string name="Page3Message">**ice9** provides free unlimited cloud storage for chats and media.</string>
     <string name="Page4Message">**ice9** keeps your messages safe\nfrom hacker attacks.</string>
@@ -10580,9 +10580,11 @@
          installation, and a row in Settings afterwards. -->
     <string name="Ice9Server">ice9 server</string>
     <string name="Ice9ServerTitle">Choose your server</string>
-    <string name="Ice9ServerInfo">Your messages live on the server you name here. Ours is filled in — put in another and this app talks to that one instead.</string>
-    <string name="Ice9ServerAddress">Server address</string>
-    <string name="Ice9ServerSetDefault">Use the default server</string>
+    <string name="Ice9ServerInfo">Your messages live on the server you name here. Ours is filled in — keep it, or put in your own: an IP address or a name.</string>
+    <string name="Ice9ServerAddress">Address or name:port</string>
+    <string name="Ice9ServerSetDefault">Use default</string>
+    <string name="Ice9ServerOwn">Important: your own server goes up in 5-10 minutes, and here is how. It is easy — try it.</string>
+    <string name="Ice9ServerInstructions">https://ice9.app/your-server</string>
     <string name="Ice9ServerMalformed">That is not an address. A name or an IP, and a port after a colon if it is not the usual one.</string>
     <string name="Ice9ServerNoAnswer">No answer from that address. Check it and try again.</string>
     <string name="Ice9ServerChangeTitle">Change server?</string>
