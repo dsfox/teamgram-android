@@ -10578,7 +10578,7 @@
 
     <!-- Which server this app talks to (ice9 #65). The first screen after
          installation, and a row in Settings afterwards. -->
-    <string name="Ice9Server">ice9 server</string>
+    <string name="Ice9Server">Server</string>
     <string name="Ice9ServerTitle">Choose your server</string>
     <string name="Ice9ServerInfo">Your messages live on the server you name here. Ours is filled in — keep it, or put in your own: an IP address or a name.</string>
     <string name="Ice9ServerAddress">Address or name:port</string>
