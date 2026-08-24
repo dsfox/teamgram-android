@@ -703,6 +703,20 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
 
         Bundle savedInstanceState = activityMode == MODE_LOGIN ? loadCurrentState(newAccount, currentAccount) : null;
+        // A sign-in saved from before does not get to answer the server
+        // question. That page was written down during a login against a server
+        // nobody has confirmed since, and restoring it walks straight past the
+        // screen that asks - which is what changing the server from Settings
+        // did: it put the question back, signed out, and the app came up on the
+        // phone number as if nothing had been asked. Thrown away here rather
+        // than worked around below, because a half-finished login against a
+        // server that may be about to change is not state worth keeping. See
+        // ice9 #65.
+        if (savedInstanceState != null && activityMode == MODE_LOGIN && !newAccount
+                && !ServerAddress.wasChosen()) {
+            savedInstanceState = null;
+            clearCurrentState();
+        }
         if (savedInstanceState != null) {
             int viewNum = savedInstanceState.getInt("currentViewNum", 0);
             if (viewNum < 0 || viewNum >= views.length)
@@ -9026,7 +9040,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             }
             needHideProgress(false);
             if (checkingFrom != null) {
-                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]));
+                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]), checkingFrom[2]);
                 ConnectionsManager.reseedFromAddress(false);
                 checkingFrom = null;
             }
@@ -9096,26 +9110,57 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             AndroidUtilities.hideKeyboard(addressField);
             updateDefaultButton();
 
-            // Try it before keeping it. Seeding costs nothing to undo here -
-            // nobody has signed in yet, so there is no stored history keyed to
-            // an address, and a refusal simply leaves the screen as it was.
-            //
-            // Unless it is where the client is already pointed, which is the
-            // common case: the field is filled in with ours and the answer is
-            // one tap. Seeding then would throw away a key just agreed with
-            // this very server and make somebody wait through a second
-            // handshake to be told what the client already knew.
-            boolean moved = !parsed[0].equals(ServerAddress.host())
-                    || Integer.parseInt(parsed[1]) != ServerAddress.port();
+            needShowProgress(0);
+
+            // A name has to become something the socket can open before it is
+            // stored or dialled: ConnectionSocket takes an IPv4 literal and
+            // nothing else, so a name reaches it as "bad ipv4" and the socket
+            // closes silently on every attempt. That is a DNS lookup, which is
+            // not a thing to do on the thread drawing the screen - so the
+            // checking starts when the answer comes back.
+            final String host = parsed[0];
+            final int port = Integer.parseInt(parsed[1]);
+            Utilities.globalQueue.postRunnable(() -> {
+                final String dialable = ServerAddress.resolve(host);
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (!nextPressed) {
+                        // Given up on while the name was being looked up.
+                        return;
+                    }
+                    if (dialable == null) {
+                        // A name that resolves to nothing cannot be dialled,
+                        // and to the person that is the same news as a server
+                        // that did not answer.
+                        answered(false, null);
+                        return;
+                    }
+                    beginChecking(host, port, dialable);
+                });
+            });
+        }
+
+        /**
+         * Points the client at the address and asks it one question.
+         *
+         * Seeding costs nothing to undo here - nobody has signed in yet, so
+         * there is no stored history keyed to an address, and a refusal simply
+         * leaves the screen as it was. Unless it is where the client is already
+         * pointed, which is the common case: the field is filled in with ours
+         * and the answer is one tap. Seeding then would throw away a key just
+         * agreed with this very server and make somebody wait through a second
+         * handshake to be told what the client already knew.
+         */
+        private void beginChecking(String host, int port, String dialable) {
+            boolean moved = !host.equals(ServerAddress.host()) || port != ServerAddress.port();
             checkingFrom = moved
-                    ? new String[]{ServerAddress.host(), String.valueOf(ServerAddress.port())}
+                    ? new String[]{ServerAddress.host(), String.valueOf(ServerAddress.port()),
+                            ServerAddress.dialable()}
                     : null;
             if (moved) {
-                ServerAddress.set(parsed[0], Integer.parseInt(parsed[1]));
+                ServerAddress.set(host, port, dialable);
                 ConnectionsManager.reseedFromAddress(false);
             }
 
-            needShowProgress(0);
             checkingRequest = getConnectionsManager().sendRequest(new TLRPC.TL_help_getConfig(),
                     (response, error) -> AndroidUtilities.runOnUIThread(() -> {
                         if (!nextPressed) {
@@ -9130,7 +9175,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             // A wrong address does not refuse, it says nothing at all, and the
             // request would wait for as long as somebody is willing to look at
             // a spinner. Fifteen seconds is longer than any handshake we have
-            // measured and short enough to be an answer.
+            // measured and short enough to be an answer. Started here rather
+            // than before the lookup, so a slow name does not eat the wait.
             giveUp = () -> answered(false, null);
             AndroidUtilities.runOnUIThread(giveUp, 15000);
         }
@@ -9163,7 +9209,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             // it, and answering the wrong one by moving them to ours would be a
             // change they did not ask for.
             if (checkingFrom != null) {
-                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]));
+                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]), checkingFrom[2]);
                 ConnectionsManager.reseedFromAddress(false);
                 checkingFrom = null;
             }
