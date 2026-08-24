@@ -8931,7 +8931,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             addressField.setBackground(null);
             addressField.setCursorSize(AndroidUtilities.dp(20));
             addressField.setCursorWidth(1.5f);
-            addressField.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+            addressField.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
+            addressField.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(16), AndroidUtilities.dp(16), AndroidUtilities.dp(16));
             addressField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
             addressField.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
             addressField.setText(ServerAddress.describe());
@@ -8959,8 +8960,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 }
             });
             outlineField.attachEditText(addressField);
-            outlineField.addView(addressField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.FILL_HORIZONTAL, 16, 1, 16, 0));
-            addView(outlineField, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 58, 16, 0, 16, 0));
+            // The same shape the name and e-mail fields use in this file: the
+            // padding is what centres the text inside the outline, and the
+            // container is measured rather than pinned to a height. Pinned to
+            // 58dp with no padding, the text sat on the top edge and ran into
+            // the floating label - which is what it did on a phone.
+            outlineField.addView(addressField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP));
+            addView(outlineField, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 16, 0, 16, 0));
 
             errorTextView = new TextView(context);
             errorTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
