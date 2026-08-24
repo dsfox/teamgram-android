@@ -15,6 +15,7 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ConfigurationInfo;
@@ -88,6 +89,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.ServerAddress;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
@@ -699,6 +701,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(8, IconBackgroundColors.CYAN.top, IconBackgroundColors.CYAN.bottom, R.drawable.settings_devices, getString(R.string.SettingsDevices), getString(R.string.SettingsDevicesInfo)));
         items.add(SettingCell.Factory.of(9, IconBackgroundColors.ORANGE_DEEP.top, IconBackgroundColors.ORANGE_DEEP.bottom, R.drawable.settings_power, getString(R.string.SettingsPowerSaving), getString(R.string.SettingsPowerSavingInfo)));
         items.add(SettingCell.Factory.of(10, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_language, getString(R.string.SettingsLanguage), LocaleController.getCurrentLanguageName()));
+        // Which server this phone talks to, with the address on the row rather
+        // than one screen in: a promise about whose machine your messages are
+        // on is worth nothing if checking it takes a search. See ice9 #65.
+        items.add(SettingCell.Factory.of(60, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9Server), ServerAddress.describe()));
 
         items.add(UItem.asShadow(null));
 
@@ -756,6 +762,44 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
 
         items.add(UItem.asCustomShadow(versionView));
+    }
+
+    /**
+     * Changing which server this phone talks to (ice9 #65).
+     *
+     * The address is not typed here. Confirming puts the question back and
+     * signs out, and the address is typed on the screen that already knows how
+     * to check one before keeping it - checking it from inside a signed-in
+     * account would mean a second connection beside the account's own, and
+     * keeping an address that has not answered is the one outcome this whole
+     * feature exists to prevent.
+     *
+     * The sign-out is not a side effect somebody discovers afterwards: messages,
+     * chats and keys belong to the server that issued them and mean nothing on
+     * another, so the whole of what it costs is on the dialog before the button.
+     */
+    private void askAboutChangingServer() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(getString(R.string.Ice9ServerChangeTitle));
+        builder.setMessage(getString(R.string.Ice9ServerChangeInfo));
+        builder.setPositiveButton(getString(R.string.Ice9ServerChange), (dialog, which) -> {
+            // The question goes back first, so that whatever happens to the
+            // sign-out the next launch asks it. The address itself is left
+            // alone: a phone that gets no further goes on reaching the server
+            // it always did rather than silently landing on ours.
+            ServerAddress.askAgain();
+            getMessagesController().performLogout(1);
+        });
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        AlertDialog dialog = builder.create();
+        showDialog(dialog);
+        TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (button != null) {
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
+        }
     }
 
     private void presentSettingFragment(BaseFragment fragment) {
@@ -840,6 +884,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 10:
                 presentSettingFragment(new LanguageSelectActivity());
+                break;
+            case 60:
+                askAboutChangingServer();
                 break;
 
             case 11:

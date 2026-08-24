@@ -105,6 +105,19 @@ public class ServerAddress {
     }
 
     /**
+     * Puts the question back without changing what is dialled. This is what
+     * changing servers from Settings does before signing out: the screen comes
+     * up again with the current address in it, and until somebody types another
+     * one the client goes on reaching the same server it always did.
+     *
+     * Deliberately not {@code set(DEFAULT_HOST, DEFAULT_PORT)}: somebody who
+     * opens that screen and then walks away must not find themselves on ours.
+     */
+    public static void askAgain() {
+        preferences().edit().putBoolean(CHOSEN, false).apply();
+    }
+
+    /**
      * Splits what a person typed. Accepts "name", "name:port" and a bare
      * address; returns null when there is nothing usable in it, so the caller
      * can say so rather than store a value that cannot be dialled.
