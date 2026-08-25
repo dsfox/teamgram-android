@@ -5584,19 +5584,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         // nothing - so the entities are dropped from the request
                         // rather than sent pointing into base64.
                         //
-                        // Null means this conversation cannot carry it, and then
-                        // the message goes as it always did. A messenger that
-                        // will not send is worse than one that sometimes cannot
-                        // protect.
-                        String carried = MlsRuntime.getInstance(currentAccount)
-                                .encrypt(peer, message, entities, sendMessageParams.mlsForwarded);
-                        if (carried != null) {
-                            // Remembered under the same random id the server
-                            // will echo back, so its copy does not replace what
-                            // was written with base64.
-                            MlsRuntime.getInstance(currentAccount).wrote(newMsg.random_id, message);
-                        }
-                        reqSend.message = carried != null ? carried : message;
+                        // Filled in just before the request goes out rather than
+                        // here: the conversation may not exist yet, and asking
+                        // now would start it and answer null in the same breath -
+                        // which is how every conversation used to begin with one
+                        // message the server could read. See the wait below.
+                        reqSend.message = message;
                         reqSend.clear_draft = retryMessageObject == null;
                         reqSend.silent = newMsg.silent;
                         reqSend.peer = sendToPeer;
@@ -5626,11 +5619,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         if (!searchLinks) {
                             reqSend.no_webpage = true;
                         }
-                        // Not when the text is a ciphertext: the offsets would
-                        // point into base64, and the server would be told where
-                        // the bold began in a message it cannot read. They went
-                        // inside instead.
-                        if (carried == null && entities != null && !entities.isEmpty()) {
+                        // Attached now and taken off again if the text turns out
+                        // to be a ciphertext - see the wait below. An entity is a
+                        // pair of offsets into the text, so beside base64 it
+                        // would tell the server where the bold began in a message
+                        // it cannot read.
+                        if (entities != null && !entities.isEmpty()) {
                             reqSend.entities = entities;
                             reqSend.flags |= 8;
                         }
@@ -5656,7 +5650,40 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         if (retryMessageObject == null) {
                             StarsController.getInstance(currentAccount).beforeSendingMessage(newMsgObj);
                         }
-                        performSendMessageRequest(reqSend, newMsgObj, null, null, parentObject, params, scheduleDate != 0);
+                        // The request waits for a conversation to encrypt into.
+                        // The message is already drawn in the chat as sending, so
+                        // nothing on screen waits with it; what waits is the
+                        // ciphertext, and only the first time to each person.
+                        //
+                        // The callback always runs - no conversation possible, a
+                        // handshake that failed, ten seconds gone - and then the
+                        // message goes in the clear exactly as it did before.
+                        final TLRPC.TL_messages_sendMessage sending = reqSend;
+                        final MessageObject sendingObj = newMsgObj;
+                        final Object sendingParent = parentObject;
+                        final HashMap<String, String> sendingParams = params;
+                        final boolean sendingScheduled = scheduleDate != 0;
+                        final long sendingRandomId = newMsg.random_id;
+                        final String sendingPlain = message;
+                        final ArrayList<TLRPC.MessageEntity> sendingEntities = entities;
+                        final MlsRuntime.Forwarded sendingForwarded = sendMessageParams.mlsForwarded;
+                        final long sendingPeer = peer;
+                        MlsRuntime.getInstance(currentAccount).ensureConversation(peer, () -> {
+                            String carried = MlsRuntime.getInstance(currentAccount)
+                                    .encrypt(sendingPeer, sendingPlain, sendingEntities, sendingForwarded);
+                            if (carried != null) {
+                                // Remembered under the same random id the server
+                                // will echo back, so its copy does not replace
+                                // what was written with base64.
+                                MlsRuntime.getInstance(currentAccount).wrote(sendingRandomId, sendingPlain);
+                                sending.message = carried;
+                                // The formatting travels inside the ciphertext,
+                                // so it must not travel beside it as well.
+                                sending.entities = null;
+                                sending.flags &= ~8;
+                            }
+                            performSendMessageRequest(sending, sendingObj, null, null, sendingParent, sendingParams, sendingScheduled);
+                        });
                         if (retryMessageObject == null) {
                             getMediaDataController().cleanDraft(peer, replyToTopMsg != null ? replyToTopMsg.getId() : 0, false);
                         }

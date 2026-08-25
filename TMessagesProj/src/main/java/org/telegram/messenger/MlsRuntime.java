@@ -536,6 +536,44 @@ public class MlsRuntime {
 
     private final java.util.Set<Long> starting = new java.util.HashSet<>();
 
+    /** Sends held back until a conversation with that peer exists, by peer. */
+    private final Map<Long, java.util.ArrayList<Waiter>> waitingForConversation = new HashMap<>();
+
+    /**
+     * How long a message may wait for a handshake before it goes anyway.
+     *
+     * Encryption must never be able to stop a message. A slow network, a server
+     * that does not answer, anything - after this the message goes in the clear
+     * rather than waiting behind something a person cannot see. The other client
+     * gives it the same ten seconds, and the handshake it waits for has been
+     * measured in milliseconds.
+     */
+    private static final long CONVERSATION_WAIT = 10_000L;
+
+    /**
+     * One held-back send. Fires once and once only: it has both a deadline of
+     * its own and the conversation to wait for, and whichever arrives first
+     * must not let the other send the message twice.
+     */
+    private static final class Waiter {
+        private final Runnable then;
+        private boolean fired;
+
+        Waiter(Runnable then) {
+            this.then = then;
+        }
+
+        void fire() {
+            synchronized (this) {
+                if (fired) {
+                    return;
+                }
+                fired = true;
+            }
+            AndroidUtilities.runOnUIThread(then);
+        }
+    }
+
     /**
      * Whether it makes any sense to encrypt to this peer at all.
      *
@@ -743,15 +781,60 @@ public class MlsRuntime {
      * all of them.
      */
     public void ensureConversation(long peerId) {
+        ensureConversation(peerId, null);
+    }
+
+    /**
+     * The same, with something to do once there is a conversation - or once it
+     * is known there will not be one.
+     *
+     * This is what stops the first message to somebody going in the clear. The
+     * conversation used to be started behind the send: the group appeared nine
+     * milliseconds after the request had already left, so every conversation
+     * began with one message the server could read - usually the one that says
+     * why somebody is writing. The other client waits for it before sending and
+     * has since it was built; this is the same thing, as a callback, because
+     * here the send starts on the thread drawing the screen and cannot block.
+     *
+     * The callback always runs. Not worth encrypting, no key packages, a
+     * handshake that fails, ten seconds gone - every one of them ends in the
+     * callback and the message goes as it always did. A message that never
+     * leaves is worse than a message the server can read.
+     */
+    public void ensureConversation(long peerId, Runnable then) {
         if (!worthEncrypting(peerId)) {
+            fire(then);
             return;
         }
         loadConversations();
+        Waiter waiter = null;
+        boolean startNow;
         synchronized (this) {
-            if (groupIdByPeer.containsKey(peerId) || starting.contains(peerId)) {
+            if (groupIdByPeer.containsKey(peerId)) {
+                fire(then);
                 return;
             }
-            starting.add(peerId);
+            if (then != null) {
+                waiter = new Waiter(then);
+                java.util.ArrayList<Waiter> waiting = waitingForConversation.get(peerId);
+                if (waiting == null) {
+                    waiting = new java.util.ArrayList<>();
+                    waitingForConversation.put(peerId, waiting);
+                }
+                waiting.add(waiter);
+            }
+            startNow = !starting.contains(peerId);
+            if (startNow) {
+                starting.add(peerId);
+            }
+        }
+        if (waiter != null) {
+            final Waiter deadline = waiter;
+            AndroidUtilities.runOnUIThread(deadline::fire, CONVERSATION_WAIT);
+        }
+        if (!startNow) {
+            // Somebody else is already building it; this send waits with theirs.
+            return;
         }
 
         TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
@@ -761,6 +844,7 @@ public class MlsRuntime {
                 synchronized (MlsRuntime.this) {
                     starting.remove(peerId);
                 }
+                settle(peerId);
                 FileLog.e("mls: no key packages for " + peerId
                         + (error != null ? ": " + error.text : ""));
                 return;
@@ -774,10 +858,37 @@ public class MlsRuntime {
                     starting.remove(peerId);
                     withoutDevices.put(peerId, System.currentTimeMillis());
                 }
+                settle(peerId);
                 return;
             }
             Utilities.globalQueue.postRunnable(() -> begin(peerId, claimed.packages));
         });
+    }
+
+    private static void fire(Runnable then) {
+        if (then != null) {
+            AndroidUtilities.runOnUIThread(then);
+        }
+    }
+
+    /**
+     * Lets go every send held for this peer, whatever the outcome was.
+     *
+     * Called from every path that ends the building of a conversation -
+     * including the ones that end it badly. A path that quietly returns without
+     * this is a message that never leaves, and there is no worse failure here.
+     */
+    private void settle(long peerId) {
+        java.util.ArrayList<Waiter> waiting;
+        synchronized (this) {
+            waiting = waitingForConversation.remove(peerId);
+        }
+        if (waiting == null) {
+            return;
+        }
+        for (Waiter waiter : waiting) {
+            waiter.fire();
+        }
     }
 
     private void begin(long peerId, List<byte[]> keyPackages) {
@@ -800,6 +911,10 @@ public class MlsRuntime {
                     synchronized (MlsRuntime.this) {
                         starting.remove(peerId);
                     }
+                    // After the welcome rather than after the group was made:
+                    // until they have been invited, a message encrypted into it
+                    // is one they cannot open.
+                    settle(peerId);
                     if (error != null) {
                         // The conversation exists here and they were never
                         // invited. Sending in the clear is right: a message they
@@ -816,6 +931,7 @@ public class MlsRuntime {
             synchronized (this) {
                 starting.remove(peerId);
             }
+            settle(peerId);
             FileLog.e("mls: cannot start a conversation with " + peerId + ": " + e.getMessage());
         }
     }
