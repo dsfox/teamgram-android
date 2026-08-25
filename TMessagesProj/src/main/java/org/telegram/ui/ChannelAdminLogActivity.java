@@ -3124,7 +3124,7 @@ public class ChannelAdminLogActivity extends BaseFragment implements Notificatio
                                     if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage && messageObject.messageOwner.media.webpage != null && messageObject.messageOwner.media.webpage.cached_page != null) {
                                         String lowerUrl = urlFinal.toLowerCase();
                                         String lowerUrl2 = messageObject.messageOwner.media.webpage.url.toLowerCase();
-                                        if ((Browser.isTelegraphUrl(lowerUrl, false) || lowerUrl.contains("teamgram.me/iv")) && (lowerUrl.contains(lowerUrl2) || lowerUrl2.contains(lowerUrl))) {
+                                        if ((Browser.isTelegraphUrl(lowerUrl, false) || lowerUrl.contains("i.ice9.app/iv")) && (lowerUrl.contains(lowerUrl2) || lowerUrl2.contains(lowerUrl))) {
                                             if (LaunchActivity.instance != null && LaunchActivity.instance.getBottomSheetTabs() != null && LaunchActivity.instance.getBottomSheetTabs().tryReopenTab(messageObject) != null) {
                                                 return;
                                             }

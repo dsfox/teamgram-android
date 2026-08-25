@@ -507,6 +507,6 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     }
 
     public void onGiftClick(Gift gift) {
-        Browser.openUrl(getContext(), "https://teamgram.me/nft/" + gift.slug);
+        Browser.openUrl(getContext(), "https://i.ice9.app/nft/" + gift.slug);
     }
 }

@@ -83,7 +83,7 @@ public class DialogsBotsAdapter extends UniversalAdapter {
                         if (alert[0] != null) {
                             alert[0].dismiss();
                         }
-                        Browser.openUrl(context, "https://teamgram.me/" + username);
+                        Browser.openUrl(context, "https://i.ice9.app/" + username);
                     }
                     @Override
                     public void updateDrawState(@NonNull TextPaint ds) {

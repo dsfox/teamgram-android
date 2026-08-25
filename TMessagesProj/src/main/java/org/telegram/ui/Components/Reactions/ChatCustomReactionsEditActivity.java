@@ -289,7 +289,7 @@ public class ChatCustomReactionsEditActivity extends BaseFragment implements Not
         infoCell2.setText(AndroidUtilities.replaceSingleTag(
                 getString(R.string.ReactionCreateOwnPack),
                 Theme.key_chat_messageLinkIn, 0,
-                () -> Browser.openUrl(getContext(), "https://teamgram.me/stickers"),
+                () -> Browser.openUrl(getContext(), "https://i.ice9.app/stickers"),
                 getResourceProvider()
         ));
         switchLayout.addView(infoCell2, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));

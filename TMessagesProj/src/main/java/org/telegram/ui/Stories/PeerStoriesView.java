@@ -7100,18 +7100,18 @@ public class PeerStoriesView extends SizeNotifierFrameLayout implements Notifica
                     return null;
                 }
                 if (currentStory.isLive) {
-                    return String.format(Locale.US, "https://teamgram.me/%1$s/s/live", UserObject.getPublicUsername(user));
+                    return String.format(Locale.US, "https://i.ice9.app/%1$s/s/live", UserObject.getPublicUsername(user));
                 }
-                return String.format(Locale.US, "https://teamgram.me/%1$s/s/%2$s", UserObject.getPublicUsername(user), currentStory.storyItem.id);
+                return String.format(Locale.US, "https://i.ice9.app/%1$s/s/%2$s", UserObject.getPublicUsername(user), currentStory.storyItem.id);
             } else {
                 TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
                 if (ChatObject.getPublicUsername(chat) == null) {
                     return null;
                 }
                 if (currentStory.isLive) {
-                    return String.format(Locale.US, "https://teamgram.me/%1$s/s/live", ChatObject.getPublicUsername(chat));
+                    return String.format(Locale.US, "https://i.ice9.app/%1$s/s/live", ChatObject.getPublicUsername(chat));
                 }
-                return String.format(Locale.US, "https://teamgram.me/%1$s/s/%2$s", ChatObject.getPublicUsername(chat), currentStory.storyItem.id);
+                return String.format(Locale.US, "https://i.ice9.app/%1$s/s/%2$s", ChatObject.getPublicUsername(chat), currentStory.storyItem.id);
             }
         }
 

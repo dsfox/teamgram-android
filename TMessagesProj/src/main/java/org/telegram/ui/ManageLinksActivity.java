@@ -834,7 +834,7 @@ public class ManageLinksActivity extends BaseFragment implements NotificationCen
                     linkActionView.setCanEdit(adminId == getAccountInstance().getUserConfig().clientUserId);
                     if (isPublic && adminId == getAccountInstance().getUserConfig().clientUserId) {
                         if (info != null) {
-                            linkActionView.setLink("https://teamgram.me/" + ChatObject.getPublicUsername(currentChat));
+                            linkActionView.setLink("https://i.ice9.app/" + ChatObject.getPublicUsername(currentChat));
                             linkActionView.setUsers(0, null);
                             linkActionView.hideRevokeOption(true);
                         }
@@ -1359,10 +1359,10 @@ public class ManageLinksActivity extends BaseFragment implements NotificationCen
                 SpannableStringBuilder builder = new SpannableStringBuilder(invite.title);
                 Emoji.replaceEmoji(builder, titleView.getPaint().getFontMetricsInt(), false);
                 titleView.setText(builder);
-            } else if (invite.link.startsWith("https://teamgram.me/+")) {
-                titleView.setText(MessagesController.getInstance(currentAccount).linkPrefix + "/" + invite.link.substring("https://teamgram.me/+".length()));
-            } else if (invite.link.startsWith("https://teamgram.me/joinchat/")) {
-                titleView.setText(invite.link.substring("https://teamgram.me/joinchat/".length()));
+            } else if (invite.link.startsWith("https://i.ice9.app/+")) {
+                titleView.setText(MessagesController.getInstance(currentAccount).linkPrefix + "/" + invite.link.substring("https://i.ice9.app/+".length()));
+            } else if (invite.link.startsWith("https://i.ice9.app/joinchat/")) {
+                titleView.setText(invite.link.substring("https://i.ice9.app/joinchat/".length()));
             } else if (invite.link.startsWith("https://")) {
                 titleView.setText(invite.link.substring("https://".length()));
             } else {

@@ -1394,13 +1394,13 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     TLRPC.Chat currentChat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
                     String username = ChatObject.getPublicUsername(currentChat);
                     if (username != null) {
-                        url1 = "https://teamgram.me/" + username + "/" + messageId + "?t=" + AndroidUtilities.formatTimestamp(timestamp);
+                        url1 = "https://i.ice9.app/" + username + "/" + messageId + "?t=" + AndroidUtilities.formatTimestamp(timestamp);
                     }
                 } else {
                     TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(dialogId);
                     String username = UserObject.getPublicUsername(user);
                     if (user != null && username != null) {
-                        url1 = "https://teamgram.me/" + username + "/" + messageId + "?t=" + AndroidUtilities.formatTimestamp(timestamp);
+                        url1 = "https://i.ice9.app/" + username + "/" + messageId + "?t=" + AndroidUtilities.formatTimestamp(timestamp);
                     }
                 }
             }

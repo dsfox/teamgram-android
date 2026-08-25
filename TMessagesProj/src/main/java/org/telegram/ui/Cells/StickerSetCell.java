@@ -67,8 +67,8 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 public class StickerSetCell extends FrameLayout {
-    private final static String LINK_PREFIX = "teamgram.me/addstickers/";
-    private final static String LINK_PREFIX_EMOJI = "teamgram.me/addemoji/";
+    private final static String LINK_PREFIX = "i.ice9.app/addstickers/";
+    private final static String LINK_PREFIX_EMOJI = "i.ice9.app/addemoji/";
 
     private final int option;
 

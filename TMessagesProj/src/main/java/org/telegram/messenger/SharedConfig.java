@@ -405,7 +405,7 @@ public class SharedConfig {
         }
 
         public String getLink() {
-            StringBuilder url = new StringBuilder(!TextUtils.isEmpty(secret) ? "https://teamgram.me/proxy?" : "https://teamgram.me/socks?");
+            StringBuilder url = new StringBuilder(!TextUtils.isEmpty(secret) ? "https://i.ice9.app/proxy?" : "https://i.ice9.app/socks?");
             try {
                 url.append("server=").append(URLEncoder.encode(address, "UTF-8")).append("&").append("port=").append(port);
                 if (!TextUtils.isEmpty(username)) {

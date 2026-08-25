@@ -943,10 +943,14 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
         final Utilities.Callback<TLRPC.User> onUser = user -> {
             if (user == null) {
                 phoneStatusView.setImageDrawable(null);
-                underPhoneTextView.setText(AndroidUtilities.replaceArrows(AndroidUtilities.replaceSingleTag("This phone number is not on Telegram. **Invite >**", () -> {
+                // The invitation used to read "Join me! Download it here:
+                // https://telegram.org/dl" - an invitation to this messenger
+                // that advertised another one (#87). The line above it named
+                // Telegram too, in English, whatever language the phone was in.
+                underPhoneTextView.setText(AndroidUtilities.replaceArrows(AndroidUtilities.replaceSingleTag("This phone number is not on ice9. **Invite >**", () -> {
                     final Intent intent = new Intent(Intent.ACTION_VIEW);
                     intent.setData(Uri.parse("sms:+" + phone));
-                    intent.putExtra("sms_body", LocaleController.formatString(R.string.InviteText2, "https://telegram.org/dl"));
+                    intent.putExtra("sms_body", LocaleController.formatString(R.string.InviteText2, "https://ice9.app"));
                     getContext().startActivity(intent);
                 }), true, dp(8f / 3f), dp(1)));
             } else {

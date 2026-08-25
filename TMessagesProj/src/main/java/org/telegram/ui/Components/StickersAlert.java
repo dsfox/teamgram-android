@@ -1664,7 +1664,7 @@ public class StickersAlert extends BottomSheet implements NotificationCenter.Not
         textView.setTextColor(getThemedColor(Theme.key_dialogTextHint));
         textView.setMaxLines(1);
         textView.setLines(1);
-        textView.setText("teamgram.me/addstickers/");
+        textView.setText("i.ice9.app/addstickers/");
         textView.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         textView.setGravity(Gravity.LEFT | Gravity.TOP);
         textView.setSingleLine(true);

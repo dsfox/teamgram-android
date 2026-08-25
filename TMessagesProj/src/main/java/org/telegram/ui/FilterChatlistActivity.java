@@ -964,7 +964,7 @@ public class FilterChatlistActivity extends BaseFragment {
             spoilerTextView = new SimpleTextView(context);
             spoilerTextView.setTextSize(16);
             spoilerTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-            SpannableString spoileredText = new SpannableString("teamgram.me/folder/N3k/dImA/bIo");
+            SpannableString spoileredText = new SpannableString("i.ice9.app/folder/N3k/dImA/bIo");
             TextStyleSpan.TextStyleRun run = new TextStyleSpan.TextStyleRun();
             run.flags |= FLAG_STYLE_SPOILER;
             spoileredText.setSpan(new TextStyleSpan(run), 0, spoileredText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);

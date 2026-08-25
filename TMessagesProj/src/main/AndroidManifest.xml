@@ -254,12 +254,16 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="vnd.android.cursor.item/vnd.org.chatengine.messenger.android.profile"/>
             </intent-filter>
-            <intent-filter>
+            <!-- A link to a person (#87). autoVerify because the host now serves
+                 /.well-known/assetlinks.json naming this package and the key it
+                 is signed with, which is what lets the link open the app
+                 straight away instead of asking which app should have it. -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:host="teamgram.me" android:scheme="http" />
-                <data android:host="teamgram.me" android:scheme="https" />
+                <data android:host="i.ice9.app" android:scheme="http" />
+                <data android:host="i.ice9.app" android:scheme="https" />
             </intent-filter>
             <intent-filter android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:priority="1">
                 <action android:name="android.intent.action.VIEW"/>

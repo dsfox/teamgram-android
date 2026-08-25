@@ -11,9 +11,9 @@ public class ChannelBoostUtilities {
         TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
         String username = ChatObject.getPublicUsername(chat);
         if (!TextUtils.isEmpty(username)) {
-            return "https://teamgram.me/boost/" + ChatObject.getPublicUsername(chat);
+            return "https://i.ice9.app/boost/" + ChatObject.getPublicUsername(chat);
         } else {
-            return "https://teamgram.me/boost/?c=" + -dialogId;
+            return "https://i.ice9.app/boost/?c=" + -dialogId;
         }
     }
 }
