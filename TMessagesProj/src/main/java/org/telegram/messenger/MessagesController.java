@@ -13486,7 +13486,18 @@ public class MessagesController extends BaseController implements NotificationCe
                 // already opened before it asks MLS, and MLS opens a ciphertext
                 // exactly once.
                 if (MlsRuntime.isCiphertext(message.message)) {
-                    MlsRuntime.getInstance(currentAccount).open(message);
+                    boolean read = MlsRuntime.getInstance(currentAccount).open(message);
+                    // Said out loud, because it cannot be checked any other way.
+                    // The row is drawn on a canvas, so no dump can see it, and
+                    // the ciphertext of a message this device sent is kept on
+                    // purpose - so the bytes in the database cannot tell the two
+                    // apart either. The log can: this line means a top message
+                    // arrived as a ciphertext and did not stay one.
+                    // Without the dialog id: it is not filled in yet on this
+                    // path, so printing it said "in 0" for every message and
+                    // would have sent somebody looking for dialog zero.
+                    FileLog.d("mls: dialog top message " + (read ? "opened" : "locked")
+                            + ", id " + message.id);
                 }
                 if (message.date == 0) {
                     continue;
@@ -14186,7 +14197,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 // The other route the dialog list comes in by, and it needs the
                 // same thing for the same reason - see processLoadedDialogs.
                 if (MlsRuntime.isCiphertext(message.message)) {
-                    MlsRuntime.getInstance(currentAccount).open(message);
+                    boolean read = MlsRuntime.getInstance(currentAccount).open(message);
+                    // Without the dialog id: it is not filled in yet on this
+                    // path, so printing it said "in 0" for every message and
+                    // would have sent somebody looking for dialog zero.
+                    FileLog.d("mls: dialog top message " + (read ? "opened" : "locked")
+                            + ", id " + message.id);
                 }
                 if (promoDialogId == 0 || promoDialogId != message.dialog_id) {
                     if (message.peer_id != null && message.peer_id.channel_id != 0) {
