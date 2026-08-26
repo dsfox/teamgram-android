@@ -42,6 +42,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.MlsRuntime;
 import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
@@ -446,6 +447,18 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 }
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
+                    // The server's copy, and the server cannot read it. Every
+                    // other route that turns a stored message into one on
+                    // screen opens it first - open() says so in its own words,
+                    // "the chat list shows the last one, search indexes it, a
+                    // notification quotes it" - and this route did not, so a
+                    // result came back reading mls1:AAEAAh... (#106).
+                    //
+                    // Safe from here: open() asks what it has already opened
+                    // before it asks MLS, and MLS opens a ciphertext once.
+                    if (MlsRuntime.isCiphertext(message.message)) {
+                        MlsRuntime.getInstance(currentAccount).open(message);
+                    }
                     MessageObject messageObject = new MessageObject(currentAccount, message, usersMap, chatsMap, false, true);
                     messageObjects.add(messageObject);
                     messageObject.setQuery(query);
@@ -591,6 +604,18 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 }
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
+                    // The server's copy, and the server cannot read it. Every
+                    // other route that turns a stored message into one on
+                    // screen opens it first - open() says so in its own words,
+                    // "the chat list shows the last one, search indexes it, a
+                    // notification quotes it" - and this route did not, so a
+                    // result came back reading mls1:AAEAAh... (#106).
+                    //
+                    // Safe from here: open() asks what it has already opened
+                    // before it asks MLS, and MLS opens a ciphertext once.
+                    if (MlsRuntime.isCiphertext(message.message)) {
+                        MlsRuntime.getInstance(currentAccount).open(message);
+                    }
                     MessageObject messageObject = new MessageObject(currentAccount, message, usersMap, chatsMap, false, true);
                     messageObjects.add(messageObject);
                     messageObject.setQuery(query);
