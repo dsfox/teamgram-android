@@ -7350,6 +7350,20 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 checkNavigationBarColor = (boolean) args[1];
             }
             checkSystemBarColors(args.length > 2 && (boolean) args[2], true, checkNavigationBarColor && !isNavigationBarColorFrozen && !actionBarLayout.isTransitionAnimationInProgress());
+            // And the screens themselves. A theme change repaints what a screen
+            // declares in getThemeDescriptions(), and a screen that declares
+            // nothing keeps what it was built with: the Account screen came back
+            // with its cards in the old colour and its fields in the new one, so
+            // a name read as dark text on a dark field (#88). Two of the screens
+            // it happens on answer no descriptions at all, and enumerating every
+            // colour of every cell is a list that is wrong the moment a cell is
+            // added.
+            //
+            // Rebuilt instead, which cannot miss one. This is the same call the
+            // app already makes when the interface reloads for other reasons,
+            // and it defers itself while a transition is running - the animated
+            // day/night switch included.
+            rebuildAllFragments(true);
         } else if (id == NotificationCenter.needSetDayNightTheme) {
             boolean instant = false;
             if (args[2] != null) {

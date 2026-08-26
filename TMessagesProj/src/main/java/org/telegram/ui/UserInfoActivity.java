@@ -282,6 +282,14 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
         doneButton = actionBar.createMenu().addItemWithWidth(done_button, doneButtonDrawable, dp(56), LocaleController.getString(R.string.Done));
         checkDone(false);
 
+        // The guard inside setValue() is there so a late userInfoDidLoad does not
+        // overwrite what somebody has typed. It also blocked filling the fields
+        // when the views are built a second time - which is what a theme change
+        // now does (#88) - and the screen came back with an empty name where the
+        // account plainly has one. Cleared here rather than inside setValue():
+        // at this moment the fields are new and empty, so there is nothing to
+        // overwrite, and anywhere else the guard is still doing its job.
+        valueSet = false;
         setValue();
 
         return fragmentView;
