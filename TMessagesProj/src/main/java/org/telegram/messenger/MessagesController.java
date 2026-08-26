@@ -13474,6 +13474,20 @@ public class MessagesController extends BaseController implements NotificationCe
             ArrayList<MessageObject> newMessages = new ArrayList<>();
             for (int a = 0; a < dialogsRes.messages.size(); a++) {
                 TLRPC.Message message = dialogsRes.messages.get(a);
+                // The dialog list arrives by its own route and used to miss this
+                // entirely, so the row read `mls1:AAEAAh...` while the chat
+                // behind it read a lock: history goes through
+                // processLoadedMessages, which does open, and the top message of
+                // a dialog does not. It shows on a device signing in to an
+                // account that already has conversations, because the dialogs
+                // land before any history does (#86).
+                //
+                // Safe to call from here as well: open() asks what it has
+                // already opened before it asks MLS, and MLS opens a ciphertext
+                // exactly once.
+                if (MlsRuntime.isCiphertext(message.message)) {
+                    MlsRuntime.getInstance(currentAccount).open(message);
+                }
                 if (message.date == 0) {
                     continue;
                 }
@@ -14169,6 +14183,11 @@ public class MessagesController extends BaseController implements NotificationCe
             ArrayList<MessageObject> newMessages = new ArrayList<>();
             for (int a = 0; a < dialogsRes.messages.size(); a++) {
                 TLRPC.Message message = dialogsRes.messages.get(a);
+                // The other route the dialog list comes in by, and it needs the
+                // same thing for the same reason - see processLoadedDialogs.
+                if (MlsRuntime.isCiphertext(message.message)) {
+                    MlsRuntime.getInstance(currentAccount).open(message);
+                }
                 if (promoDialogId == 0 || promoDialogId != message.dialog_id) {
                     if (message.peer_id != null && message.peer_id.channel_id != 0) {
                         TLRPC.Chat chat = chatsDict.get(message.peer_id.channel_id);

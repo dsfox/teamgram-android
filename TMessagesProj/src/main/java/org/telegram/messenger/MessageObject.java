@@ -6058,6 +6058,15 @@ public class MessageObject {
                         }
                     }
                 }
+            } else if (MlsRuntime.LOCKED.equals(messageOwner.message)) {
+                // A message this device cannot read: it was written into a
+                // conversation this device was never let into, or its welcome
+                // has not arrived yet. What is stored is a lock and nothing
+                // else - the storage layer has no business holding a sentence
+                // in one language while the app is in another - so the words
+                // are put on here, where the app's own strings are, and where
+                // both the bubble and the chat list row take their text from.
+                messageText = getString(R.string.Ice9MessageFromAnotherDevice);
             } else {
                 if (messageOwner.message != null) {
                     try {

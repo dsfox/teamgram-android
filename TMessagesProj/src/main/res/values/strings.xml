@@ -10590,6 +10590,7 @@
     <string name="Ice9ServerChangeTitle">Change server?</string>
     <string name="Ice9ServerChangeInfo">You will be signed out and everything on this device will be erased: messages, chats and keys belong to the server that issued them and mean nothing on another. Your account on the old server stays where it is.</string>
     <string name="Ice9ServerChange">Change and sign out</string>
+    <string name="Ice9MessageFromAnotherDevice">🔒 Message from another device</string>
     <string name="SettingsNotifications">Notifications</string>
     <string name="SettingsNotificationsInfo">Sounds, Badges, Exceptions</string>
     <string name="SettingsData">Data and Storage</string>
