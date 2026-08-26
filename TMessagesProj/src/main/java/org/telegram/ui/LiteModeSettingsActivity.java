@@ -252,13 +252,20 @@ public class LiteModeSettingsActivity extends BaseFragment {
         items.add(Item.asSwitch(R.drawable.msg2_smile_status, LocaleController.getString(R.string.LiteOptionsEmoji), LiteMode.FLAGS_ANIMATED_EMOJI));
         if (expanded[1]) {
             items.add(Item.asCheckbox(LocaleController.getString(R.string.LiteOptionsAutoplayKeyboard), LiteMode.FLAG_ANIMATED_EMOJI_KEYBOARD));
-            items.add(Item.asCheckbox(LocaleController.getString(R.string.LiteOptionsAutoplayReactions), LiteMode.FLAG_ANIMATED_EMOJI_REACTIONS));
+            // How lively the reactions menu should be, in a client where it
+            // never opens (#18). See Offered.
+            if (Offered.REACTIONS) {
+                items.add(Item.asCheckbox(LocaleController.getString(R.string.LiteOptionsAutoplayReactions), LiteMode.FLAG_ANIMATED_EMOJI_REACTIONS));
+            }
             items.add(Item.asCheckbox(LocaleController.getString(R.string.LiteOptionsAutoplayChat), LiteMode.FLAG_ANIMATED_EMOJI_CHAT));
         }
         items.add(Item.asSwitch(R.drawable.msg2_ask_question, LocaleController.getString(R.string.LiteOptionsChat), FLAGS_CHAT));
         if (expanded[2]) {
             items.add(Item.asCheckbox(LocaleController.getString("LiteOptionsBackground"), LiteMode.FLAG_CHAT_BACKGROUND));
-            if (!AndroidUtilities.isTablet()) {
+            // The side menu of a forum, in a client with no forums: there is
+            // not one channels.toggleForum handler on the server, so no group
+            // can become one (#16). See Offered.
+            if (!AndroidUtilities.isTablet() && Offered.CHANNELS) {
                 items.add(Item.asCheckbox(LocaleController.getString("LiteOptionsTopics"), LiteMode.FLAG_CHAT_FORUM_TWOCOLUMN));
             }
             items.add(Item.asCheckbox(LocaleController.getString("LiteOptionsSpoiler"), LiteMode.FLAG_CHAT_SPOILER));
@@ -273,9 +280,10 @@ public class LiteModeSettingsActivity extends BaseFragment {
                 items.add(Item.asCheckbox(LocaleController.getString("LiteOptionsThanos"), LiteMode.FLAG_CHAT_THANOS));
             }
         }
-        // Animations during a call, in a client that cannot place one (#14).
-        // See Offered.
-        if (Offered.VIDEO_CHATS) {
+        // Animations during a call, in a client that cannot place one. This
+        // used to read Offered.VIDEO_CHATS, which is #28 and a different
+        // thing; the switch it wants is the one for calls. See Offered.
+        if (Offered.CALLS) {
             items.add(Item.asSwitch(R.drawable.msg2_call_earpiece, LocaleController.getString(R.string.LiteOptionsCalls), LiteMode.FLAG_CALLS_ANIMATIONS));
         }
         items.add(Item.asSwitch(R.drawable.msg2_videocall, LocaleController.getString(R.string.LiteOptionsAutoplayVideo), LiteMode.FLAG_AUTOPLAY_VIDEOS));

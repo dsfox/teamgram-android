@@ -39,6 +39,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.UserConfig;
@@ -1459,7 +1460,17 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
     }
 
     public void showDownloads() {
-        setPosition((expandedPublicPosts ? 1 : 0) + 5);
+        // Found rather than counted. This used to be `(expandedPublicPosts ? 1
+        // : 0) + 5`, which is the position downloads happens to sit at when
+        // every tab before it is present - and three of those tabs are now
+        // gone, so the number pointed at Links. A tab is asked for by what it
+        // is, the way getPositionForType already asks.
+        for (int i = 0; i < viewPagerAdapter.items.size(); i++) {
+            if (viewPagerAdapter.items.get(i).type == ViewPagerAdapter.DOWNLOADS_TYPE) {
+                setPosition(i);
+                return;
+            }
+        }
     }
 
     public int getPositionForType(int initialSearchType) {
@@ -1535,12 +1546,23 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
                 return;
             }
 
-            if (expandedPublicPosts) {
-                items.add(new Item(PUBLIC_POSTS_TYPE));
+            // Four tabs across the top of search that can only ever come back
+            // empty (#91). Both kinds of Posts search messages in public
+            // channels - channels.searchPosts on the server, answered with
+            // ErrEnterpriseIsBlocked - and Channels is #16. Apps searches for
+            // mini apps, and there is no bots service on the server at all:
+            // not one bots.* handler, so no account can even be a bot (#105).
+            // See Offered.
+            if (Offered.CHANNELS) {
+                if (expandedPublicPosts) {
+                    items.add(new Item(PUBLIC_POSTS_TYPE));
+                }
+                items.add(new Item(CHANNELS_TYPE));
+                items.add(new Item(POSTS_TYPE));
             }
-            items.add(new Item(CHANNELS_TYPE));
-            items.add(new Item(BOTS_TYPE));
-            items.add(new Item(POSTS_TYPE));
+            if (Offered.BOTS) {
+                items.add(new Item(BOTS_TYPE));
+            }
             if (!showOnlyDialogsAdapter) {
                 Item item = new Item(FILTER_TYPE);
                 item.filterIndex = 0;

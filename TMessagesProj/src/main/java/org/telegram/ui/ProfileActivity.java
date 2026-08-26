@@ -14561,6 +14561,22 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             });
         }
 
+        /**
+         * Everything settings search can find - and a second copy of the whole
+         * settings tree, which is why #91 kept finding nothing.
+         *
+         * The sweeps of #91 took the switched-off rows out of the screens that
+         * draw them. This array is not those screens: it is a flat list, held
+         * here, of every destination in settings, and it went on offering
+         * every row that had been removed. Typing "two-step" opened the cloud
+         * password screen; "calls" found six settings for calls nobody can
+         * place; "channels", "trending stickers" and "quick reactions" were
+         * all still one search away from screens that no longer show them.
+         *
+         * So an entry lives exactly as long as the row it points at. A null in
+         * this array is skipped, which is how the folders and premium entries
+         * already work.
+         */
         private static SearchResult[] onCreateSearchArray(final BaseFragment f) {
             final int currentAccount = f.getCurrentAccount();
             final Theme.ResourcesProvider resourcesProvider = f.getResourceProvider();
@@ -14590,8 +14606,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(1, getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsSettingsActivity())).withLink("tg://settings/notifications"),
                     new SearchResult(2, getString(R.string.NotificationsPrivateChats), getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsCustomSettingsActivity(NotificationsController.TYPE_PRIVATE, new ArrayList<>(), null, true))).withLink("tg://settings/notifications/private-chats"),
                     new SearchResult(3, getString(R.string.NotificationsGroups), getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsCustomSettingsActivity(NotificationsController.TYPE_GROUP, new ArrayList<>(), null, true))).withLink("tg://settings/notifications/groups"),
-                    new SearchResult(4, getString(R.string.NotificationsChannels), getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsCustomSettingsActivity(NotificationsController.TYPE_CHANNEL, new ArrayList<>(), null, true))).withLink("tg://settings/notifications/channels"),
-                    new SearchResult(5, getString(R.string.VoipNotificationSettings), "callsSectionRow", getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsSettingsActivity())),
+                    Offered.CHANNELS ? new SearchResult(4, getString(R.string.NotificationsChannels), getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsCustomSettingsActivity(NotificationsController.TYPE_CHANNEL, new ArrayList<>(), null, true))).withLink("tg://settings/notifications/channels") : null,
+                    Offered.CALLS ? new SearchResult(5, getString(R.string.VoipNotificationSettings), "callsSectionRow", getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsSettingsActivity())) : null,
                     new SearchResult(6, getString(R.string.BadgeNumber), "badgeNumberSection", getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsSettingsActivity())),
                     new SearchResult(7, getString(R.string.InAppNotifications), "inappSectionRow", getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsSettingsActivity())),
                     new SearchResult(8, getString(R.string.ContactJoined), "contactJoinedRow", getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsSettingsActivity())).withLink("tg://settings/notifications/new-contacts"),
@@ -14602,7 +14618,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(13, getString(R.string.RepeatNotifications), "repeatRow", getString(R.string.NotificationsAndSounds), R.drawable.msg_notifications, () -> f.presentFragment(new NotificationsSettingsActivity())),
 
                     new SearchResult(100, getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy"),
-                    new SearchResult(109, getString(R.string.TwoStepVerification), getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new TwoStepVerificationActivity())).withLink("tg://settings/privacy/2sv"),
+                    Offered.CLOUD_PASSWORD ? new SearchResult(109, getString(R.string.TwoStepVerification), getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new TwoStepVerificationActivity())).withLink("tg://settings/privacy/2sv") : null,
                     new SearchResult(124, getString(R.string.AutoDeleteMessages), getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> {
                         if (UserConfig.getInstance(currentAccount).getGlobalTTl() >= 0) {
                             f.presentFragment(new AutoDeleteMessagesActivity());
@@ -14616,8 +14632,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(102, getString(R.string.PrivacyLastSeen), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_LASTSEEN, true))).withLink("tg://settings/privacy/last-seen"),
                     new SearchResult(103, getString(R.string.PrivacyProfilePhoto), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_PHOTO, true))).withLink("tg://settings/privacy/profile-photos"),
                     new SearchResult(104, getString(R.string.PrivacyForwards), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_FORWARDS, true))).withLink("tg://settings/privacy/forwards"),
-                    new SearchResult(122, getString(R.string.PrivacyP2P), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_P2P, true))).withLink("tg://settings/privacy/calls/p2p"),
-                    new SearchResult(106, getString(R.string.Calls), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_CALLS, true))).withLink("tg://settings/privacy/calls"),
+                    Offered.CALLS ? new SearchResult(122, getString(R.string.PrivacyP2P), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_P2P, true))).withLink("tg://settings/privacy/calls/p2p") : null,
+                    Offered.CALLS ? new SearchResult(106, getString(R.string.Calls), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_CALLS, true))).withLink("tg://settings/privacy/calls") : null,
                     new SearchResult(107, getString(R.string.PrivacyInvites), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> f.presentFragment(new PrivacyControlActivity(ContactsController.PRIVACY_RULES_TYPE_INVITE, true))).withLink("tg://settings/privacy/invites"),
                     new SearchResult(123, getString(R.string.PrivacyVoiceMessages), getString(R.string.PrivacySettings), R.drawable.msg_secret, () -> {
                         if (!UserConfig.getInstance(currentAccount).isPremium()) {
@@ -14628,8 +14644,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }).withLink("tg://settings/privacy/voice"),
                     MessagesController.getInstance(currentAccount).autoarchiveAvailable ? new SearchResult(121, getString(R.string.ArchiveAndMute), "newChatsRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/archive-and-mute") : null,
                     new SearchResult(112, getString(R.string.DeleteAccountIfAwayFor2), "deleteAccountRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/self-destruct"),
-                    new SearchResult(113, getString(R.string.PrivacyPaymentsClear), "paymentsClearRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/data-settings/clear-payment-info"),
-                    new SearchResult(114, getString(R.string.WebSessionsTitle), getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new SessionsActivity(1))).withLink("tg://settings/privacy/active-websites"),
+                    Offered.BOTS ? new SearchResult(113, getString(R.string.PrivacyPaymentsClear), "paymentsClearRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/data-settings/clear-payment-info") : null,
+                    Offered.BOTS ? new SearchResult(114, getString(R.string.WebSessionsTitle), getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new SessionsActivity(1))).withLink("tg://settings/privacy/active-websites") : null,
                     new SearchResult(115, getString(R.string.SyncContactsDelete), "contactsDeleteRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/data-settings/delete-synced"),
                     new SearchResult(116, getString(R.string.SyncContacts), "contactsSyncRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/data-settings/sync-contacts"),
                     new SearchResult(117, getString(R.string.SuggestContacts), "contactsSuggestRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/data-settings/suggest-contacts"),
@@ -14654,16 +14670,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(211, getString(R.string.ResetAutomaticMediaDownload), "resetDownloadRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/data/auto-download/reset"),
                     new SearchResult(215, getString(R.string.Streaming), "streamSectionRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())),
                     new SearchResult(216, getString(R.string.EnableStreaming), "enableStreamRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())),
-                    new SearchResult(217, getString(R.string.Calls), "callsSectionRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())),
-                    new SearchResult(218, getString(R.string.VoipUseLessData), "useLessDataForCallsRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/data/use-less-data"),
-                    new SearchResult(219, getString(R.string.VoipQuickReplies), "quickRepliesRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())),
+                    Offered.CALLS ? new SearchResult(217, getString(R.string.Calls), "callsSectionRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())) : null,
+                    Offered.CALLS ? new SearchResult(218, getString(R.string.VoipUseLessData), "useLessDataForCallsRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/data/use-less-data") : null,
+                    Offered.CALLS ? new SearchResult(219, getString(R.string.VoipQuickReplies), "quickRepliesRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())) : null,
                     new SearchResult(220, getString(R.string.ProxySettings), getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new ProxyListActivity())).withLink("tg://settings/data/proxy"),
-                    new SearchResult(221, getString(R.string.UseProxyForCalls), "callsRow", getString(R.string.DataSettings), getString(R.string.ProxySettings), R.drawable.msg2_data, () -> f.presentFragment(new ProxyListActivity())).withLink("tg://settings/data/proxy/use-for-calls"),
+                    Offered.CALLS ? new SearchResult(221, getString(R.string.UseProxyForCalls), "callsRow", getString(R.string.DataSettings), getString(R.string.ProxySettings), R.drawable.msg2_data, () -> f.presentFragment(new ProxyListActivity())).withLink("tg://settings/data/proxy/use-for-calls") : null,
                     new SearchResult(111, getString(R.string.PrivacyDeleteCloudDrafts), "clearDraftsRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/privacy/data-settings/delete-cloud-drafts"),
                     new SearchResult(222, getString(R.string.SaveToGallery), "saveToGallerySectionRow", getString(R.string.DataSettings), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())),
                     new SearchResult(223, getString(R.string.SaveToGalleryPrivate), "saveToGalleryPeerRow", getString(R.string.DataSettings), getString(R.string.SaveToGallery), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/data/save-to-photos/chats"),
                     new SearchResult(224, getString(R.string.SaveToGalleryGroups), "saveToGalleryGroupsRow", getString(R.string.DataSettings), getString(R.string.SaveToGallery), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/data/save-to-photos/groups"),
-                    new SearchResult(225, getString(R.string.SaveToGalleryChannels), "saveToGalleryChannelsRow", getString(R.string.DataSettings), getString(R.string.SaveToGallery), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/data/save-to-photos/channels"),
+                    Offered.CHANNELS ? new SearchResult(225, getString(R.string.SaveToGalleryChannels), "saveToGalleryChannelsRow", getString(R.string.DataSettings), getString(R.string.SaveToGallery), R.drawable.msg2_data, () -> f.presentFragment(new DataSettingsActivity())).withLink("tg://settings/data/save-to-photos/channels") : null,
 
                     new SearchResult(300, getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC))).withLink("tg://settings/appearance/themes"),
                     new SearchResult(301, getString(R.string.TextSizeHeader), "textSizeHeaderRow", getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC))).withLink("tg://settings/appearance/text-size"),
@@ -14671,8 +14687,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(303, getString(R.string.SetColor), null, getString(R.string.ChatSettings), getString(R.string.ChatBackground), R.drawable.msg2_discussion, () -> f.presentFragment(new WallpapersListActivity(WallpapersListActivity.TYPE_COLOR))),
                     new SearchResult(304, getString(R.string.ResetChatBackgrounds), "resetRow", getString(R.string.ChatSettings), getString(R.string.ChatBackground), R.drawable.msg2_discussion, () -> f.presentFragment(new WallpapersListActivity(WallpapersListActivity.TYPE_ALL))),
                     new SearchResult(306, getString(R.string.ColorTheme), "themeHeaderRow", getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC))),
-                    new SearchResult(319, getString(R.string.BrowseThemes), null, getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_THEMES_BROWSER))),
-                    new SearchResult(320, getString(R.string.CreateNewTheme), "createNewThemeRow", getString(R.string.ChatSettings), getString(R.string.BrowseThemes), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_THEMES_BROWSER))).withLink("tg://settings/appearance/themes/create"),
+                    Offered.CHAT_THEMES ? new SearchResult(319, getString(R.string.BrowseThemes), null, getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_THEMES_BROWSER))) : null,
+                    Offered.CHAT_THEMES ? new SearchResult(320, getString(R.string.CreateNewTheme), "createNewThemeRow", getString(R.string.ChatSettings), getString(R.string.BrowseThemes), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_THEMES_BROWSER))).withLink("tg://settings/appearance/themes/create") : null,
                     new SearchResult(321, getString(R.string.BubbleRadius), "bubbleRadiusHeaderRow", getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC))).withLink("tg://settings/appearance/message-corners"),
                     new SearchResult(322, getString(R.string.ChatList), "chatListHeaderRow", getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC))),
                     new SearchResult(323, getString(R.string.ChatListSwipeGesture), "swipeGestureHeaderRow", getString(R.string.ChatSettings), R.drawable.msg2_discussion, () -> f.presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC))),
@@ -14689,16 +14705,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
                     new SearchResult(600, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_IMAGE, null))).withLink("tg://settings/appearance/stickers-and-emoji"),
                     new SearchResult(601, getString(R.string.SuggestStickers), "suggestRow", getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_IMAGE, null))),
-                    new SearchResult(602, getString(R.string.FeaturedStickers), "featuredStickersHeaderRow", getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_IMAGE, null))),
-                    new SearchResult(603, getString(R.string.Masks), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_MASK, null))),
-                    new SearchResult(604, getString(R.string.ArchivedStickers), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new ArchivedStickersActivity(MediaDataController.TYPE_IMAGE))).withLink("tg://settings/appearance/stickers-and-emoji/archived"),
-                    new SearchResult(605, getString(R.string.ArchivedMasks), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new ArchivedStickersActivity(MediaDataController.TYPE_MASK))),
+                    Offered.STICKER_PACKS ? new SearchResult(602, getString(R.string.FeaturedStickers), "featuredStickersHeaderRow", getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_IMAGE, null))) : null,
+                    Offered.STICKER_PACKS ? new SearchResult(603, getString(R.string.Masks), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_MASK, null))) : null,
+                    Offered.STICKER_PACKS ? new SearchResult(604, getString(R.string.ArchivedStickers), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new ArchivedStickersActivity(MediaDataController.TYPE_IMAGE))).withLink("tg://settings/appearance/stickers-and-emoji/archived") : null,
+                    Offered.STICKER_PACKS ? new SearchResult(605, getString(R.string.ArchivedMasks), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new ArchivedStickersActivity(MediaDataController.TYPE_MASK))) : null,
                     new SearchResult(606, getString(R.string.LargeEmoji), "largeEmojiRow", getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_IMAGE, null))).withLink("tg://settings/appearance/stickers-and-emoji/emoji/large"),
                     new SearchResult(607, getString(R.string.LoopAnimatedStickers), "loopRow", getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_IMAGE, null))),
                     new SearchResult(608, getString(R.string.Emoji), null, getString(R.string.StickersName), R.drawable.input_smile, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_EMOJIPACKS, null))).withLink("tg://settings/appearance/stickers-and-emoji/emoji"),
                     new SearchResult(609, getString(R.string.SuggestAnimatedEmoji), "suggestAnimatedEmojiRow", getString(R.string.StickersName), getString(R.string.Emoji), R.drawable.input_smile, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_EMOJIPACKS, null))).withLink("tg://settings/appearance/stickers-and-emoji/emoji/suggest"),
-                    new SearchResult(610, getString(R.string.FeaturedEmojiPacks), "featuredStickersHeaderRow", getString(R.string.StickersName), getString(R.string.Emoji), R.drawable.input_smile, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_EMOJIPACKS, null))),
-                    new SearchResult(611, getString(R.string.DoubleTapSetting), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new ReactionsDoubleTapManageActivity())).withLink("tg://settings/appearance/stickers-and-emoji/emoji/quick-reaction"),
+                    Offered.STICKER_PACKS ? new SearchResult(610, getString(R.string.FeaturedEmojiPacks), "featuredStickersHeaderRow", getString(R.string.StickersName), getString(R.string.Emoji), R.drawable.input_smile, () -> f.presentFragment(new StickersActivity(MediaDataController.TYPE_EMOJIPACKS, null))) : null,
+                    Offered.REACTIONS ? new SearchResult(611, getString(R.string.DoubleTapSetting), null, getString(R.string.StickersName), R.drawable.msg2_sticker, () -> f.presentFragment(new ReactionsDoubleTapManageActivity())).withLink("tg://settings/appearance/stickers-and-emoji/emoji/quick-reaction") : null,
 
                     // Folders are not offered, and settings search must not
                     // find what the settings screens no longer show.
@@ -14749,12 +14765,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         set.setExpanded(LiteMode.FLAGS_ANIMATED_EMOJI, true);
                         set.scrollToFlags(LiteMode.FLAG_ANIMATED_EMOJI_KEYBOARD);
                     }),
-                    new SearchResult(906, getString(R.string.LiteOptionsAutoplayReactions), null, getString(R.string.PowerUsage), getString(R.string.LiteOptionsEmoji), R.drawable.msg2_battery, () -> {
+                    Offered.REACTIONS ? new SearchResult(906, getString(R.string.LiteOptionsAutoplayReactions), null, getString(R.string.PowerUsage), getString(R.string.LiteOptionsEmoji), R.drawable.msg2_battery, () -> {
                         LiteModeSettingsActivity set = new LiteModeSettingsActivity();
                         f.presentFragment(set);
                         set.setExpanded(LiteMode.FLAGS_ANIMATED_EMOJI, true);
                         set.scrollToFlags(LiteMode.FLAG_ANIMATED_EMOJI_REACTIONS);
-                    }),
+                    }) : null,
                     new SearchResult(907, getString(R.string.LiteOptionsAutoplayChat), null, getString(R.string.PowerUsage), getString(R.string.LiteOptionsEmoji), R.drawable.msg2_battery, () -> {
                         LiteModeSettingsActivity set = new LiteModeSettingsActivity();
                         f.presentFragment(set);
@@ -14772,12 +14788,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         set.setExpanded(LiteMode.FLAGS_CHAT, true);
                         set.scrollToFlags(LiteMode.FLAG_CHAT_BACKGROUND);
                     }).withLink("tg://settings/power-saving/background"),
-                    new SearchResult(910, getString(R.string.LiteOptionsTopics), null, getString(R.string.PowerUsage), getString(R.string.LiteOptionsChat), R.drawable.msg2_battery, () -> {
+                    Offered.CHANNELS ? new SearchResult(910, getString(R.string.LiteOptionsTopics), null, getString(R.string.PowerUsage), getString(R.string.LiteOptionsChat), R.drawable.msg2_battery, () -> {
                         LiteModeSettingsActivity set = new LiteModeSettingsActivity();
                         f.presentFragment(set);
                         set.setExpanded(LiteMode.FLAGS_CHAT, true);
                         set.scrollToFlags(LiteMode.FLAG_CHAT_FORUM_TWOCOLUMN);
-                    }),
+                    }) : null,
                     new SearchResult(911, getString(R.string.LiteOptionsSpoiler), null, getString(R.string.PowerUsage), getString(R.string.LiteOptionsChat), R.drawable.msg2_battery, () -> {
                         LiteModeSettingsActivity set = new LiteModeSettingsActivity();
                         f.presentFragment(set);
@@ -14796,11 +14812,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         set.setExpanded(LiteMode.FLAGS_CHAT, true);
                         set.scrollToFlags(LiteMode.FLAG_CHAT_SCALE);
                     }),
-                    new SearchResult(913, getString(R.string.LiteOptionsCalls), getString(R.string.PowerUsage), R.drawable.msg2_battery, () -> {
+                    Offered.CALLS ? new SearchResult(913, getString(R.string.LiteOptionsCalls), getString(R.string.PowerUsage), R.drawable.msg2_battery, () -> {
                         LiteModeSettingsActivity set = new LiteModeSettingsActivity();
                         f.presentFragment(set);
                         set.scrollToFlags(LiteMode.FLAG_CALLS_ANIMATIONS);
-                    }).withLink("tg://settings/power-saving/call-animations"),
+                    }).withLink("tg://settings/power-saving/call-animations") : null,
                     new SearchResult(214 /* for compatibility */, getString(R.string.LiteOptionsAutoplayVideo), getString(R.string.PowerUsage), R.drawable.msg2_battery, () -> {
                         LiteModeSettingsActivity set = new LiteModeSettingsActivity();
                         f.presentFragment(set);
@@ -14818,8 +14834,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }).withLink("tg://settings/power-saving/transitions"),
 
                     new SearchResult(400, getString(R.string.Language), R.drawable.msg2_language, () -> f.presentFragment(new LanguageSelectActivity())).withLink("tg://settings/language"),
-                    new SearchResult(405, getString(R.string.ShowTranslateButton), getString(R.string.Language), R.drawable.msg2_language, () -> f.presentFragment(new LanguageSelectActivity())).withLink("tg://settings/language/show-button"),
-                    MessagesController.getInstance(currentAccount).getTranslateController().isContextTranslateEnabled() ? new SearchResult(406, getString(R.string.DoNotTranslate), getString(R.string.Language), R.drawable.msg2_language, () -> f.presentFragment(new LanguageSelectActivity())).withLink("tg://settings/language/do-not-translate") : null,
+                    Offered.TRANSLATION ? new SearchResult(405, getString(R.string.ShowTranslateButton), getString(R.string.Language), R.drawable.msg2_language, () -> f.presentFragment(new LanguageSelectActivity())).withLink("tg://settings/language/show-button") : null,
+                    Offered.TRANSLATION && MessagesController.getInstance(currentAccount).getTranslateController().isContextTranslateEnabled() ? new SearchResult(406, getString(R.string.DoNotTranslate), getString(R.string.Language), R.drawable.msg2_language, () -> f.presentFragment(new LanguageSelectActivity())).withLink("tg://settings/language/do-not-translate") : null,
 
                     new SearchResult(402, getString(R.string.AskAQuestion), getString(R.string.SettingsHelp), R.drawable.msg2_help, () -> f.showDialog(AlertsCreator.createSupportAlert(f, null))).withLink("tg://settings/ask-question"),
                     new SearchResult(403, getString(R.string.TelegramFAQ), getString(R.string.SettingsHelp), R.drawable.msg2_help, () -> Browser.openUrl(f.getParentActivity(), getString(R.string.TelegramFaqUrl))).withLink("tg://settings/faq"),

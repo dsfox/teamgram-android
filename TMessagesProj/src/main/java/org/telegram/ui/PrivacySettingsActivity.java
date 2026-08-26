@@ -771,7 +771,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         if (getMessagesController().config.settingsDisplayPasskeys.get() && Build.VERSION.SDK_INT >= 28 && BuildVars.SUPPORTS_PASSKEYS) {
             passkeysRow = rowCount++;
         }
-        if (currentPassword != null ? currentPassword.login_email_pattern != null : SharedConfig.hasEmailLogin) {
+        // An address to receive login codes at, which no account can have here:
+        // account.sendVerifyEmailCode is not implemented. The condition already
+        // hid it, since login_email_pattern is never set - the switch says so
+        // out loud, and iOS hides it by the same one. See Offered.
+        if (Offered.LOGIN_EMAIL && (currentPassword != null ? currentPassword.login_email_pattern != null : SharedConfig.hasEmailLogin)) {
             emailLoginRow = rowCount++;
         } else {
             emailLoginRow = -1;
@@ -825,23 +829,41 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         advancedSectionRow = rowCount++;
         deleteAccountRow = rowCount++;
         deleteAccountDetailRow = rowCount++;
-        botsSectionRow = rowCount++;
-        if (getUserConfig().hasSecureData) {
-            passportRow = rowCount++;
+        // A whole section headed "Bots and websites", in a messenger that has
+        // neither. Its four rows: a passport whose ten handlers are all
+        // blocked, biometry for bots that cannot exist (#105), the websites a
+        // bot logged you into, and "Clear Payment and Shipping Info" - which
+        // was the only one ever visible, because the other three appear only
+        // once there is something to show and there never is. There is no
+        // payments service on the server either, so payments.clearSavedInfo is
+        // refused and the row clears nothing. See Offered.
+        if (Offered.BOTS) {
+            botsSectionRow = rowCount++;
+            if (getUserConfig().hasSecureData) {
+                passportRow = rowCount++;
+            } else {
+                passportRow = -1;
+            }
+            paymentsClearRow = rowCount++;
+            if (!biometryBots.isEmpty()) {
+                botsBiometryRow = rowCount++;
+            } else {
+                botsBiometryRow = -1;
+            }
+            if (webSessionsActivityPreload != null && webSessionsActivityPreload.getSessionsCount() > 0) {
+                webSessionsRow = rowCount++;
+                botsDetailRow = rowCount++;
+                botsAndWebsitesShadowRow = -1;
+            } else {
+                webSessionsRow = -1;
+                botsDetailRow = -1;
+                botsAndWebsitesShadowRow = rowCount++;
+            }
         } else {
+            botsSectionRow = -1;
             passportRow = -1;
-        }
-        paymentsClearRow = rowCount++;
-        if (!biometryBots.isEmpty()) {
-            botsBiometryRow = rowCount++;
-        } else {
+            paymentsClearRow = -1;
             botsBiometryRow = -1;
-        }
-        if (webSessionsActivityPreload != null && webSessionsActivityPreload.getSessionsCount() > 0) {
-            webSessionsRow = rowCount++;
-            botsDetailRow = rowCount++;
-            botsAndWebsitesShadowRow = -1;
-        } else {
             webSessionsRow = -1;
             botsDetailRow = -1;
             botsAndWebsitesShadowRow = rowCount++;

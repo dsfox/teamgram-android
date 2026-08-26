@@ -114,6 +114,40 @@ public final class Offered {
     public static final boolean GIFTS = false;
 
     /**
+     * Voice and video calls between people.
+     *
+     * Nothing places or receives one. Issue #14.
+     *
+     * Three screens took their call rows out before this switch existed and
+     * pin them to -1 with a note: the ringtone section in
+     * NotificationsSettingsActivity, "who may call you" in
+     * PrivacySettingsActivity, and the data section in DataSettingsActivity.
+     * They are left as they are - identical behaviour, and rewriting a
+     * working removal risks the screen for nothing - but this is the switch to
+     * follow when the calls come back.
+     */
+    public static final boolean CALLS = false;
+
+    /**
+     * An address to receive login codes at.
+     *
+     * account.sendVerifyEmailCode is not implemented, so the screen would take
+     * an address and never confirm it. This client already hides the row unless
+     * the account has one, and no account can - the switch is here because the
+     * other client hides it outright and the two have to hide the same things.
+     */
+    public static final boolean LOGIN_EMAIL = false;
+
+    /**
+     * Bots and the mini apps that run inside them.
+     *
+     * Not a stub but an absence: the server has no bots service, and not one
+     * bots.* handler exists, so no account can be a bot and there is nothing
+     * for a search over apps to find. Issue #105.
+     */
+    public static final boolean BOTS = false;
+
+    /**
      * Reactions to a message.
      *
      * The server keeps none, so a tapped reaction appears for a moment on the

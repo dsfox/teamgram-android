@@ -42,6 +42,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
@@ -1277,7 +1278,13 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 });
             }, 300);
 
-            final String finalHashtag = hashtag;
+            // A hashtag is looked for in public channels, and there are none:
+            // channels.searchPosts is answered with ErrEnterpriseIsBlocked
+            // (#16). Asked anyway, it costs a round trip for every hashtag
+            // typed and puts an error in the server log, and the reply can
+            // only be empty - so the tab it would fill is gone too. See
+            // Offered.
+            final String finalHashtag = Offered.CHANNELS ? hashtag : null;
 
             if (finalHashtag != null) {
                 waitingResponseCount++;

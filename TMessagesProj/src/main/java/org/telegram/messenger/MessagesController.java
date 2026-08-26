@@ -759,11 +759,16 @@ public class MessagesController extends BaseController implements NotificationCe
     public boolean giftAttachMenuIcon;
     public boolean giftTextFieldIcon;
 
+    // Whether the server offers translation at all. TranslateController already
+    // refuses to translate (#27), but these two are asked one level up - by the
+    // Language screen, to decide whether to draw its "Translate Messages"
+    // section - so without them a switch was still offered for a button that
+    // can never appear (#91). See Offered.
     public boolean isTranslationsManualEnabled() {
-        return !"disabled".equals(translationsManualEnabled);
+        return Offered.TRANSLATION && !"disabled".equals(translationsManualEnabled);
     }
     public boolean isTranslationsAutoEnabled() {
-        return !"disabled".equals(translationsAutoEnabled);
+        return Offered.TRANSLATION && !"disabled".equals(translationsAutoEnabled);
     }
 
     public final AppGlobalConfig config = new AppGlobalConfig();
