@@ -16,8 +16,20 @@
 #include <inttypes.h>
 #include "ByteArray.h"
 
-#define USE_DEBUG_SESSION true
+// Off: with this on, every session id this client makes begins 0xabcd and
+// carries 48 random bits instead of 64. It is a debug marker meant to make a
+// session recognisable in a log, and it was shipped in every release - the
+// sample in #93 shows it, `session: 0xabcdf936...`. Nothing reads the prefix:
+// not the server, and not the other client, which has always used the full
+// width. So this costs sixteen bits of a number that is supposed to be
+// unguessable and buys a marker in logs that a release no longer writes.
+#define USE_DEBUG_SESSION false
 #define READ_BUFFER_SIZE 1024 * 1024 * 2
+// Left defined on purpose, and it no longer decides logging - FileLog.cpp says
+// why. What it still decides is the 4 MB send and receive buffers in
+// ConnectionSocket, which every build has had; this project has been bitten
+// once already by changing what a socket does on the way out (#100), and that
+// is not what this task is about.
 #define DEBUG_VERSION
 #define PFS_ENABLED 1
 #define DEFAULT_DATACENTER_ID INT_MAX

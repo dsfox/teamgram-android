@@ -16,11 +16,21 @@
 #include <android/log.h>
 #endif
 
-#ifdef DEBUG_VERSION
-bool LOGS_ENABLED = true;
-#else
+// Off until something asks for it, in every build. This used to read
+// `#ifdef DEBUG_VERSION` - and DEBUG_VERSION is defined unconditionally in
+// Defines.h, for every build there is - so a release installed from a store
+// wrote the whole protocol to logcat: the server's address, the handshake, and
+// every call by name. 767 lines from one launch, before anyone had signed in.
+// Any app holding READ_LOGS, any adb session and every bug report got a running
+// account of who talks to whom and when. The ciphertext was never at risk; the
+// metadata was all of it (#93).
+//
+// Nothing is lost for a debug build. ConnectionsManager::init turns this on
+// when it is given a log path, and the path comes from Java's
+// FileLog.getNetworkLogPath(), which is empty unless BuildVars.LOGS_ENABLED -
+// so the two sides now follow one switch instead of two, and that switch is
+// off in release.
 bool LOGS_ENABLED = false;
-#endif
 
 bool REF_LOGS_ENABLED = false;
 
