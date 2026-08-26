@@ -2286,7 +2286,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             fragment.presentFragment(new PremiumPreviewFragment(uri.getQueryParameter("ref")));
                                         }});
                                     } else if (url.startsWith("tg2:resolve") || url.startsWith("tg2://resolve")) {
-                                        url = url.replace("tg2:resolve", "tg2://teamgram.net").replace("tg2://resolve", "tg2://teamgram.net");
+                                        url = url.replace("tg2:resolve", "tg2://ice9.app").replace("tg2://resolve", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         username = data.getQueryParameter("domain");
                                         if (username == null) {
@@ -2391,7 +2391,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                         data = Uri.parse(url);
                                         contactToken = data.getQueryParameter("token");
                                     } else if (url.startsWith("tg2:privatepost") || url.startsWith("tg2://privatepost")) {
-                                        url = url.replace("tg2:privatepost", "tg2://teamgram.net").replace("tg2://privatepost", "tg2://teamgram.net");
+                                        url = url.replace("tg2:privatepost", "tg2://ice9.app").replace("tg2://privatepost", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         messageId = Utilities.parseInt(data.getQueryParameter("post"));
                                         channelId = Utilities.parseLong(data.getQueryParameter("channel"));
@@ -2414,7 +2414,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             commentId = null;
                                         }
                                     } else if (url.startsWith("tg2:bg") || url.startsWith("tg2://bg")) {
-                                        url = url.replace("tg2:bg", "tg2://teamgram.net").replace("tg2://bg", "tg2://teamgram.net");
+                                        url = url.replace("tg2:bg", "tg2://ice9.app").replace("tg2://bg", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         wallPaper = new TLRPC.TL_wallPaper();
                                         wallPaper.settings = new TLRPC.TL_wallPaperSettings();
@@ -2498,19 +2498,19 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             }
                                         }
                                     } else if (url.startsWith("tg2:join") || url.startsWith("tg2://join")) {
-                                        url = url.replace("tg2:join", "tg2://teamgram.net").replace("tg2://join", "tg2://teamgram.net");
+                                        url = url.replace("tg2:join", "tg2://ice9.app").replace("tg2://join", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         group = data.getQueryParameter("invite");
                                     } else if (url.startsWith("tg2:addstickers") || url.startsWith("tg2://addstickers")) {
-                                        url = url.replace("tg2:addstickers", "tg2://teamgram.net").replace("tg2://addstickers", "tg2://teamgram.net");
+                                        url = url.replace("tg2:addstickers", "tg2://ice9.app").replace("tg2://addstickers", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         sticker = data.getQueryParameter("set");
                                     } else if (url.startsWith("tg2:addemoji") || url.startsWith("tg2://addemoji")) {
-                                        url = url.replace("tg2:addemoji", "tg2://teamgram.net").replace("tg2://addemoji", "tg2://teamgram.net");
+                                        url = url.replace("tg2:addemoji", "tg2://ice9.app").replace("tg2://addemoji", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         emoji = data.getQueryParameter("set");
                                     } else if (url.startsWith("tg2:msg") || url.startsWith("tg2://msg") || url.startsWith("tg2://share") || url.startsWith("tg2:share")) {
-                                        url = url.replace("tg2:msg", "tg2://teamgram.net").replace("tg2://msg", "tg2://teamgram.net").replace("tg2://share", "tg2://teamgram.net").replace("tg2:share", "tg2://teamgram.net");
+                                        url = url.replace("tg2:msg", "tg2://ice9.app").replace("tg2://msg", "tg2://ice9.app").replace("tg2://share", "tg2://ice9.app").replace("tg2:share", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         message = data.getQueryParameter("url");
                                         if (message == null) {
@@ -2530,13 +2530,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             message = message.substring(0, message.length() - 1);
                                         }
                                     } else if (url.startsWith("tg2:confirmphone") || url.startsWith("tg2://confirmphone")) {
-                                        url = url.replace("tg2:confirmphone", "tg2://teamgram.net").replace("tg2://confirmphone", "tg2://teamgram.net");
+                                        url = url.replace("tg2:confirmphone", "tg2://ice9.app").replace("tg2://confirmphone", "tg2://ice9.app");
                                         data = Uri.parse(url);
 
                                         phone = data.getQueryParameter("phone");
                                         phoneHash = data.getQueryParameter("hash");
                                     } else if (url.startsWith("tg2:login") || url.startsWith("tg2://login")) {
-                                        url = url.replace("tg2:login", "tg2://teamgram.net").replace("tg2://login", "tg2://teamgram.net");
+                                        url = url.replace("tg2:login", "tg2://ice9.app").replace("tg2://login", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         login = data.getQueryParameter("token");
                                         int intCode = Utilities.parseInt(data.getQueryParameter("code"));
@@ -2544,7 +2544,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             code = "" + intCode;
                                         }
                                     } else if (url.startsWith("tg2:openmessage") || url.startsWith("tg2://openmessage")) {
-                                        url = url.replace("tg2:openmessage", "tg2://teamgram.net").replace("tg2://openmessage", "tg2://teamgram.net");
+                                        url = url.replace("tg2:openmessage", "tg2://ice9.app").replace("tg2://openmessage", "tg2://ice9.app");
                                         data = Uri.parse(url);
 
                                         String userID = data.getQueryParameter("user_id");
@@ -2579,7 +2579,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             } catch (NumberFormatException ignore) {}
                                         }
                                     } else if (url.startsWith("tg2:passport") || url.startsWith("tg2://passport") || url.startsWith("tg2:secureid")) {
-                                        url = url.replace("tg2:passport", "tg2://teamgram.net").replace("tg2://passport", "tg2://teamgram.net").replace("tg2:secureid", "tg2://teamgram.net");
+                                        url = url.replace("tg2:passport", "tg2://ice9.app").replace("tg2://passport", "tg2://ice9.app").replace("tg2:secureid", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         auth = new HashMap<>();
                                         String scope = data.getQueryParameter("scope");
@@ -2593,11 +2593,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                         auth.put("public_key", data.getQueryParameter("public_key"));
                                         auth.put("callback_url", data.getQueryParameter("callback_url"));
                                     } else if (url.startsWith("tg2:setlanguage") || url.startsWith("tg2://setlanguage")) {
-                                        url = url.replace("tg2:setlanguage", "tg2://teamgram.net").replace("tg2://setlanguage", "tg2://teamgram.net");
+                                        url = url.replace("tg2:setlanguage", "tg2://ice9.app").replace("tg2://setlanguage", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         lang = data.getQueryParameter("lang");
                                     } else if (url.startsWith("tg2:addtheme") || url.startsWith("tg2://addtheme")) {
-                                        url = url.replace("tg2:addtheme", "tg2://teamgram.net").replace("tg2://addtheme", "tg2://teamgram.net");
+                                        url = url.replace("tg2:addtheme", "tg2://ice9.app").replace("tg2://addtheme", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         theme = data.getQueryParameter("slug");
                                     } else if (url.startsWith("tg2:settings") || url.startsWith("tg2://settings")) {
@@ -2631,7 +2631,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             open_settings = 1;
                                         }
                                     } else if ((url.startsWith("tg2:search") || url.startsWith("tg2://search"))) {
-                                        url = url.replace("tg2:search", "tg2://teamgram.net").replace("tg2://search", "tg2://teamgram.net");
+                                        url = url.replace("tg2:search", "tg2://ice9.app").replace("tg2://search", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         searchQuery = data.getQueryParameter("query");
                                         if (searchQuery != null) {
@@ -2684,7 +2684,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     } else if ((url.startsWith("tg2:scanqr") || url.startsWith("tg2://scanqr"))) {
                                         scanQr = true;
                                     } else if ((url.startsWith("tg2:addcontact") || url.startsWith("tg2://addcontact"))) {
-                                        url = url.replace("tg2:addcontact", "tg2://teamgram.net").replace("tg2://addcontact", "tg2://teamgram.net");
+                                        url = url.replace("tg2:addcontact", "tg2://ice9.app").replace("tg2://addcontact", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         newContactName = data.getQueryParameter("name");
 
@@ -2695,15 +2695,15 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                         }
                                         newContact = true;
                                     } else if (url.startsWith("tg2:addlist") || url.startsWith("tg2://addlist")) {
-                                        url = url.replace("tg2:addlist", "tg2://teamgram.net").replace("tg2://addlist", "tg2://teamgram.net");
+                                        url = url.replace("tg2:addlist", "tg2://ice9.app").replace("tg2://addlist", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         folderSlug = data.getQueryParameter("slug");
                                     } else if (url.startsWith("tg2:message") || url.startsWith("tg2://message")) {
-                                        url = url.replace("tg2:message", "tg2://teamgram.net").replace("tg2://message", "tg2://teamgram.net");
+                                        url = url.replace("tg2:message", "tg2://ice9.app").replace("tg2://message", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         chatLinkSlug = data.getQueryParameter("slug");
                                     } else if (url.startsWith("tg2:stars_topup") || url.startsWith("tg2://stars_topup")) {
-                                        url = url.replace("tg2:stars_topup", "tg2://teamgram.net").replace("tg2://stars_topup", "tg2://teamgram.net");
+                                        url = url.replace("tg2:stars_topup", "tg2://ice9.app").replace("tg2://stars_topup", "tg2://ice9.app");
                                         data = Uri.parse(url);
                                         long balance = 0;
                                         try {

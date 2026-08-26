@@ -9326,7 +9326,7 @@ public class ArticleViewer extends IArticleViewer implements NotificationCenter.
                 try {
                     if (currentBlock.html != null) {
                         if (webView != null) {
-                            webView.loadDataWithBaseURL("https://teamgram.net/embed", currentBlock.html, "text/html", "UTF-8", null);
+                            webView.loadDataWithBaseURL("https://ice9.app", currentBlock.html, "text/html", "UTF-8", null);
                             webView.setVisibility(VISIBLE);
                         }
                         if (videoView != null) {

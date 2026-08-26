@@ -36630,7 +36630,7 @@ public class ChatActivity extends BaseFragment implements
                     if (messageObject != null && messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage && messageObject.messageOwner.media.webpage != null && messageObject.messageOwner.media.webpage.cached_page != null) {
                         String lowerUrl = urlFinal.toLowerCase();
                         String lowerUrl2 = messageObject.messageOwner.media.webpage.url.toLowerCase();
-                        if ((lowerUrl.contains("teamgram.net/blog") || Browser.isTelegraphUrl(lowerUrl, false) || lowerUrl.contains("i.ice9.app/iv")) && (lowerUrl.contains(lowerUrl2) || lowerUrl2.contains(lowerUrl))) {
+                        if ((lowerUrl.contains("ice9.app/blog") || Browser.isTelegraphUrl(lowerUrl, false) || lowerUrl.contains("i.ice9.app/iv")) && (lowerUrl.contains(lowerUrl2) || lowerUrl2.contains(lowerUrl))) {
                             if (LaunchActivity.instance != null && LaunchActivity.instance.getBottomSheetTabs() != null && LaunchActivity.instance.getBottomSheetTabs().tryReopenTab(messageObject) != null) {
                                 return;
                             }
@@ -42218,7 +42218,7 @@ public class ChatActivity extends BaseFragment implements
             cell.invalidate();
         } : null;
         if (urlFinal.startsWith("tg2:privatepost") || urlFinal.startsWith("tg2://privatepost")) {
-            String urlTmp = urlFinal.replace("tg2:privatepost", "tg2://teamgram.net").replace("tg2://privatepost", "tg2://teamgram.net");
+            String urlTmp = urlFinal.replace("tg2:privatepost", "tg2://ice9.app").replace("tg2://privatepost", "tg2://ice9.app");
             Uri data = Uri.parse(urlTmp);
             int messageId = Utilities.parseInt(data.getQueryParameter("post"));
             long channelId = Utilities.parseLong(data.getQueryParameter("channel"));
@@ -42282,7 +42282,7 @@ public class ChatActivity extends BaseFragment implements
                     }
                     return true;
                 } else if (urlFinal.startsWith("tg2:resolve") || urlFinal.startsWith("tg2://resolve")) {
-                    String urlTmp = urlFinal.replace("tg2:resolve", "tg2://teamgram.net").replace("tg2://resolve", "tg2://teamgram.net");
+                    String urlTmp = urlFinal.replace("tg2:resolve", "tg2://ice9.app").replace("tg2://resolve", "tg2://ice9.app");
                     Uri data = Uri.parse(urlTmp);
                     String usernameE = data.getQueryParameter("domain").toLowerCase();
                     int messageId = Utilities.parseInt(data.getQueryParameter("post"));

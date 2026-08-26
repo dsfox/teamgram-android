@@ -4624,7 +4624,7 @@ public class AndroidUtilities {
                     } else if (scheme.equals("tg2")) {
                         String url = data.toString();
                         if (url.startsWith("tg2:proxy") || url.startsWith("tg2://proxy") || url.startsWith("tg2:socks") || url.startsWith("tg2://socks")) {
-                            url = url.replace("tg2:proxy", "tg2://teamgram.net").replace("tg2://proxy", "tg2://teamgram.net").replace("tg2://socks", "tg2://teamgram.net").replace("tg2:socks", "tg2://teamgram.net.");
+                            url = url.replace("tg2:proxy", "tg2://ice9.app").replace("tg2://proxy", "tg2://ice9.app").replace("tg2://socks", "tg2://ice9.app").replace("tg2:socks", "tg2://ice9.app.");
                             data = Uri.parse(url);
                             address = data.getQueryParameter("server");
                             if (AndroidUtilities.checkHostForPunycode(address)) {

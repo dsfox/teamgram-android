@@ -5015,7 +5015,7 @@ public class ThemePreviewActivity extends BaseFragment implements DownloadContro
                     TLRPC.TL_messageEntityTextUrl entityUrl = new TLRPC.TL_messageEntityTextUrl();
                     entityUrl.offset = index1;
                     entityUrl.length = index2 - index1 - 1;
-                    entityUrl.url = "https://teamgram.net";
+                    entityUrl.url = "https://ice9.app";
                     message.entities.add(entityUrl);
                 }
                 message.message = builder.toString();

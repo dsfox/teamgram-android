@@ -220,13 +220,21 @@ public class Browser {
         return null;
     }
 
+    /**
+     * Whether this link opens without asking the person first.
+     *
+     * Ours only. It used to trust telegra.ph, graph.org, fragment.com and two
+     * paths on upstream's own domains: a link somebody sent you to any of those
+     * opened with no question asked, and not one of them is a domain we own or
+     * can vouch for (#102).
+     *
+     * The two upstream ones survived the sweep of #87 because they were written
+     * as regular expressions: a dot escaped for the regex is a backslash in the
+     * source, and a search for the plain host name walks straight past it. The
+     * gate in tests/test_link_domain_gate.py allows for that now.
+     */
     public static boolean urlMustNotHaveConfirmation(String url) {
-        return (
-            isTelegraphUrl(url, false, true) ||
-            url.matches("^(https://)?teamgram\\.me/iv\\??(/.*|$)") || // i.ice9.app/iv?
-            url.matches("^(https://)?teamgram\\.net/(blog|tour)(/.*|$)") || // telegram.org/blog, telegram.org/tour
-            url.matches("^(https://)?fragment\\.com(/.*|$)") // fragment.com
-        );
+        return url.matches("^(https://)?(i\\.)?ice9\\.app(/.*|$)");
     }
 
     public static class Progress {
@@ -304,7 +312,7 @@ public class Browser {
         if (tryTelegraph) {
             try {
                 String host = AndroidUtilities.getHostAuthority(uri);
-                if (UserConfig.getInstance(UserConfig.selectedAccount).getCurrentUser() != null && (isTelegraphUrl(host, true) || "teamgram.net".equalsIgnoreCase(host) && (uri.toString().toLowerCase().contains("teamgram.net/faq") || uri.toString().toLowerCase().contains("teamgram.net/privacy") || uri.toString().toLowerCase().contains("teamgram.net/blog")))) {
+                if (UserConfig.getInstance(UserConfig.selectedAccount).getCurrentUser() != null && (isTelegraphUrl(host, true) || "ice9.app".equalsIgnoreCase(host) && (uri.toString().toLowerCase().contains("ice9.app/how-it-works") || uri.toString().toLowerCase().contains("ice9.app/privacy") || uri.toString().toLowerCase().contains("ice9.app/blog")))) {
                     final AlertDialog[] progressDialog = new AlertDialog[] {
                         new AlertDialog(context, AlertDialog.ALERT_TYPE_SPINNER)
                     };
@@ -727,10 +735,10 @@ public class Browser {
                 }
                 return true;
             }
-        } else if ("teamgram.net".equals(host) && uri != null && uri.getPath() != null && uri.getPath().startsWith("/blog/")) {
+        } else if ("ice9.app".equals(host) && uri != null && uri.getPath() != null && uri.getPath().startsWith("/blog/")) {
             return true;
         } else if (all) {
-            if (host.endsWith("teamgram.net")) {
+            if (host.endsWith("ice9.app")) {
                 return true;
             }
         }

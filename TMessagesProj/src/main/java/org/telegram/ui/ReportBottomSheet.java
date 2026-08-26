@@ -970,7 +970,7 @@ public class ReportBottomSheet extends BottomSheet {
                                                         LocaleController.getString(R.string.AdReported),
                                                         -1,
                                                         AndroidUtilities.REPLACING_TAG_TYPE_LINKBOLD,
-                                                        () -> Browser.openUrl(context, "https://teamgram.net/promote/guidelines"),
+                                                        () -> Browser.openUrl(context, "https://ice9.app"),
                                                         resourceProvider
                                                     )
                                                 )
@@ -1006,7 +1006,7 @@ public class ReportBottomSheet extends BottomSheet {
                                     LocaleController.getString(R.string.AdReported),
                                     -1,
                                     AndroidUtilities.REPLACING_TAG_TYPE_LINKBOLD,
-                                    () -> Browser.openUrl(context, "https://teamgram.net/promote/guidelines"),
+                                    () -> Browser.openUrl(context, "https://ice9.app"),
                                     resourceProvider
                                 )
                             )
@@ -1032,7 +1032,7 @@ public class ReportBottomSheet extends BottomSheet {
                                 LocaleController.getString(R.string.AdReported),
                                 -1,
                                 AndroidUtilities.REPLACING_TAG_TYPE_LINKBOLD,
-                                () -> Browser.openUrl(context, "https://teamgram.net/promote/guidelines"),
+                                () -> Browser.openUrl(context, "https://ice9.app"),
                                 resourceProvider
                             )
                         )
@@ -1204,7 +1204,7 @@ public class ReportBottomSheet extends BottomSheet {
                                                     LocaleController.getString(R.string.AdReported),
                                                     -1,
                                                     AndroidUtilities.REPLACING_TAG_TYPE_LINKBOLD,
-                                                    () -> Browser.openUrl(context, "https://teamgram.net/promote/guidelines"),
+                                                    () -> Browser.openUrl(context, "https://ice9.app"),
                                                     resourceProvider
                                                 )
                                             )
@@ -1238,7 +1238,7 @@ public class ReportBottomSheet extends BottomSheet {
                                     LocaleController.getString(R.string.AdReported),
                                     -1,
                                     AndroidUtilities.REPLACING_TAG_TYPE_LINKBOLD,
-                                    () -> Browser.openUrl(context, "https://teamgram.net/promote/guidelines"),
+                                    () -> Browser.openUrl(context, "https://ice9.app"),
                                     resourceProvider
                                 )
                             )
@@ -1262,7 +1262,7 @@ public class ReportBottomSheet extends BottomSheet {
                                 LocaleController.getString(R.string.AdReported),
                                 -1,
                                 AndroidUtilities.REPLACING_TAG_TYPE_LINKBOLD,
-                                () -> Browser.openUrl(context, "https://teamgram.net/promote/guidelines"),
+                                () -> Browser.openUrl(context, "https://ice9.app"),
                                 resourceProvider
                             )
                         )

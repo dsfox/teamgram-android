@@ -748,10 +748,10 @@ public class PhotoViewerWebView extends FrameLayout {
                 }
                 bos.close();
                 in.close();
-                webView.loadDataWithBaseURL("https://teamgram.net/messenger/", String.format(Locale.US, bos.toString("UTF-8"), currentYoutubeId, seekToTime), "text/html", "UTF-8", "https://youtube.com");
+                webView.loadDataWithBaseURL("https://ice9.app", String.format(Locale.US, bos.toString("UTF-8"), currentYoutubeId, seekToTime), "text/html", "UTF-8", "https://youtube.com");
             } else {
                 HashMap<String, String> args = new HashMap<>();
-                args.put("Referer", "teamgram.net/messenger");
+                args.put("Referer", "ice9.app/messenger");
                 webView.loadUrl(webPage.embed_url, args);
             }
         } catch (Exception e) {
