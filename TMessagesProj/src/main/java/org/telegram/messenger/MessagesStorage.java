@@ -5135,6 +5135,113 @@ public class MessagesStorage extends BaseController {
         });
     }
 
+    /**
+     * Looks for a word in the conversations the server cannot read (#108).
+     *
+     * Every message search on this client asks messages.searchGlobal and
+     * nothing else, and the server holds an encrypted conversation as
+     * ciphertext - so a word plainly visible in the chat list was not findable
+     * at all. The phone has the plaintext; it simply had never been asked.
+     *
+     * No index and no new table, on purpose. An index means a schema version, a
+     * write on the path that stores every message, and a backfill for the
+     * history that predates it - three chances to damage the one file whose
+     * damage cannot be undone. What is searched here is messages_v2 itself,
+     * which already holds every message this device has.
+     *
+     * What keeps that honest is the peer list: only conversations that encrypt,
+     * which is a handful of people rather than every chat, and a limit on top of
+     * that. Everything else is still the server's to answer, and better answered
+     * there - it has history this device never downloaded.
+     *
+     * Matched in Java rather than in SQL because the text lives inside a
+     * serialised message, not in a column: LIKE against a blob stops at the
+     * first zero byte and would answer with a confident nothing.
+     */
+    public void searchEncryptedMessages(String query, long[] peers, int limit,
+                                        Utilities.Callback3<ArrayList<TLRPC.Message>, ArrayList<TLRPC.User>, ArrayList<TLRPC.Chat>> done) {
+        if (done == null) {
+            return;
+        }
+        if (TextUtils.isEmpty(query) || peers == null || peers.length == 0) {
+            AndroidUtilities.runOnUIThread(() -> done.run(new ArrayList<>(), new ArrayList<>(), new ArrayList<>()));
+            return;
+        }
+        final String needle = query.toLowerCase();
+        storageQueue.postRunnable(() -> {
+            SQLiteCursor cursor = null;
+            final ArrayList<TLRPC.Message> found = new ArrayList<>();
+            final ArrayList<TLRPC.User> users = new ArrayList<>();
+            final ArrayList<TLRPC.Chat> chats = new ArrayList<>();
+            try {
+                final long selfId = getUserConfig().getClientUserId();
+                final ArrayList<Long> usersToLoad = new ArrayList<>();
+                final ArrayList<Long> chatsToLoad = new ArrayList<>();
+                final ArrayList<Long> animatedEmojiToLoad = new ArrayList<>();
+                // Newest first, and stopped at a limit rather than read whole:
+                // this runs on every keystroke, and a conversation of years is
+                // still a conversation somebody is typing into.
+                cursor = database.queryFinalized(
+                    "SELECT data FROM messages_v2 WHERE uid IN (" + TextUtils.join(",", asList(peers))
+                        + ") ORDER BY date DESC LIMIT " + SEARCH_ENCRYPTED_SCAN);
+                while (cursor.next() && found.size() < limit) {
+                    NativeByteBuffer data = cursor.byteBufferValue(0);
+                    if (data == null) {
+                        continue;
+                    }
+                    TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                    if (message == null) {
+                        data.reuse();
+                        continue;
+                    }
+                    message.readAttachPath(data, selfId);
+                    data.reuse();
+                    if (TextUtils.isEmpty(message.message)
+                            || !message.message.toLowerCase().contains(needle)) {
+                        continue;
+                    }
+                    addUsersAndChatsFromMessage(message, usersToLoad, chatsToLoad, animatedEmojiToLoad);
+                    found.add(message);
+                }
+                cursor.dispose();
+                cursor = null;
+
+                if (!usersToLoad.isEmpty()) {
+                    getUsersInternal(usersToLoad, users);
+                }
+                if (!chatsToLoad.isEmpty()) {
+                    getChatsInternal(TextUtils.join(",", chatsToLoad), chats);
+                }
+            } catch (Exception e) {
+                checkSQLException(e);
+            } finally {
+                if (cursor != null) {
+                    cursor.dispose();
+                }
+            }
+            AndroidUtilities.runOnUIThread(() -> done.run(found, users, chats));
+        });
+    }
+
+    /**
+     * How many stored messages are read before giving up, per search.
+     *
+     * A ceiling rather than a guess at what is enough: the rows are read newest
+     * first, so what falls off the end is the oldest, and the server answers for
+     * everything it can read anyway. Said out loud here because a silent cap is
+     * a search that reports "nothing" when it means "not in the last few
+     * thousand".
+     */
+    private static final int SEARCH_ENCRYPTED_SCAN = 4000;
+
+    private static ArrayList<Long> asList(long[] values) {
+        ArrayList<Long> list = new ArrayList<>(values.length);
+        for (long value : values) {
+            list.add(value);
+        }
+        return list;
+    }
+
     public void searchSavedByTag(TLRPC.Reaction tag, long topic_id, String query, int limit, int offset, Utilities.Callback4<ArrayList<MessageObject>, ArrayList<TLRPC.User>, ArrayList<TLRPC.Chat>, ArrayList<TLRPC.Document>> done, boolean includeGroups) {
         if (done == null) {
             return;

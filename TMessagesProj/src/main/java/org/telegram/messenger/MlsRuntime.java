@@ -675,6 +675,29 @@ public class MlsRuntime {
         }
     }
 
+    /**
+     * Everybody talked to in private, for the search that has to look at all of
+     * them at once rather than at one chat.
+     *
+     * The server holds these conversations as ciphertext and cannot match a
+     * word in one, so a search that only asks the server finds nothing in them
+     * (#108). This is the list of chats the phone has to look through itself,
+     * and it is short - one entry per person, not per message.
+     *
+     * The twin of encryptedPeerIds() on the other client.
+     */
+    public long[] encryptedPeerIds() {
+        loadConversations();
+        synchronized (this) {
+            long[] peers = new long[groupIdByPeer.size()];
+            int at = 0;
+            for (Long peerId : groupIdByPeer.keySet()) {
+                peers[at++] = peerId;
+            }
+            return peers;
+        }
+    }
+
     public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities) {
         return encrypt(peerId, text, entities, null);
     }
