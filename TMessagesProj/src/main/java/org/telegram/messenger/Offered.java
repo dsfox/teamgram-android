@@ -148,6 +148,20 @@ public final class Offered {
     public static final boolean BOTS = false;
 
     /**
+     * An avatar built out of an emoji on a coloured background.
+     *
+     * There are no emoji to build it from. The picker is filled from
+     * account.getDefaultProfilePhotoEmojis, which is an empty stub, plus the
+     * installed emoji packs, and there are none of those either (#20) - so the
+     * screen opens on a white field with a search box that can find nothing,
+     * and an active "Set" button over an empty choice. The backgrounds do work,
+     * but a background on its own is not an avatar.
+     *
+     * Comes back with the emoji packs. Nothing else is needed for it.
+     */
+    public static final boolean EMOJI_AVATAR = false;
+
+    /**
      * Reactions to a message.
      *
      * The server keeps none, so a tapped reaction appears for a moment on the

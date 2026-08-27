@@ -87,6 +87,7 @@ import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
@@ -253,7 +254,14 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     private boolean showAvatarConstructor;
 
     public void updateAvatarPicker() {
-        showAvatarConstructor = parentAlert.avatarPicker != 0 && !parentAlert.isPhotoPicker;
+    // An avatar built out of an emoji, and there are no emoji to build it from:
+    // the picker opens on a white field with a search box that can find nothing.
+    // It is filled from profileAvatarConstructorDefault, which comes from
+    // account.getDefaultProfilePhotoEmojis - an empty stub - plus the installed
+    // emoji packs, and there are none of those either (#20). The backgrounds
+    // work, but a background alone is not an avatar. See Offered.
+        showAvatarConstructor = Offered.EMOJI_AVATAR
+                && parentAlert.avatarPicker != 0 && !parentAlert.isPhotoPicker;
     }
 
     private class BasePhotoProvider extends PhotoViewer.EmptyPhotoViewerProvider {
@@ -736,7 +744,7 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.albumsDidLoad);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.cameraInitied);
         FrameLayout container = alert.getContainer();
-        showAvatarConstructor = parentAlert.avatarPicker != 0;
+        showAvatarConstructor = Offered.EMOJI_AVATAR && parentAlert.avatarPicker != 0;
 
         ActionBarMenu menu = parentAlert.actionBar.createMenu();
         dropDownContainer = new ActionBarMenuItem(context, menu, 0, 0, resourcesProvider) {
