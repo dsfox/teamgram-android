@@ -1474,7 +1474,18 @@ public class MlsRuntime {
     }
 
     private void removeMember(long peerId, long userId, int attempt) {
-        if (!DialogObject.isChatDialog(peerId) || groupOf(peerId) == null) {
+        // Said out loud, including the times it declines. A path that removes
+        // nobody and says nothing is indistinguishable from one that was never
+        // called, and the difference is exactly what has to be found when
+        // somebody keeps reading a group they were thrown out of.
+        FileLog.d("mls: asked to take " + userId + " out of " + peerId
+                + " (attempt " + attempt + ")");
+        if (!DialogObject.isChatDialog(peerId)) {
+            FileLog.d("mls: " + peerId + " is not a group chat, nothing to do");
+            return;
+        }
+        if (groupOf(peerId) == null) {
+            FileLog.d("mls: " + peerId + " is not encrypted, nothing to do");
             return;
         }
         if (attempt > COMMIT_ATTEMPTS) {

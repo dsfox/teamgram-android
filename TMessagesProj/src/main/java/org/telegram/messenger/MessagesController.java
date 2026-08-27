@@ -16064,12 +16064,6 @@ public class MessagesController extends BaseController implements NotificationCe
             }
             TLRPC.Updates updates = (TLRPC.Updates) response;
             processUpdates(updates, false);
-            // Out of the chat means out of the conversation, and it has to be
-            // said in MLS or it is only a line in an interface: a device left
-            // in the group goes on reading everything said afterwards (#40).
-            if (!self && peer.user_id != 0) {
-                MlsRuntime.getInstance(currentAccount).memberRemoved(-chatId, peer.user_id);
-            }
             if (isChannel && !self) {
                 AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
             }
@@ -18785,6 +18779,27 @@ public class MessagesController extends BaseController implements NotificationCe
                         message.flags |= 64;
                     } else if (message.from_id instanceof TLRPC.TL_peerUser && message.from_id.user_id == clientUserId && message.action.user_id == clientUserId) {
                         continue;
+                    }
+                    // Out of the chat means out of the MLS group, or the removal
+                    // is only a line in an interface: a device left in the group
+                    // goes on reading everything said afterwards (#40).
+                    //
+                    // Hung on the service message, which is the one thing every
+                    // member gets. The button was the obvious place and was
+                    // wrong twice over: deleteParticipantFromChat has two
+                    // separate implementations and the member list uses the
+                    // other one, and the update naming the person who left goes
+                    // only to whoever pressed it - everybody else learns from
+                    // this message and nothing else.
+                    //
+                    // So every member tries, and that is deliberate. Removing
+                    // costs nothing: it is local, one commit takes the epoch,
+                    // and the rest then find the person already gone. Adding is
+                    // hooked at the action instead, because claiming a key
+                    // package spends one, and a sweep already catches the misses.
+                    if (message.peer_id != null && message.peer_id.chat_id != 0) {
+                        MlsRuntime.getInstance(currentAccount)
+                                .memberRemoved(-message.peer_id.chat_id, message.action.user_id);
                     }
                 }
 
