@@ -1024,6 +1024,13 @@ public class MlsRuntime {
         }
     }
 
+    /** The twin of fire(), for the collectors that report what they did. */
+    private static void answer(Utilities.Callback<Boolean> then, boolean anything) {
+        if (then != null) {
+            AndroidUtilities.runOnUIThread(() -> then.run(anything));
+        }
+    }
+
     private static void fire(Runnable then) {
         if (then != null) {
             AndroidUtilities.runOnUIThread(then);
@@ -1778,7 +1785,7 @@ public class MlsRuntime {
     private boolean collectingCommits;
 
     public void collectCommits() {
-        collectCommits(null);
+        collectCommits((Utilities.Callback<Boolean>) null);
     }
 
     /**
@@ -1806,16 +1813,51 @@ public class MlsRuntime {
         // finds something it cannot open, which asks to catch up, which reads
         // again: a phone talking to the server several times a second and a
         // chat that never settles. It ran exactly that way before this line.
+        long wait = 0;
         synchronized (this) {
             Long last = caughtUpAt.get(peerId);
-            if (last != null && System.currentTimeMillis() - last < CATCH_UP_NOT_BEFORE) {
-                return;
+            long since = last == null ? Long.MAX_VALUE : System.currentTimeMillis() - last;
+            if (since < CATCH_UP_NOT_BEFORE) {
+                // Too soon - but not never. What would open this may have been
+                // posted since the last ask, and without a second attempt it
+                // waits for whatever happens to trigger one: a phone sat three
+                // minutes in a chat it had just been invited back into, with
+                // the invitation waiting on the server the whole time.
+                //
+                // One queued attempt, no more. It is the reopening that finds
+                // the next thing to ask about, and reopening only happens when
+                // something was applied, so this stops of its own accord.
+                if (!waitingToCatchUp.add(peerId)) {
+                    return;
+                }
+                wait = CATCH_UP_NOT_BEFORE - since;
+            } else {
+                caughtUpAt.put(peerId, System.currentTimeMillis());
             }
-            caughtUpAt.put(peerId, System.currentTimeMillis());
         }
-        collectWelcomes();
-        collectCommits(() -> reopen(peerId));
+        if (wait > 0) {
+            AndroidUtilities.runOnUIThread(() -> {
+                synchronized (MlsRuntime.this) {
+                    waitingToCatchUp.remove(peerId);
+                }
+                catchUp(peerId);
+            }, wait);
+            return;
+        }
+
+        collectWelcomes(joined -> collectCommits(applied -> {
+            // Only when something changed. Reading again is what asks for the
+            // history, and asking for it after learning nothing new finds the
+            // same things that could not be opened last time - which asks to
+            // catch up, and round it goes.
+            if (joined || applied) {
+                reopen(peerId);
+            }
+        }));
     }
+
+    /** Chats with one attempt already queued behind the interval. */
+    private final java.util.Set<Long> waitingToCatchUp = new java.util.HashSet<>();
 
     /** When this chat last asked for everything waiting for it. */
     private final Map<Long, Long> caughtUpAt = new HashMap<>();
@@ -1834,9 +1876,14 @@ public class MlsRuntime {
      * person, which looks like anything but a lost commit.
      */
     public void collectCommits(Runnable then) {
+        collectCommits(applied -> fire(then));
+    }
+
+    /** @param then given whether anything was actually applied. */
+    public void collectCommits(Utilities.Callback<Boolean> then) {
         synchronized (this) {
             if (collectingCommits) {
-                fire(then);
+                answer(then, false);
                 return;
             }
             collectingCommits = true;
@@ -1848,23 +1895,23 @@ public class MlsRuntime {
             }
             if (error != null) {
                 FileLog.e("mls: cannot ask for commits: " + error.text);
-                fire(then);
+                answer(then, false);
                 return;
             }
             if (!(response instanceof TLRPCMls.TL_mls_commits)) {
-                fire(then);
+                answer(then, false);
                 return;
             }
             TLRPCMls.TL_mls_commits commits = (TLRPCMls.TL_mls_commits) response;
             if (commits.commits.isEmpty()) {
-                fire(then);
+                answer(then, false);
                 return;
             }
             Utilities.globalQueue.postRunnable(() -> applyCommits(commits, then));
         });
     }
 
-    private void applyCommits(TLRPCMls.TL_mls_commits commits, Runnable then) {
+    private void applyCommits(TLRPCMls.TL_mls_commits commits, Utilities.Callback<Boolean> then) {
         List<Long> applied = new ArrayList<>();
         java.util.Set<Long> moved = new java.util.HashSet<>();
         try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
@@ -1913,7 +1960,7 @@ public class MlsRuntime {
             }
         } catch (MlsCore.MlsException e) {
             FileLog.e("mls: no identity to apply commits with: " + e.getMessage());
-            fire(then);
+            answer(then, false);
             return;
         }
 
@@ -1927,7 +1974,7 @@ public class MlsRuntime {
         }
 
         if (applied.isEmpty()) {
-            fire(then);
+            answer(then, false);
             return;
         }
         TLRPCMls.TL_mls_confirmCommits confirm = new TLRPCMls.TL_mls_confirmCommits();
@@ -1939,7 +1986,7 @@ public class MlsRuntime {
                 // is dropped on sight.
                 FileLog.e("mls: the commits were not confirmed: " + error.text);
             }
-            fire(then);
+            answer(then, true);
         });
     }
 
@@ -1954,8 +2001,14 @@ public class MlsRuntime {
      * can never read a word of.
      */
     public void collectWelcomes() {
+        collectWelcomes(null);
+    }
+
+    /** @param then given whether this device joined anything. */
+    public void collectWelcomes(Utilities.Callback<Boolean> then) {
         synchronized (this) {
             if (collectingWelcomes) {
+                answer(then, false);
                 return;
             }
             collectingWelcomes = true;
@@ -1968,16 +2021,19 @@ public class MlsRuntime {
             }
             if (error != null) {
                 FileLog.e("mls: cannot ask for welcomes: " + error.text);
+                answer(then, false);
                 return;
             }
             if (!(response instanceof TLRPCMls.TL_mls_welcomes)) {
+                answer(then, false);
                 return;
             }
             TLRPCMls.TL_mls_welcomes welcomes = (TLRPCMls.TL_mls_welcomes) response;
             if (welcomes.welcomes.isEmpty()) {
+                answer(then, false);
                 return;
             }
-            Utilities.globalQueue.postRunnable(() -> join(welcomes));
+            Utilities.globalQueue.postRunnable(() -> join(welcomes, then));
         });
     }
 
@@ -2005,7 +2061,7 @@ public class MlsRuntime {
         });
     }
 
-    private void join(TLRPCMls.TL_mls_welcomes welcomes) {
+    private void join(TLRPCMls.TL_mls_welcomes welcomes, Utilities.Callback<Boolean> then) {
         List<Long> joined = new ArrayList<>();
         try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
             for (TLRPCMls.TL_mls_welcome welcome : welcomes.welcomes) {
@@ -2036,10 +2092,12 @@ public class MlsRuntime {
             }
         } catch (MlsCore.MlsException e) {
             FileLog.e("mls: no identity to join with: " + e.getMessage());
+            answer(then, false);
             return;
         }
 
         if (joined.isEmpty()) {
+            answer(then, false);
             return;
         }
         TLRPCMls.TL_mls_confirmWelcomes confirm = new TLRPCMls.TL_mls_confirmWelcomes();
@@ -2051,6 +2109,7 @@ public class MlsRuntime {
                 // core and skipped.
                 FileLog.e("mls: the welcomes were not confirmed: " + error.text);
             }
+            answer(then, true);
         });
     }
 }
