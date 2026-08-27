@@ -12024,11 +12024,17 @@ public class MessagesController extends BaseController implements NotificationCe
                     + (isCache ? " from the cache" : " from the server"));
             getMessagesStorage().putMessages(opened, true, true, false, 0, 0, 0);
 
-            // And to the chat somebody is looking at. What cannot be read is
-            // not drawn, so these were never on the screen - from its point of
-            // view they arrive now, and nothing else puts them there: the load
-            // that opened them was asked for by the repair under a guid of its
-            // own, so the answer went to nobody (#109).
+            // And to the chat somebody is looking at. The load that opened
+            // these was asked for by the repair under a guid of its own, so
+            // nothing was listening for the answer: they went into storage and
+            // the screen went on showing what it had (#109).
+            //
+            // Replaced rather than added, and the difference is the whole fix.
+            // A message that arrives and will not open is drawn straight away,
+            // as a lock - only a load from storage hides those. So the chat
+            // already holds it, by that id, and handing it over as new is
+            // dropped on sight by the check that stops a message appearing
+            // twice. What it needs is the same id with words in it.
             final ArrayList<TLRPC.Message> justOpened = new ArrayList<>(opened);
             AndroidUtilities.runOnUIThread(() -> {
                 ArrayList<MessageObject> drawable = new ArrayList<>(justOpened.size());
@@ -12037,6 +12043,11 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 FileLog.d("mls: handing " + drawable.size() + " opened messages to "
                         + dialogId + " to be drawn");
+                getNotificationCenter().postNotificationName(
+                        NotificationCenter.replaceMessagesObjects, dialogId, drawable);
+                // And as new as well, for the ones the chat never had - a
+                // message hidden by a load from storage was never given to it,
+                // and replacing something that is not there does nothing.
                 getNotificationCenter().postNotificationName(
                         NotificationCenter.didReceiveNewMessages, dialogId, drawable, false, 0);
             });
