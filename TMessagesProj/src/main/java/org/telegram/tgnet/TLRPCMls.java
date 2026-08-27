@@ -739,4 +739,194 @@ public class TLRPCMls {
             document.serializeToStream(stream);
         }
     }
+
+    // ------------------------------------------------------------------
+    // Moving a group to its next epoch (#40)
+    //
+    // A commit is what a membership change is: somebody added, somebody
+    // removed. It travels through its own methods for the same reason a
+    // welcome does - handshake traffic never touches the message pipeline, so
+    // nothing has to be hidden from a chat list.
+    // ------------------------------------------------------------------
+
+    /** mls.commitResult accepted:Bool epoch:long = mls.CommitResult; */
+    public static class TL_mls_commitResult extends TLObject {
+        public static final int constructor = 191372459;
+
+        public boolean accepted;
+        /** Where the conversation really is. Present on refusal too, which is
+         *  the whole point: it tells the loser of a race how far behind it is
+         *  without another round trip. */
+        public long epoch;
+
+        public static TL_mls_commitResult TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_commitResult.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.commitResult", constructor));
+                }
+                return null;
+            }
+            TL_mls_commitResult result = new TL_mls_commitResult();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            accepted = stream.readBool(exception);
+            epoch = stream.readInt64(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeBool(accepted);
+            stream.writeInt64(epoch);
+        }
+    }
+
+    /** mls.sendCommit group_id:bytes epoch:long members:Vector&lt;long&gt; commit:bytes = mls.CommitResult; */
+    public static class TL_mls_sendCommit extends TLObject {
+        public static final int constructor = -945155929;
+
+        public byte[] group_id;
+        public long epoch;
+        /** Where to leave it. The server does not know who is in a group and
+         *  must not - it is told, not asked. */
+        public java.util.ArrayList<Long> members = new java.util.ArrayList<>();
+        public byte[] commit;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_commitResult.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeByteArray(group_id);
+            stream.writeInt64(epoch);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(members.size());
+            for (int i = 0; i < members.size(); i++) {
+                stream.writeInt64(members.get(i));
+            }
+            stream.writeByteArray(commit);
+        }
+    }
+
+    /** mls.commit id:long from_id:long group_id:bytes epoch:long commit:bytes = mls.Commit; */
+    public static class TL_mls_commit extends TLObject {
+        public static final int constructor = -130530128;
+
+        public long id;
+        public long from_id;
+        public byte[] group_id;
+        public long epoch;
+        public byte[] commit;
+
+        public static TL_mls_commit TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_commit.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.commit", constructor));
+                }
+                return null;
+            }
+            TL_mls_commit result = new TL_mls_commit();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            id = stream.readInt64(exception);
+            from_id = stream.readInt64(exception);
+            group_id = stream.readByteArray(exception);
+            epoch = stream.readInt64(exception);
+            commit = stream.readByteArray(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(id);
+            stream.writeInt64(from_id);
+            stream.writeByteArray(group_id);
+            stream.writeInt64(epoch);
+            stream.writeByteArray(commit);
+        }
+    }
+
+    /** mls.commits commits:Vector&lt;mls.Commit&gt; = mls.Commits; */
+    public static class TL_mls_commits extends TLObject {
+        public static final int constructor = -902742102;
+
+        public java.util.ArrayList<TL_mls_commit> commits = new java.util.ArrayList<>();
+
+        public static TL_mls_commits TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_commits.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.commits", constructor));
+                }
+                return null;
+            }
+            TL_mls_commits result = new TL_mls_commits();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            int magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int count = stream.readInt32(exception);
+            for (int i = 0; i < count; i++) {
+                TL_mls_commit item = TL_mls_commit.TLdeserialize(stream, stream.readInt32(exception), exception);
+                if (item == null) {
+                    return;
+                }
+                commits.add(item);
+            }
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(commits.size());
+            for (int i = 0; i < commits.size(); i++) {
+                commits.get(i).serializeToStream(stream);
+            }
+        }
+    }
+
+    /** mls.getCommits = mls.Commits; */
+    public static class TL_mls_getCommits extends TLObject {
+        public static final int constructor = 1356576713;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_commits.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+        }
+    }
+
+    /** mls.confirmCommits ids:Vector&lt;long&gt; = mls.Ok; */
+    public static class TL_mls_confirmCommits extends TLObject {
+        public static final int constructor = 96655983;
+
+        public java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_ok.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(ids.size());
+            for (int i = 0; i < ids.size(); i++) {
+                stream.writeInt64(ids.get(i));
+            }
+        }
+    }
 }

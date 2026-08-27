@@ -43,6 +43,8 @@ public final class MlsCore {
 
     private static native byte[][] addMembers(long group, long identity, byte[] packed);
 
+    private static native byte[] removeMembers(long group, long identity, byte[] packed);
+
     private static native byte[] messageGroupId0(byte[] ciphertext);
 
     private static native byte[] recoveryPhrase(int words);
@@ -272,6 +274,39 @@ public final class MlsCore {
                 throw failure("the members were not added");
             }
             return new Invitation(pair[0], pair[1]);
+        }
+
+        /**
+         * Removes every device of everybody named, and gives back the commit
+         * the rest have to apply.
+         *
+         * By name prefix, because the question is asked about a person and
+         * answered about devices: a device is named <user>/<device>, so the
+         * prefix is the person. Removing one phone and leaving another is worse
+         * than not removing at all - they go on reading from the one that
+         * stayed while the interface says they are gone.
+         *
+         * Null when nobody matched, which is not a failure: two people removing
+         * the same person at once is ordinary, and the second is looking at a
+         * group that already looks the way they wanted.
+         */
+        public byte[] removeMembers(Identity identity, java.util.List<byte[]> namePrefixes)
+                throws MlsException {
+            int total = 0;
+            for (byte[] each : namePrefixes) {
+                total += 4 + each.length;
+            }
+            byte[] packed = new byte[total];
+            int at = 0;
+            for (byte[] each : namePrefixes) {
+                packed[at] = (byte) (each.length >>> 24);
+                packed[at + 1] = (byte) (each.length >>> 16);
+                packed[at + 2] = (byte) (each.length >>> 8);
+                packed[at + 3] = (byte) each.length;
+                System.arraycopy(each, 0, packed, at + 4, each.length);
+                at += 4 + each.length;
+            }
+            return MlsCore.removeMembers(this.handle, identity.handle, packed);
         }
 
         public byte[] encrypt(Identity identity, byte[] plaintext) throws MlsException {

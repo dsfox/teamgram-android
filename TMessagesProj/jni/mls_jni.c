@@ -207,6 +207,24 @@ Java_org_telegram_messenger_MlsCore_messageGroupId0(JNIEnv *env, jclass class, j
 // them in; added one at a time, only the last welcome survives and which of
 // their phones can join is chance.
 //
+// Removing somebody: one commit for the others and nothing else, because
+// nobody joined. Null means nobody matched, which is ordinary - two people
+// removing the same person at once, and the second is looking at a group that
+// already looks the way they wanted. Whether that was a failure instead is
+// what lastError answers.
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_removeMembers(JNIEnv *env, jclass class, jlong group,
+                                                  jlong identity, jbyteArray packed) {
+    jsize len = (*env)->GetArrayLength(env, packed);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, packed, NULL);
+
+    struct MlsBuffer commit = mls_group_remove_members((Group *) from_handle(group),
+                                                       (const Identity *) from_handle(identity),
+                                                       (const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, packed, bytes, JNI_ABORT);
+    return take(env, commit);
+}
+
 // The packages arrive already packed - each preceded by its length as four
 // bytes, most significant first - because that is one thing to keep alive
 // across the boundary instead of two.
