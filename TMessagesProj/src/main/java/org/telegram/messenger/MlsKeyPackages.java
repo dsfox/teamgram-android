@@ -59,6 +59,33 @@ public class MlsKeyPackages {
     }
 
     /** This device's identity, read from storage or made if there is none yet. */
+    /**
+     * What every read-modify-write of this device's state must hold.
+     *
+     * The state is one blob. Every operation opens the whole of it, changes a
+     * ratchet somewhere inside, and writes the whole of it back - so two at
+     * once means the second write silently throws away what the first did.
+     *
+     * It is not theoretical. Membership work runs on the shared queue and is
+     * serialised with itself; encrypting and decrypting run on the threads of
+     * the message pipeline and are not serialised with anything. An incoming
+     * message being opened while commits are being applied is two threads in
+     * the same blob (#112).
+     *
+     * What is lost surfaces nowhere near where it happened: a sender does not
+     * read their own message, so a dropped ratchet advance turns up later as a
+     * message that will not open on the other side.
+     *
+     * The lock is never held across a network call - every path closes the
+     * state before it asks the server anything - so this costs only the
+     * milliseconds the cryptography itself takes.
+     */
+    public Object stateLock() {
+        return this.stateLock;
+    }
+
+    private final Object stateLock = new Object();
+
     public MlsCore.Identity identity() throws MlsCore.MlsException {
         String saved = storage().getString("state", null);
         if (saved != null) {

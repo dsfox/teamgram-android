@@ -264,34 +264,38 @@ public class MlsRuntime {
             return Opened.of(Reading.UNREADABLE);
         }
 
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
-            if (group == null) {
-                // Not a conversation this device is in. That is ordinary while a
-                // welcome is still on its way, and it is also what a message
-                // this device wrote looks like from here.
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    // Not a conversation this device is in. That is ordinary while a
+                    // welcome is still on its way, and it is also what a message
+                    // this device wrote looks like from here.
+                    return Opened.of(Reading.UNREADABLE);
+                }
+                try {
+                    byte[] plaintext = group.decrypt(identity, ciphertext);
+                    // Saved after anything that moves a ratchet, not at some
+                    // convenient later moment: the app can be killed at any point
+                    // and what is lost is the ability to read.
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                    if (plaintext == null) {
+                        // A commit or a proposal. It moved the conversation on and
+                        // there is nothing to show.
+                        return Opened.of(Reading.NOTHING);
+                    }
+                    Opened opened = decode(plaintext);
+                    opened.plaintext = plaintext;
+                    return opened;
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot read a message in " + shortId(groupId) + ": " + e.getMessage());
                 return Opened.of(Reading.UNREADABLE);
             }
-            try {
-                byte[] plaintext = group.decrypt(identity, ciphertext);
-                // Saved after anything that moves a ratchet, not at some
-                // convenient later moment: the app can be killed at any point
-                // and what is lost is the ability to read.
-                MlsKeyPackages.getInstance(currentAccount).save(identity);
-                if (plaintext == null) {
-                    // A commit or a proposal. It moved the conversation on and
-                    // there is nothing to show.
-                    return Opened.of(Reading.NOTHING);
-                }
-                Opened opened = decode(plaintext);
-                opened.plaintext = plaintext;
-                return opened;
-            } finally {
-                group.close();
-            }
-        } catch (MlsCore.MlsException e) {
-            FileLog.e("mls: cannot read a message in " + shortId(groupId) + ": " + e.getMessage());
-            return Opened.of(Reading.UNREADABLE);
         }
     }
 
@@ -837,48 +841,52 @@ public class MlsRuntime {
             return null;
         }
 
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
-            if (group == null) {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return null;
+                }
+                try {
+                    // One shape for everything, the same one the other client
+                    // writes. It used to be a choice between two older shapes, and
+                    // neither of them could carry a file - nor could the client on
+                    // the other side read what this one chose to send.
+                    TLRPCMls.TL_mls_message content = new TLRPCMls.TL_mls_message();
+                    content.text = text;
+                    if (entities != null) {
+                        content.entities.addAll(entities);
+                    }
+                    if (from != null) {
+                        TLRPCMls.TL_mls_forward forward = new TLRPCMls.TL_mls_forward();
+                        forward.from_id = from.id;
+                        forward.from_name = from.name == null ? "" : from.name;
+                        forward.date = from.date;
+                        content.forward = forward;
+                        content.flags |= 1;
+                    }
+                    if (media != null) {
+                        content.media = media;
+                        content.flags |= 2;
+                    }
+                    SerializedData out = new SerializedData();
+                    content.serializeToStream(out);
+
+                    byte[] ciphertext = group.encrypt(identity, out.toByteArray());
+                    // The ratchet has moved, so it is written back at once. Saving
+                    // late is the same as not saving: the app can be killed at any
+                    // moment, and what is lost is the ability to read.
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                    return CIPHERTEXT_PREFIX + Base64.encodeToString(ciphertext, Base64.NO_WRAP);
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot encrypt to " + peerId + ": " + e.getMessage());
                 return null;
             }
-            try {
-                // One shape for everything, the same one the other client
-                // writes. It used to be a choice between two older shapes, and
-                // neither of them could carry a file - nor could the client on
-                // the other side read what this one chose to send.
-                TLRPCMls.TL_mls_message content = new TLRPCMls.TL_mls_message();
-                content.text = text;
-                if (entities != null) {
-                    content.entities.addAll(entities);
-                }
-                if (from != null) {
-                    TLRPCMls.TL_mls_forward forward = new TLRPCMls.TL_mls_forward();
-                    forward.from_id = from.id;
-                    forward.from_name = from.name == null ? "" : from.name;
-                    forward.date = from.date;
-                    content.forward = forward;
-                    content.flags |= 1;
-                }
-                if (media != null) {
-                    content.media = media;
-                    content.flags |= 2;
-                }
-                SerializedData out = new SerializedData();
-                content.serializeToStream(out);
-
-                byte[] ciphertext = group.encrypt(identity, out.toByteArray());
-                // The ratchet has moved, so it is written back at once. Saving
-                // late is the same as not saving: the app can be killed at any
-                // moment, and what is lost is the ability to read.
-                MlsKeyPackages.getInstance(currentAccount).save(identity);
-                return CIPHERTEXT_PREFIX + Base64.encodeToString(ciphertext, Base64.NO_WRAP);
-            } finally {
-                group.close();
-            }
-        } catch (MlsCore.MlsException e) {
-            FileLog.e("mls: cannot encrypt to " + peerId + ": " + e.getMessage());
-            return null;
         }
     }
 
@@ -1058,36 +1066,40 @@ public class MlsRuntime {
     }
 
     private void begin(long peerId, List<byte[]> keyPackages, List<Long> members) {
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            MlsCore.Group group = MlsCore.Group.create(identity);
-            try {
-                MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
-                // Taken here and not asked about, which is the one place that is
-                // right: this group did not exist a moment ago, so there is
-                // nobody to have raced with and nothing for the server to order.
-                // Every later change goes through sendCommit and waits.
-                group.acceptCommit(identity);
-                byte[] groupId = group.id();
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.create(identity);
+                try {
+                    MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
+                    // Taken here and not asked about, which is the one place that is
+                    // right: this group did not exist a moment ago, so there is
+                    // nobody to have raced with and nothing for the server to order.
+                    // Every later change goes through sendCommit and waits.
+                    group.acceptCommit(identity);
+                    byte[] groupId = group.id();
 
-                // Saved before the welcome is sent. A welcome delivered for a
-                // conversation this device has forgotten is one the other side
-                // can join and nobody can talk in.
-                MlsKeyPackages.getInstance(currentAccount).save(identity);
-                remember(peerId, groupId);
+                    // Saved before the welcome is sent. A welcome delivered for a
+                    // conversation this device has forgotten is one the other side
+                    // can join and nobody can talk in.
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                    remember(peerId, groupId);
 
-                // One welcome, every member. add_members made a single one that
-                // serves all of them, and each has to be handed it separately
-                // because the mailbox is addressed to a person.
-                inviteEveryone(peerId, groupId, invitation.welcome, members, 0);
-            } finally {
-                group.close();
+                    // One welcome, every member. add_members made a single one that
+                    // serves all of them, and each has to be handed it separately
+                    // because the mailbox is addressed to a person.
+                    inviteEveryone(peerId, groupId, invitation.welcome, members, 0);
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                synchronized (this) {
+                    starting.remove(peerId);
+                }
+                settle(peerId);
+                FileLog.e("mls: cannot start a conversation with " + peerId + ": " + e.getMessage());
             }
-        } catch (MlsCore.MlsException e) {
-            synchronized (this) {
-                starting.remove(peerId);
-            }
-            settle(peerId);
-            FileLog.e("mls: cannot start a conversation with " + peerId + ": " + e.getMessage());
         }
     }
 
@@ -1342,37 +1354,41 @@ public class MlsRuntime {
 
         byte[] commit;
         long epoch;
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
-            if (group == null) {
-                doneChanging(peerId);
-                return;
-            }
-            try {
-                commit = change.build(identity, group);
-                if (commit == null) {
-                    FileLog.d("mls: " + change.describe() + " - nothing left to do");
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
                     doneChanging(peerId);
                     return;
                 }
-                epoch = group.epoch();
-                // Written down before it is offered. The commit is staged
-                // rather than applied, and the answer may arrive after this
-                // process has been killed - or never, if the connection drops.
-                // Either way the way back is the commit box, and the box can
-                // only help a device that still holds what it staged.
-                MlsKeyPackages.getInstance(currentAccount).save(identity);
-            } finally {
-                group.close();
+                try {
+                    commit = change.build(identity, group);
+                    if (commit == null) {
+                        FileLog.d("mls: " + change.describe() + " - nothing left to do");
+                        doneChanging(peerId);
+                        return;
+                    }
+                    epoch = group.epoch();
+                    // Written down before it is offered. The commit is staged
+                    // rather than applied, and the answer may arrive after this
+                    // process has been killed - or never, if the connection drops.
+                    // Either way the way back is the commit box, and the box can
+                    // only help a device that still holds what it staged.
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                // Usually a commit staged by an earlier attempt that never heard
+                // back. Catching up resolves it - the server left us a copy of our
+                // own commit for exactly this - and then the change is made again.
+                FileLog.e("mls: " + change.describe() + " could not be built: " + e.getMessage());
+                doneChanging(peerId);
+                collectCommits(retry);
+                return;
             }
-        } catch (MlsCore.MlsException e) {
-            // Usually a commit staged by an earlier attempt that never heard
-            // back. Catching up resolves it - the server left us a copy of our
-            // own commit for exactly this - and then the change is made again.
-            FileLog.e("mls: " + change.describe() + " could not be built: " + e.getMessage());
-            doneChanging(peerId);
-            collectCommits(retry);
-            return;
         }
 
         final long staked = epoch;
@@ -1408,28 +1424,32 @@ public class MlsRuntime {
                               TLRPCMls.TL_mls_commitResult result, Runnable retry) {
         final long peerId = change.peerId;
         boolean lost;
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
-            if (group == null) {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    doneChanging(peerId);
+                    return;
+                }
+                try {
+                    if (result.accepted) {
+                        group.acceptCommit(identity);
+                        MlsKeyPackages.getInstance(currentAccount).save(identity);
+                    } else {
+                        group.abandonCommit(identity);
+                        MlsKeyPackages.getInstance(currentAccount).save(identity);
+                    }
+                    lost = !result.accepted;
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: " + change.describe() + " could not be settled: " + e.getMessage());
                 doneChanging(peerId);
                 return;
             }
-            try {
-                if (result.accepted) {
-                    group.acceptCommit(identity);
-                    MlsKeyPackages.getInstance(currentAccount).save(identity);
-                } else {
-                    group.abandonCommit(identity);
-                    MlsKeyPackages.getInstance(currentAccount).save(identity);
-                }
-                lost = !result.accepted;
-            } finally {
-                group.close();
-            }
-        } catch (MlsCore.MlsException e) {
-            FileLog.e("mls: " + change.describe() + " could not be settled: " + e.getMessage());
-            doneChanging(peerId);
-            return;
         }
 
         if (!lost) {
@@ -1612,26 +1632,30 @@ public class MlsRuntime {
      * nobody being extra.
      */
     private List<Long> whoIsExtra(byte[] groupId, java.util.Set<Long> belong) {
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
-            if (group == null) {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return null;
+                }
+                try {
+                    java.util.LinkedHashSet<Long> extra = new java.util.LinkedHashSet<>();
+                    for (byte[] name : group.memberNames()) {
+                        long userId = userIdIn(name);
+                        if (userId != 0 && !belong.contains(userId)) {
+                            extra.add(userId);
+                        }
+                    }
+                    return new ArrayList<>(extra);
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
                 return null;
             }
-            try {
-                java.util.LinkedHashSet<Long> extra = new java.util.LinkedHashSet<>();
-                for (byte[] name : group.memberNames()) {
-                    long userId = userIdIn(name);
-                    if (userId != 0 && !belong.contains(userId)) {
-                        extra.add(userId);
-                    }
-                }
-                return new ArrayList<>(extra);
-            } finally {
-                group.close();
-            }
-        } catch (MlsCore.MlsException e) {
-            FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
-            return null;
         }
     }
 
@@ -1691,34 +1715,38 @@ public class MlsRuntime {
     /** Which of these people are not in the conversation. Null when the group
      *  cannot be opened, which is not the same as nobody missing. */
     private List<Long> whoIsMissing(byte[] groupId, List<Long> members) {
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
-            if (group == null) {
-                return null;
-            }
-            try {
-                List<byte[]> names = group.memberNames();
-                List<Long> missing = new ArrayList<>();
-                for (Long member : members) {
-                    byte[] prefix = nameOf(member);
-                    boolean present = false;
-                    for (byte[] name : names) {
-                        if (startsWith(name, prefix)) {
-                            present = true;
-                            break;
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return null;
+                }
+                try {
+                    List<byte[]> names = group.memberNames();
+                    List<Long> missing = new ArrayList<>();
+                    for (Long member : members) {
+                        byte[] prefix = nameOf(member);
+                        boolean present = false;
+                        for (byte[] name : names) {
+                            if (startsWith(name, prefix)) {
+                                present = true;
+                                break;
+                            }
+                        }
+                        if (!present) {
+                            missing.add(member);
                         }
                     }
-                    if (!present) {
-                        missing.add(member);
-                    }
+                    return missing;
+                } finally {
+                    group.close();
                 }
-                return missing;
-            } finally {
-                group.close();
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
+                return null;
             }
-        } catch (MlsCore.MlsException e) {
-            FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
-            return null;
         }
     }
 
@@ -1959,54 +1987,58 @@ public class MlsRuntime {
     private void applyCommits(TLRPCMls.TL_mls_commits commits, Utilities.Callback<Boolean> then) {
         List<Long> applied = new ArrayList<>();
         java.util.Set<Long> moved = new java.util.HashSet<>();
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            for (TLRPCMls.TL_mls_commit commit : commits.commits) {
-                MlsCore.Group group = MlsCore.Group.load(identity, commit.group_id);
-                if (group == null) {
-                    // A conversation this device is not in yet. Ordinary while
-                    // the welcome is still travelling, and it must not be
-                    // confirmed - that would throw away the only copy.
-                    continue;
-                }
-                try {
-                    long epoch = group.epoch();
-                    if (commit.epoch < epoch) {
-                        // Already applied. The same commit arrives twice on
-                        // ordinary routes: a confirmation that was lost, a
-                        // device that stopped before saving.
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                for (TLRPCMls.TL_mls_commit commit : commits.commits) {
+                    MlsCore.Group group = MlsCore.Group.load(identity, commit.group_id);
+                    if (group == null) {
+                        // A conversation this device is not in yet. Ordinary while
+                        // the welcome is still travelling, and it must not be
+                        // confirmed - that would throw away the only copy.
+                        continue;
+                    }
+                    try {
+                        long epoch = group.epoch();
+                        if (commit.epoch < epoch) {
+                            // Already applied. The same commit arrives twice on
+                            // ordinary routes: a confirmation that was lost, a
+                            // device that stopped before saving.
+                            applied.add(commit.id);
+                            continue;
+                        }
+                        if (commit.epoch > epoch) {
+                            // Not this one's turn. They are handed over oldest
+                            // first, so an earlier one for this conversation has
+                            // still to arrive, and applying out of order fails.
+                            continue;
+                        }
+                        boolean somebodyElses = group.applyCommit(identity, commit.commit);
+                        MlsKeyPackages.getInstance(currentAccount).save(identity);
                         applied.add(commit.id);
-                        continue;
+                        if (somebodyElses) {
+                            moved.add(peerOf(commit.group_id));
+                            FileLog.d("mls: " + shortId(commit.group_id) + " moved to epoch "
+                                    + (commit.epoch + 1) + ", changed by " + commit.from_id);
+                        } else {
+                            FileLog.d("mls: our own change to " + shortId(commit.group_id)
+                                    + " was taken after all, applied from the box");
+                        }
+                    } catch (MlsCore.MlsException e) {
+                        // Left unconfirmed on purpose: it may become applicable once
+                        // an earlier one arrives.
+                        FileLog.e("mls: cannot apply a commit to "
+                                + shortId(commit.group_id) + ": " + e.getMessage());
+                    } finally {
+                        group.close();
                     }
-                    if (commit.epoch > epoch) {
-                        // Not this one's turn. They are handed over oldest
-                        // first, so an earlier one for this conversation has
-                        // still to arrive, and applying out of order fails.
-                        continue;
-                    }
-                    boolean somebodyElses = group.applyCommit(identity, commit.commit);
-                    MlsKeyPackages.getInstance(currentAccount).save(identity);
-                    applied.add(commit.id);
-                    if (somebodyElses) {
-                        moved.add(peerOf(commit.group_id));
-                        FileLog.d("mls: " + shortId(commit.group_id) + " moved to epoch "
-                                + (commit.epoch + 1) + ", changed by " + commit.from_id);
-                    } else {
-                        FileLog.d("mls: our own change to " + shortId(commit.group_id)
-                                + " was taken after all, applied from the box");
-                    }
-                } catch (MlsCore.MlsException e) {
-                    // Left unconfirmed on purpose: it may become applicable once
-                    // an earlier one arrives.
-                    FileLog.e("mls: cannot apply a commit to "
-                            + shortId(commit.group_id) + ": " + e.getMessage());
-                } finally {
-                    group.close();
                 }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: no identity to apply commits with: " + e.getMessage());
+                answer(then, false);
+                return;
             }
-        } catch (MlsCore.MlsException e) {
-            FileLog.e("mls: no identity to apply commits with: " + e.getMessage());
-            answer(then, false);
-            return;
         }
 
         // What was locked a moment ago may open now: a message written in the
@@ -2108,37 +2140,41 @@ public class MlsRuntime {
 
     private void join(TLRPCMls.TL_mls_welcomes welcomes, Utilities.Callback<Boolean> then) {
         List<Long> joined = new ArrayList<>();
-        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
-            for (TLRPCMls.TL_mls_welcome welcome : welcomes.welcomes) {
-                try {
-                    MlsCore.Group group = MlsCore.Group.join(identity, welcome.welcome);
-                    byte[] groupId = group.id();
-                    group.close();
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                for (TLRPCMls.TL_mls_welcome welcome : welcomes.welcomes) {
+                    try {
+                        MlsCore.Group group = MlsCore.Group.join(identity, welcome.welcome);
+                        byte[] groupId = group.id();
+                        group.close();
 
-                    // The state first, then the note about whose conversation it
-                    // is, then the confirmation. Any other order leaves one of
-                    // the three behind if the app dies between them.
-                    MlsKeyPackages.getInstance(currentAccount).save(identity);
-                    remember(welcome.from_id, groupId);
-                    joined.add(welcome.id);
-                    FileLog.d("mls: joined " + shortId(groupId) + " with " + welcome.from_id);
-                    // What is already stored for this person was unreadable a
-                    // moment ago and is not any more. A message and the welcome
-                    // that opens it travel by different routes and the message
-                    // usually wins, so without this the first thing anybody
-                    // ever receives stays a ciphertext.
-                    reopen(welcome.from_id);
-                } catch (MlsCore.MlsException e) {
-                    // One invitation that cannot be joined must not stop the
-                    // others: they are from different people.
-                    FileLog.e("mls: cannot join an invitation from "
-                            + welcome.from_id + ": " + e.getMessage());
+                        // The state first, then the note about whose conversation it
+                        // is, then the confirmation. Any other order leaves one of
+                        // the three behind if the app dies between them.
+                        MlsKeyPackages.getInstance(currentAccount).save(identity);
+                        remember(welcome.from_id, groupId);
+                        joined.add(welcome.id);
+                        FileLog.d("mls: joined " + shortId(groupId) + " with " + welcome.from_id);
+                        // What is already stored for this person was unreadable a
+                        // moment ago and is not any more. A message and the welcome
+                        // that opens it travel by different routes and the message
+                        // usually wins, so without this the first thing anybody
+                        // ever receives stays a ciphertext.
+                        reopen(welcome.from_id);
+                    } catch (MlsCore.MlsException e) {
+                        // One invitation that cannot be joined must not stop the
+                        // others: they are from different people.
+                        FileLog.e("mls: cannot join an invitation from "
+                                + welcome.from_id + ": " + e.getMessage());
+                    }
                 }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: no identity to join with: " + e.getMessage());
+                answer(then, false);
+                return;
             }
-        } catch (MlsCore.MlsException e) {
-            FileLog.e("mls: no identity to join with: " + e.getMessage());
-            answer(then, false);
-            return;
         }
 
         if (joined.isEmpty()) {
