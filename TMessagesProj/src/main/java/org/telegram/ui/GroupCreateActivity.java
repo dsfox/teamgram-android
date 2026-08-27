@@ -1033,7 +1033,17 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.AddMembersAlertNamesText, stringBuilder, chat == null ? "" : chat.title)));
             }
             CheckBoxCell[] cells = new CheckBoxCell[1];
-            if (!ChatObject.isChannel(chat)) {
+            // "Show the last 100 messages to the new member" is a promise this
+            // messenger cannot keep (#40). Those messages are encrypted to an
+            // epoch the new member was never in, and MLS gives no history by
+            // design - no key exists on any device that would open them, so the
+            // hundred messages would arrive and be hidden as unreadable.
+            //
+            // Offering the choice would be worse than not having it: the person
+            // ticking it believes they have shared something. The real answer
+            // to giving somebody history is a backup keyed by the recovery
+            // phrase (#43), which is a different thing entirely.
+            if (false && !ChatObject.isChannel(chat)) {
                 LinearLayout linearLayout = new LinearLayout(getParentActivity());
                 linearLayout.setOrientation(LinearLayout.VERTICAL);
                 cells[0] = new CheckBoxCell(getParentActivity(), 1, resourceProvider);

@@ -12203,6 +12203,22 @@ public class MessagesController extends BaseController implements NotificationCe
         for (int a = 0; a < size; a++) {
             final TLRPC.Message message = messagesRes.messages.get(a);
             message.dialog_id = dialogId;
+            // A message this device cannot open is not drawn at all (#40).
+            //
+            // It used to be drawn as a padlock, which is right for the one that
+            // overtook its welcome and is readable a second later. It is wrong
+            // for a group: somebody added to a conversation that has been going
+            // for a month cannot read a word of what came before - MLS gives no
+            // history by design - and a screen of a hundred padlocks is not an
+            // explanation, it is noise with the conversation hidden behind it.
+            //
+            // Hidden rather than deleted: the ciphertext stays in attachPath,
+            // so if the welcome does arrive the message opens and appears on
+            // the next pass. What is lost is nothing; what is gained is a chat
+            // that shows what can be read.
+            if (MlsRuntime.LOCKED.equals(message.message)) {
+                continue;
+            }
             final MessageObject messageObject = new MessageObject(currentAccount, message, usersDict, chatsDict, true, false, mode == ChatActivity.MODE_SAVED);
             messageObject.scheduled = mode == 1;
             objects.add(messageObject);
