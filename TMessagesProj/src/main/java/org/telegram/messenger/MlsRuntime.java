@@ -917,6 +917,17 @@ public class MlsRuntime {
         synchronized (this) {
             if (groupIdByPeer.containsKey(peerId)) {
                 fire(then);
+                // There is a conversation, and this is the moment to notice
+                // that somebody has joined the chat since it was built - the
+                // safety net behind the addition itself, for the times that
+                // failed or was never seen. Not on every message: it opens the
+                // group to compare it, so it is worth doing rarely.
+                Long last = reconciledAt.get(peerId);
+                if (DialogObject.isChatDialog(peerId)
+                        && (last == null || System.currentTimeMillis() - last > RECONCILE_EVERY)) {
+                    reconciledAt.put(peerId, System.currentTimeMillis());
+                    AndroidUtilities.runOnUIThread(() -> reconcile(peerId));
+                }
                 return;
             }
             if (then != null) {
@@ -1045,6 +1056,11 @@ public class MlsRuntime {
             MlsCore.Group group = MlsCore.Group.create(identity);
             try {
                 MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
+                // Taken here and not asked about, which is the one place that is
+                // right: this group did not exist a moment ago, so there is
+                // nobody to have raced with and nothing for the server to order.
+                // Every later change goes through sendCommit and waits.
+                group.acceptCommit(identity);
                 byte[] groupId = group.id();
 
                 // Saved before the welcome is sent. A welcome delivered for a
@@ -1080,13 +1096,28 @@ public class MlsRuntime {
      */
     private void inviteEveryone(long peerId, byte[] groupId, byte[] welcome,
                                 List<Long> members, int at) {
-        if (at >= members.size()) {
+        handWelcomeTo(welcome, members, at, () -> {
             synchronized (MlsRuntime.this) {
                 starting.remove(peerId);
             }
             settle(peerId);
             FileLog.d("mls: started conversation " + shortId(groupId) + " with "
                     + members.size() + " member(s) of " + peerId);
+        });
+    }
+
+    /**
+     * Hands one welcome to each of these people in turn, then does whatever
+     * comes after.
+     *
+     * The mailbox is addressed to a person, so one welcome that serves several
+     * devices still has to be posted once per member. Sequential: this happens
+     * once per conversation and a sequence is something that can be read in a
+     * log when it goes wrong.
+     */
+    private void handWelcomeTo(byte[] welcome, List<Long> members, int at, Runnable then) {
+        if (at >= members.size()) {
+            fire(then);
             return;
         }
         long member = members.get(at);
@@ -1100,7 +1131,622 @@ public class MlsRuntime {
                 // cannot read is worse than one the server can.
                 FileLog.e("mls: the welcome for " + member + " was not delivered");
             }
-            inviteEveryone(peerId, groupId, welcome, members, at + 1);
+            handWelcomeTo(welcome, members, at + 1, then);
+        });
+    }
+
+    // ----------------------------------------------------------------------
+    // Changing who is in a conversation
+    // ----------------------------------------------------------------------
+    //
+    // MLS moves a group one epoch at a time and validates a commit against the
+    // epoch it was made from, so of two commits made from the same epoch exactly
+    // one can be taken. RFC 9420 gives that ordering to the delivery service,
+    // which is why mls.sendCommit exists and why nothing here is applied until
+    // it answers.
+    //
+    // The shape of every change is the same: build the commit, offer it, and
+    // then either keep it or let it go and start again on top of whoever won.
+
+    /** How many times a change is rebuilt after losing a race. Bounded because
+     *  a loop with no end is a client that never stops trying. */
+    private static final int COMMIT_ATTEMPTS = 3;
+
+    /** Conversations a change is being made to right now. Two at once on one
+     *  device build two commits from one epoch and lose to each other. */
+    private final java.util.Set<Long> changing = new java.util.HashSet<>();
+
+    /** When each conversation was last compared against its chat. */
+    private final Map<Long, Long> reconciledAt = new HashMap<>();
+
+    /** How often that comparison is worth making. It is a safety net, not the
+     *  way membership normally travels - adding somebody says so directly. */
+    private static final long RECONCILE_EVERY = 60_000L;
+
+    /** How a device of this person is named: the user id, a slash, and which
+     *  device. So the person is the prefix, and removing them means removing
+     *  every name that starts with it. */
+    private static byte[] nameOf(long userId) {
+        return (userId + "/").getBytes();
+    }
+
+    private static boolean startsWith(byte[] name, byte[] prefix) {
+        if (name.length < prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (name[i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private synchronized byte[] groupOf(long peerId) {
+        loadConversations();
+        return groupIdByPeer.get(peerId);
+    }
+
+    /** Which chat a group belongs to, for the times something arrives naming
+     *  the group and nothing else. */
+    private synchronized long peerOf(byte[] groupId) {
+        loadConversations();
+        for (Map.Entry<Long, byte[]> each : groupIdByPeer.entrySet()) {
+            if (java.util.Arrays.equals(each.getValue(), groupId)) {
+                return each.getKey();
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * One change to who is in a conversation.
+     *
+     * It knows how to build itself against the group as it stands, who has to
+     * be told, and what is left to do once it has been taken. It deliberately
+     * does not know how to retry: a change made again after losing a race has
+     * to be worked out afresh from what the group looks like now, not replayed.
+     */
+    private abstract class Change {
+        final long peerId;
+
+        Change(long peerId) {
+            this.peerId = peerId;
+        }
+
+        /** The commit, built against the group exactly as it stands. Null when
+         *  there is nothing left to do - which is ordinary, because somebody
+         *  else's change may already have done it. */
+        abstract byte[] build(MlsCore.Identity identity, MlsCore.Group group)
+                throws MlsCore.MlsException;
+
+        /** Who has to apply it. Everybody in the conversation, unless the
+         *  change itself says otherwise. */
+        List<Long> audience(List<Long> members) {
+            return members;
+        }
+
+        /** What is left once the delivery service has taken it. */
+        void taken(byte[] groupId, Runnable then) {
+            fire(then);
+        }
+
+        abstract String describe();
+    }
+
+    /** Letting somebody in: a commit for those already here and a welcome for
+     *  them, from the one call, because the two have to describe the same group. */
+    private final class Adding extends Change {
+        private final List<Long> newcomers;
+        private final List<byte[]> keyPackages;
+        private byte[] welcome;
+
+        Adding(long peerId, List<Long> newcomers, List<byte[]> keyPackages) {
+            super(peerId);
+            this.newcomers = newcomers;
+            this.keyPackages = keyPackages;
+        }
+
+        @Override
+        byte[] build(MlsCore.Identity identity, MlsCore.Group group) throws MlsCore.MlsException {
+            MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
+            welcome = invitation.welcome;
+            return invitation.commit;
+        }
+
+        @Override
+        void taken(byte[] groupId, Runnable then) {
+            // After the commit, not before. A welcome describes the group as it
+            // is once the commit has been applied, so somebody who acts on it
+            // first joins a conversation that does not exist yet.
+            handWelcomeTo(welcome, newcomers, 0, then);
+        }
+
+        @Override
+        String describe() {
+            return "adding " + newcomers.size() + " to " + peerId;
+        }
+    }
+
+    /** Taking somebody out, and with them every phone they hold. */
+    private final class Removing extends Change {
+        private final long userId;
+
+        Removing(long peerId, long userId) {
+            super(peerId);
+            this.userId = userId;
+        }
+
+        @Override
+        byte[] build(MlsCore.Identity identity, MlsCore.Group group) throws MlsCore.MlsException {
+            // Null when nobody matched, and that is not a failure: two people
+            // removing the same person at once is ordinary, and the second is
+            // looking at a group that already looks the way they wanted.
+            return group.removeMembers(identity,
+                    java.util.Collections.singletonList(nameOf(userId)));
+        }
+
+        @Override
+        List<Long> audience(List<Long> members) {
+            // Not the person being removed. They cannot apply it - being unable
+            // to is the whole point - and it would sit in their box for ever.
+            List<Long> rest = new ArrayList<>(members);
+            rest.remove(userId);
+            return rest;
+        }
+
+        @Override
+        String describe() {
+            return "removing " + userId + " from " + peerId;
+        }
+    }
+
+    private synchronized boolean beginChanging(long peerId) {
+        return changing.add(peerId);
+    }
+
+    private void doneChanging(long peerId) {
+        synchronized (this) {
+            changing.remove(peerId);
+        }
+    }
+
+    /**
+     * Offers a change to the delivery service and does whatever its answer
+     * calls for.
+     *
+     * Nothing is applied here until that answer comes. Applying first is right
+     * exactly until two people change one group at the same moment, and then
+     * both move on into groups that hold different memberships and cannot read
+     * each other - with nothing anywhere saying so, until a conversation quietly
+     * stops working for some of the people in it.
+     */
+    private void commitChange(Change change, Runnable retry) {
+        final long peerId = change.peerId;
+        byte[] groupId = groupOf(peerId);
+        if (groupId == null) {
+            doneChanging(peerId);
+            return;
+        }
+        List<Long> members = membersOf(peerId);
+        if (members == null) {
+            FileLog.e("mls: " + change.describe() + " - the membership is not known here");
+            doneChanging(peerId);
+            return;
+        }
+
+        byte[] commit;
+        long epoch;
+        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+            if (group == null) {
+                doneChanging(peerId);
+                return;
+            }
+            try {
+                commit = change.build(identity, group);
+                if (commit == null) {
+                    FileLog.d("mls: " + change.describe() + " - nothing left to do");
+                    doneChanging(peerId);
+                    return;
+                }
+                epoch = group.epoch();
+                // Written down before it is offered. The commit is staged
+                // rather than applied, and the answer may arrive after this
+                // process has been killed - or never, if the connection drops.
+                // Either way the way back is the commit box, and the box can
+                // only help a device that still holds what it staged.
+                MlsKeyPackages.getInstance(currentAccount).save(identity);
+            } finally {
+                group.close();
+            }
+        } catch (MlsCore.MlsException e) {
+            // Usually a commit staged by an earlier attempt that never heard
+            // back. Catching up resolves it - the server left us a copy of our
+            // own commit for exactly this - and then the change is made again.
+            FileLog.e("mls: " + change.describe() + " could not be built: " + e.getMessage());
+            doneChanging(peerId);
+            collectCommits(retry);
+            return;
+        }
+
+        final long staked = epoch;
+        TLRPCMls.TL_mls_sendCommit send = new TLRPCMls.TL_mls_sendCommit();
+        send.group_id = groupId;
+        send.epoch = epoch;
+        send.commit = commit;
+        send.members.addAll(change.audience(members));
+        // And this account, which is not vanity: the other phones of the person
+        // making the change are separate leaves and need the commit as much as
+        // anybody, and this phone needs its own copy back to learn the outcome
+        // if the answer below never arrives.
+        send.members.add(UserConfig.getInstance(currentAccount).getClientUserId());
+
+        ConnectionsManager.getInstance(currentAccount).sendRequest(send, (response, error) -> {
+            if (error != null || !(response instanceof TLRPCMls.TL_mls_commitResult)) {
+                // No answer is not the same as a refusal, and it must not be
+                // treated as one: the commit may well have been taken. It stays
+                // staged, and the copy the server left in our own box will say
+                // how it ended.
+                FileLog.e("mls: " + change.describe() + " went unanswered"
+                        + (error != null ? ": " + error.text : ""));
+                doneChanging(peerId);
+                return;
+            }
+            TLRPCMls.TL_mls_commitResult result = (TLRPCMls.TL_mls_commitResult) response;
+            Utilities.globalQueue.postRunnable(
+                    () -> settleChange(change, groupId, staked, result, retry));
+        });
+    }
+
+    private void settleChange(Change change, byte[] groupId, long staked,
+                              TLRPCMls.TL_mls_commitResult result, Runnable retry) {
+        final long peerId = change.peerId;
+        boolean lost;
+        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+            if (group == null) {
+                doneChanging(peerId);
+                return;
+            }
+            try {
+                if (result.accepted) {
+                    group.acceptCommit(identity);
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                } else {
+                    group.abandonCommit(identity);
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                }
+                lost = !result.accepted;
+            } finally {
+                group.close();
+            }
+        } catch (MlsCore.MlsException e) {
+            FileLog.e("mls: " + change.describe() + " could not be settled: " + e.getMessage());
+            doneChanging(peerId);
+            return;
+        }
+
+        if (!lost) {
+            FileLog.d("mls: " + change.describe() + " taken, "
+                    + shortId(groupId) + " is now at epoch " + result.epoch);
+            change.taken(groupId, () -> doneChanging(peerId));
+            return;
+        }
+
+        FileLog.d("mls: " + change.describe() + " lost epoch " + staked
+                + "; the group is at " + result.epoch + ", catching up");
+        doneChanging(peerId);
+        collectCommits(retry);
+    }
+
+    // ----------------------------------------------------------------------
+    // The two changes, from the outside
+    // ----------------------------------------------------------------------
+
+    /**
+     * Somebody was added to a chat this device holds a conversation for.
+     *
+     * A chat that is not encrypted stays that way - adding a person to it does
+     * not start anything, because the rule for a group is all of them or none
+     * and that was decided when the conversation began.
+     */
+    public void memberAdded(long peerId, long userId) {
+        if (userId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+            // Somebody let us in. We cannot add ourselves to an MLS group; the
+            // welcome is on its way from whoever did it.
+            return;
+        }
+        reconcile(peerId, 1);
+    }
+
+    /** Somebody was taken out of a chat, by this device. */
+    public void memberRemoved(long peerId, long userId) {
+        removeMember(peerId, userId, 1);
+    }
+
+    private void removeMember(long peerId, long userId, int attempt) {
+        if (!DialogObject.isChatDialog(peerId) || groupOf(peerId) == null) {
+            return;
+        }
+        if (attempt > COMMIT_ATTEMPTS) {
+            FileLog.e("mls: gave up removing " + userId + " from " + peerId
+                    + " after " + COMMIT_ATTEMPTS + " attempts");
+            return;
+        }
+        if (!beginChanging(peerId)) {
+            return;
+        }
+        Utilities.globalQueue.postRunnable(() -> commitChange(
+                new Removing(peerId, userId),
+                () -> removeMember(peerId, userId, attempt + 1)));
+    }
+
+    /**
+     * Compares who is in the conversation with who is in the chat, and lets in
+     * anybody missing.
+     *
+     * Additive on purpose. Adding somebody who is already there is caught here
+     * and costs nothing; removing on this evidence would be destructive and the
+     * evidence is not good enough - the local idea of a chat's membership can
+     * be out of date, and somebody would be cut out of a conversation nobody
+     * asked to remove them from. Removal stays where the intention is plain.
+     *
+     * This is also what makes an addition that failed - a dropped connection,
+     * a newcomer whose client had not published anything yet - recover by
+     * itself rather than leaving somebody in a chat where nothing appears.
+     */
+    public void reconcile(long peerId) {
+        reconcile(peerId, 1);
+    }
+
+    private void reconcile(long peerId, int attempt) {
+        if (!DialogObject.isChatDialog(peerId)) {
+            return;
+        }
+        byte[] groupId = groupOf(peerId);
+        if (groupId == null) {
+            return;
+        }
+        if (attempt > COMMIT_ATTEMPTS) {
+            FileLog.e("mls: gave up adding to " + peerId + " after "
+                    + COMMIT_ATTEMPTS + " attempts");
+            return;
+        }
+        List<Long> members = membersOf(peerId);
+        if (members == null) {
+            return;
+        }
+        if (!beginChanging(peerId)) {
+            return;
+        }
+        Utilities.globalQueue.postRunnable(() -> {
+            List<Long> missing = whoIsMissing(groupId, members);
+            if (missing == null || missing.isEmpty()) {
+                doneChanging(peerId);
+                return;
+            }
+            FileLog.d("mls: " + peerId + " has " + missing.size()
+                    + " member(s) not in " + shortId(groupId) + " yet");
+            claimFor(peerId, missing, 0, new ArrayList<>(), attempt);
+        });
+    }
+
+    /** Who is in the chat and not in the conversation. Null when the group
+     *  cannot be opened, which is not the same as nobody missing. */
+    private List<Long> whoIsMissing(byte[] groupId, List<Long> members) {
+        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+            if (group == null) {
+                return null;
+            }
+            try {
+                List<byte[]> names = group.memberNames();
+                List<Long> missing = new ArrayList<>();
+                for (Long member : members) {
+                    byte[] prefix = nameOf(member);
+                    boolean present = false;
+                    for (byte[] name : names) {
+                        if (startsWith(name, prefix)) {
+                            present = true;
+                            break;
+                        }
+                    }
+                    if (!present) {
+                        missing.add(member);
+                    }
+                }
+                return missing;
+            } finally {
+                group.close();
+            }
+        } catch (MlsCore.MlsException e) {
+            FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Collects the key packages of everybody missing, then makes the change.
+     *
+     * Somebody with no devices to reach is left out of this round rather than
+     * stopping it: the others should not wait for a client that has not
+     * published anything yet. The comparison runs again later and picks them up
+     * once it has.
+     */
+    private void claimFor(long peerId, List<Long> missing, int at,
+                          ArrayList<byte[]> collected, int attempt) {
+        if (at >= missing.size()) {
+            List<Long> reachable = new ArrayList<>();
+            for (Long member : missing) {
+                if (!withoutDevices.containsKey(member)) {
+                    reachable.add(member);
+                }
+            }
+            if (collected.isEmpty()) {
+                doneChanging(peerId);
+                return;
+            }
+            final ArrayList<byte[]> packages = collected;
+            final List<Long> newcomers = reachable;
+            commitChange(new Adding(peerId, newcomers, packages),
+                    () -> reconcile(peerId, attempt + 1));
+            return;
+        }
+        long member = missing.get(at);
+        TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
+        request.user_id = member;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+            if (error == null && response instanceof TLRPCMls.TL_mls_keyPackages) {
+                TLRPCMls.TL_mls_keyPackages claimed = (TLRPCMls.TL_mls_keyPackages) response;
+                if (claimed.packages.isEmpty()) {
+                    FileLog.e("mls: " + member + " has no devices, so they stay outside "
+                            + peerId + " for now");
+                    synchronized (MlsRuntime.this) {
+                        withoutDevices.put(member, System.currentTimeMillis());
+                    }
+                } else {
+                    collected.addAll(claimed.packages);
+                    synchronized (MlsRuntime.this) {
+                        withoutDevices.remove(member);
+                    }
+                }
+            } else {
+                FileLog.e("mls: cannot reach " + member
+                        + (error != null ? ": " + error.text : ""));
+                synchronized (MlsRuntime.this) {
+                    withoutDevices.put(member, System.currentTimeMillis());
+                }
+            }
+            claimFor(peerId, missing, at + 1, collected, attempt);
+        });
+    }
+
+    // ----------------------------------------------------------------------
+    // The commits that came from everybody else
+    // ----------------------------------------------------------------------
+
+    private boolean collectingCommits;
+
+    public void collectCommits() {
+        collectCommits(null);
+    }
+
+    /**
+     * Collects the membership changes waiting on the server and applies each.
+     *
+     * Confirmed only after the new state has been saved. A commit confirmed and
+     * then lost leaves this device an epoch behind, where nothing new opens -
+     * and that shows up much later as a conversation that went quiet for one
+     * person, which looks like anything but a lost commit.
+     */
+    public void collectCommits(Runnable then) {
+        synchronized (this) {
+            if (collectingCommits) {
+                fire(then);
+                return;
+            }
+            collectingCommits = true;
+        }
+        TLRPCMls.TL_mls_getCommits request = new TLRPCMls.TL_mls_getCommits();
+        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+            synchronized (MlsRuntime.this) {
+                collectingCommits = false;
+            }
+            if (error != null) {
+                FileLog.e("mls: cannot ask for commits: " + error.text);
+                fire(then);
+                return;
+            }
+            if (!(response instanceof TLRPCMls.TL_mls_commits)) {
+                fire(then);
+                return;
+            }
+            TLRPCMls.TL_mls_commits commits = (TLRPCMls.TL_mls_commits) response;
+            if (commits.commits.isEmpty()) {
+                fire(then);
+                return;
+            }
+            Utilities.globalQueue.postRunnable(() -> applyCommits(commits, then));
+        });
+    }
+
+    private void applyCommits(TLRPCMls.TL_mls_commits commits, Runnable then) {
+        List<Long> applied = new ArrayList<>();
+        java.util.Set<Long> moved = new java.util.HashSet<>();
+        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+            for (TLRPCMls.TL_mls_commit commit : commits.commits) {
+                MlsCore.Group group = MlsCore.Group.load(identity, commit.group_id);
+                if (group == null) {
+                    // A conversation this device is not in yet. Ordinary while
+                    // the welcome is still travelling, and it must not be
+                    // confirmed - that would throw away the only copy.
+                    continue;
+                }
+                try {
+                    long epoch = group.epoch();
+                    if (commit.epoch < epoch) {
+                        // Already applied. The same commit arrives twice on
+                        // ordinary routes: a confirmation that was lost, a
+                        // device that stopped before saving.
+                        applied.add(commit.id);
+                        continue;
+                    }
+                    if (commit.epoch > epoch) {
+                        // Not this one's turn. They are handed over oldest
+                        // first, so an earlier one for this conversation has
+                        // still to arrive, and applying out of order fails.
+                        continue;
+                    }
+                    boolean somebodyElses = group.applyCommit(identity, commit.commit);
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                    applied.add(commit.id);
+                    if (somebodyElses) {
+                        moved.add(peerOf(commit.group_id));
+                        FileLog.d("mls: " + shortId(commit.group_id) + " moved to epoch "
+                                + (commit.epoch + 1) + ", changed by " + commit.from_id);
+                    } else {
+                        FileLog.d("mls: our own change to " + shortId(commit.group_id)
+                                + " was taken after all, applied from the box");
+                    }
+                } catch (MlsCore.MlsException e) {
+                    // Left unconfirmed on purpose: it may become applicable once
+                    // an earlier one arrives.
+                    FileLog.e("mls: cannot apply a commit to "
+                            + shortId(commit.group_id) + ": " + e.getMessage());
+                } finally {
+                    group.close();
+                }
+            }
+        } catch (MlsCore.MlsException e) {
+            FileLog.e("mls: no identity to apply commits with: " + e.getMessage());
+            fire(then);
+            return;
+        }
+
+        // What was locked a moment ago may open now: a message written in the
+        // new epoch arrived before the commit that opens it, which is ordinary -
+        // the two travel by different routes.
+        for (Long peerId : moved) {
+            if (peerId != null && peerId != 0) {
+                reopen(peerId);
+            }
+        }
+
+        if (applied.isEmpty()) {
+            fire(then);
+            return;
+        }
+        TLRPCMls.TL_mls_confirmCommits confirm = new TLRPCMls.TL_mls_confirmCommits();
+        confirm.ids.addAll(applied);
+        ConnectionsManager.getInstance(currentAccount).sendRequest(confirm, (response, error) -> {
+            if (error != null) {
+                // Unconfirmed means they arrive again, which is harmless: one
+                // that has already been applied is behind the group's epoch and
+                // is dropped on sight.
+                FileLog.e("mls: the commits were not confirmed: " + error.text);
+            }
+            fire(then);
         });
     }
 
@@ -1153,11 +1799,10 @@ public class MlsRuntime {
      * and two ways is how they come to disagree.
      */
     private void reopen(long peerId) {
+        if (peerId == 0) {
+            return;
+        }
         AndroidUtilities.runOnUIThread(() -> {
-            TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(peerId);
-            if (user == null) {
-                return;
-            }
             // From the server, not the cache: the cache holds the ciphertext
             // that could not be opened, and asking it again would hand back the
             // same thing.

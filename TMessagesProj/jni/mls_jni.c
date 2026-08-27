@@ -225,6 +225,48 @@ Java_org_telegram_messenger_MlsCore_removeMembers(JNIEnv *env, jclass class, jlo
     return take(env, commit);
 }
 
+// Who is in the conversation, packed the same way - each name preceded by its
+// length as four bytes, most significant first.
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_memberNames(JNIEnv *env, jclass class, jlong group) {
+    return take(env, mls_group_member_names((const Group *) from_handle(group)));
+}
+
+// A commit is left pending until the delivery service says it won its epoch.
+// These two are where that answer lands: taken, or let go of so the winner can
+// be applied and the change made again on top.
+JNIEXPORT jboolean JNICALL
+Java_org_telegram_messenger_MlsCore_acceptCommit(JNIEnv *env, jclass class, jlong group,
+                                                 jlong identity) {
+    return mls_group_accept_commit((Group *) from_handle(group),
+                                   (const Identity *) from_handle(identity))
+           ? JNI_TRUE : JNI_FALSE;
+}
+
+// A commit that arrived through the commit box. 1 - the group moved; 0 - it is
+// one this device made, come back to it, and what was staged has been applied;
+// -1 - it could not be applied, and lastError says why.
+JNIEXPORT jint JNICALL
+Java_org_telegram_messenger_MlsCore_applyCommit(JNIEnv *env, jclass class, jlong group,
+                                                jlong identity, jbyteArray commit) {
+    jsize len = (*env)->GetArrayLength(env, commit);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, commit, NULL);
+
+    int32_t applied = mls_group_apply_commit((Group *) from_handle(group),
+                                             (const Identity *) from_handle(identity),
+                                             (const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, commit, bytes, JNI_ABORT);
+    return (jint) applied;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_telegram_messenger_MlsCore_abandonCommit(JNIEnv *env, jclass class, jlong group,
+                                                  jlong identity) {
+    return mls_group_abandon_commit((Group *) from_handle(group),
+                                    (const Identity *) from_handle(identity))
+           ? JNI_TRUE : JNI_FALSE;
+}
+
 // The packages arrive already packed - each preceded by its length as four
 // bytes, most significant first - because that is one thing to keep alive
 // across the boundary instead of two.

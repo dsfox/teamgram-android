@@ -45,6 +45,14 @@ public final class MlsCore {
 
     private static native byte[] removeMembers(long group, long identity, byte[] packed);
 
+    private static native byte[] memberNames(long group);
+
+    private static native boolean acceptCommit(long group, long identity);
+
+    private static native boolean abandonCommit(long group, long identity);
+
+    private static native int applyCommit(long group, long identity, byte[] commit);
+
     private static native byte[] messageGroupId0(byte[] ciphertext);
 
     private static native byte[] recoveryPhrase(int words);
@@ -307,6 +315,78 @@ public final class MlsCore {
                 at += 4 + each.length;
             }
             return MlsCore.removeMembers(this.handle, identity.handle, packed);
+        }
+
+        /**
+         * Who is in the conversation, by the name each device goes under -
+         * <code>&lt;user&gt;/&lt;device&gt;</code>, so two phones of one person
+         * are two names sharing a prefix.
+         *
+         * The count cannot answer what this is asked for: two people leaving
+         * and two joining leaves the count exactly where it was.
+         */
+        public java.util.List<byte[]> memberNames() {
+            byte[] packed = MlsCore.memberNames(this.handle);
+            java.util.ArrayList<byte[]> names = new java.util.ArrayList<>();
+            if (packed == null) {
+                return names;
+            }
+            int at = 0;
+            while (at + 4 <= packed.length) {
+                int length = ((packed[at] & 0xff) << 24) | ((packed[at + 1] & 0xff) << 16)
+                        | ((packed[at + 2] & 0xff) << 8) | (packed[at + 3] & 0xff);
+                at += 4;
+                if (length < 0 || at + length > packed.length) {
+                    break;
+                }
+                names.add(java.util.Arrays.copyOfRange(packed, at, at + length));
+                at += length;
+            }
+            return names;
+        }
+
+        /**
+         * Makes this device's own commit real, once the delivery service has
+         * said it is the one that took its epoch.
+         *
+         * Adding and removing leave the commit pending on purpose. Of two
+         * commits made from one epoch the protocol takes only one, and a device
+         * that moves on without being told it won ends up in a group of its own
+         * that nobody else can read - which shows up as a conversation that
+         * went quiet, days later, for no visible reason.
+         */
+        public void acceptCommit(Identity identity) throws MlsException {
+            if (!MlsCore.acceptCommit(this.handle, identity.handle)) {
+                throw failure("the commit was not applied");
+            }
+        }
+
+        /** Lets go of a commit the delivery service refused, so the winner can
+         *  be applied and the change made again on top of it. */
+        public void abandonCommit(Identity identity) throws MlsException {
+            if (!MlsCore.abandonCommit(this.handle, identity.handle)) {
+                throw failure("the commit was not let go of");
+            }
+        }
+
+        /**
+         * Applies a commit that arrived through the commit box.
+         *
+         * True when the group moved because somebody else changed it. False
+         * when the commit is one this device made and is being handed back -
+         * which is how the delivery service says it won, and the answer is to
+         * apply what is already staged here.
+         *
+         * That second half is what makes a lost answer survivable: a device
+         * that sent a commit and never heard back has no other way to find out,
+         * and would otherwise sit for ever at an epoch everybody else has left.
+         */
+        public boolean applyCommit(Identity identity, byte[] commit) throws MlsException {
+            int applied = MlsCore.applyCommit(this.handle, identity.handle, commit);
+            if (applied < 0) {
+                throw failure("the commit was not applied");
+            }
+            return applied == 1;
         }
 
         public byte[] encrypt(Identity identity, byte[] plaintext) throws MlsException {

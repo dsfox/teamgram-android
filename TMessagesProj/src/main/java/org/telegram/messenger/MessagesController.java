@@ -2664,6 +2664,7 @@ public class MessagesController extends BaseController implements NotificationCe
         // rather than only when a message arrives, because a welcome sent while
         // this phone was off has nothing to arrive behind.
         MlsRuntime.getInstance(currentAccount).collectWelcomes();
+        MlsRuntime.getInstance(currentAccount).collectCommits();
 
         // And the six words that get this account back when the phone is gone.
         // Made on the device: the server is told a one-way derivation of them
@@ -12034,6 +12035,7 @@ public class MessagesController extends BaseController implements NotificationCe
             // Something here cannot be opened yet, and the invitation that would
             // open it may be waiting on the server.
             mls.collectWelcomes();
+            mls.collectCommits();
         }
 
         long startProcessTime = SystemClock.elapsedRealtime();
@@ -15968,6 +15970,11 @@ public class MessagesController extends BaseController implements NotificationCe
             if (isChannel && inputUser instanceof TLRPC.TL_inputUserSelf) {
                 getMessagesStorage().updateDialogsWithDeletedMessages(-chatId, chatId, new ArrayList<>(), null);
             }
+            // Somebody joined a chat this device may be holding an encrypted
+            // conversation for. They have to be let into it as well, or they sit
+            // in a chat where nothing appears - every message hidden, and no
+            // sign of why (#40).
+            MlsRuntime.getInstance(currentAccount).memberAdded(-chatId, user.id);
             if (onFinishRunnable != null) {
                 AndroidUtilities.runOnUIThread(onFinishRunnable);
             }
@@ -16057,6 +16064,12 @@ public class MessagesController extends BaseController implements NotificationCe
             }
             TLRPC.Updates updates = (TLRPC.Updates) response;
             processUpdates(updates, false);
+            // Out of the chat means out of the conversation, and it has to be
+            // said in MLS or it is only a line in an interface: a device left
+            // in the group goes on reading everything said afterwards (#40).
+            if (!self && peer.user_id != 0) {
+                MlsRuntime.getInstance(currentAccount).memberRemoved(-chatId, peer.user_id);
+            }
             if (isChannel && !self) {
                 AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
             }
@@ -17171,6 +17184,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                 }
                                 if (lockedInDifference) {
                                     mlsFromDifference.collectWelcomes();
+                                    mlsFromDifference.collectCommits();
                                 }
 
                                 ImageLoader.saveMessagesThumbs(res.new_messages);
@@ -18686,6 +18700,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 if (MlsRuntime.isCiphertext(message.message)) {
                     if (!MlsRuntime.getInstance(currentAccount).open(message)) {
                         MlsRuntime.getInstance(currentAccount).collectWelcomes();
+                        MlsRuntime.getInstance(currentAccount).collectCommits();
                     }
                 }
                 if (newMessageCallback != null && newMessageCallback.onMessageReceived(message)) {
