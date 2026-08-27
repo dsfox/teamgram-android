@@ -12024,6 +12024,23 @@ public class MessagesController extends BaseController implements NotificationCe
                     + (isCache ? " from the cache" : " from the server"));
             getMessagesStorage().putMessages(opened, true, true, false, 0, 0, 0);
 
+            // And to the chat somebody is looking at. What cannot be read is
+            // not drawn, so these were never on the screen - from its point of
+            // view they arrive now, and nothing else puts them there: the load
+            // that opened them was asked for by the repair under a guid of its
+            // own, so the answer went to nobody (#109).
+            final ArrayList<TLRPC.Message> justOpened = new ArrayList<>(opened);
+            AndroidUtilities.runOnUIThread(() -> {
+                ArrayList<MessageObject> drawable = new ArrayList<>(justOpened.size());
+                for (int i = 0; i < justOpened.size(); i++) {
+                    drawable.add(new MessageObject(currentAccount, justOpened.get(i), true, true));
+                }
+                FileLog.d("mls: handing " + drawable.size() + " opened messages to "
+                        + dialogId + " to be drawn");
+                getNotificationCenter().postNotificationName(
+                        NotificationCenter.didReceiveNewMessages, dialogId, drawable, false, 0);
+            });
+
             // And the copy the chat list is holding in memory, which is a third
             // one and the one a person actually looks at. Storage alone leaves
             // the row saying mls1:... until something else happens to rebuild
@@ -18836,6 +18853,17 @@ public class MessagesController extends BaseController implements NotificationCe
                         MlsRuntime.getInstance(currentAccount)
                                 .memberRemoved(-message.peer_id.chat_id, message.action.user_id);
                     }
+                }
+                // Somebody joined, and if it was us there is an invitation
+                // waiting on the server this second. Nothing else goes and
+                // fetches it promptly: a phone sat three minutes in a chat it
+                // had just been added to, with the welcome there the whole time,
+                // until an unrelated four-minute check happened to run (#110).
+                //
+                // The same message every member gets, like the removal above.
+                if (message.action instanceof TLRPC.TL_messageActionChatAddUser
+                        && message.peer_id != null && message.peer_id.chat_id != 0) {
+                    MlsRuntime.getInstance(currentAccount).invited();
                 }
 
                 ImageLoader.saveMessageThumbs(message);

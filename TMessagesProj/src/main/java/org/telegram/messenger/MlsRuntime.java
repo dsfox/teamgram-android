@@ -1805,7 +1805,52 @@ public class MlsRuntime {
      * saw the locked message knows which chat it was in; nothing else does
      * until one of them opens (#40).
      */
+    /**
+     * Somebody joined a chat, so an invitation may be waiting this second.
+     *
+     * Asked for straight away and without the interval that guards catchUp:
+     * this is not a guess prompted by something that would not open, it is the
+     * one moment when a welcome is known to have just been posted. A phone that
+     * waited for a guess to come round again sat three minutes in a chat it had
+     * been added to, showing nothing (#110).
+     */
+    public void invited() {
+        askForInvitations(1);
+    }
+
+    /**
+     * How long to leave between asking again, and how many times.
+     *
+     * The invitation is not there when the service message arrives. Joining a
+     * chat and joining its conversation are two different things done by two
+     * different machines: the person who added you has still to claim your key
+     * packages, build the commit, hear from the delivery service that it was
+     * taken, and only then post the welcome. Asking once, at the moment the
+     * message lands, is asking before it exists - which is exactly what
+     * happened, and left a phone sitting three minutes in an empty chat while
+     * the answer had been waiting for two minutes and fifty seconds of it.
+     *
+     * So it asks again, a few times, further apart each time. The cost is a
+     * handful of small requests per membership change; the cost of not doing it
+     * is a person who joins a group and sees nothing until something unrelated
+     * happens to wake the client.
+     */
+    private static final long[] ASK_AGAIN_AFTER = {3_000L, 8_000L, 20_000L, 45_000L};
+
+    private void askForInvitations(int attempt) {
+        FileLog.d("mls: asking for invitations after somebody joined (attempt "
+                + attempt + ")");
+        collectWelcomes(joined -> collectCommits(applied -> {
+            if (joined || applied || attempt > ASK_AGAIN_AFTER.length) {
+                return;
+            }
+            AndroidUtilities.runOnUIThread(
+                    () -> askForInvitations(attempt + 1), ASK_AGAIN_AFTER[attempt - 1]);
+        }));
+    }
+
     public void catchUp(long peerId) {
+        FileLog.d("mls: catching " + peerId + " up on what it could not open");
         // Once in a while per chat, and this is not tidiness. Reading again is
         // what asks the server for the history, and some of that history can
         // never be opened - a device that was out of the group for a while
