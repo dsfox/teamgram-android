@@ -131,6 +131,41 @@ public class MlsRuntime {
         FileLog.d("mls: conversation " + shortId(groupId) + " belongs to " + peerId);
     }
 
+    /**
+     * Records which chat a group belongs to, the first time a message says so.
+     *
+     * Quiet when it already agrees, and it replaces rather than refuses when it
+     * does not: a chat really can move to another group - the other side
+     * rebuilds, starts a new one, and from then on that is where the chat is.
+     */
+    private void attach(TLRPC.Message message, String ciphertext) {
+        long dialogId = MessageObject.getDialogId(message);
+        if (dialogId == 0) {
+            return;
+        }
+        byte[] groupId;
+        try {
+            // The group id lives in the message, ahead of the ciphertext, and
+            // the message is base64 on the wire - so it has to be decoded
+            // before the id can be read out of it.
+            groupId = MlsCore.messageGroupId(
+                    Base64.decode(ciphertext.substring(CIPHERTEXT_PREFIX.length()), Base64.NO_WRAP));
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        if (groupId == null) {
+            return;
+        }
+        synchronized (this) {
+            loadConversations();
+            byte[] known = groupIdByPeer.get(dialogId);
+            if (known != null && java.util.Arrays.equals(known, groupId)) {
+                return;
+            }
+        }
+        remember(dialogId, groupId);
+    }
+
     /** Short enough to read in a log and long enough to tell two apart. Every
      *  question worth asking about encryption is which conversation something
      *  happened in, and none of it is in the log without this. */
@@ -417,6 +452,17 @@ public class MlsRuntime {
             if (before == null) {
                 rememberOpening(message, opened.plaintext);
             }
+            // Which conversation this group belongs to, learnt from a message
+            // rather than from the welcome.
+            //
+            // A welcome says who sent it and nothing else, which is enough for
+            // a conversation between two and wrong for a group: the joiner
+            // recorded the group against the person who invited them, so their
+            // own first message into the chat found no conversation and started
+            // a second one for the same chat. Every message carries its group id
+            // in the clear, so the first one that opens says which chat it is -
+            // and that is the only place both facts are known at once (#40).
+            attach(message, carried);
             message.message = opened.text;
             // A forward carries who wrote it first inside the ciphertext, since
             // the server copies by id and cannot copy something it cannot read.
@@ -586,11 +632,47 @@ public class MlsRuntime {
      * read it back, and the notes would go in unreadable.
      */
     private boolean worthEncrypting(long peerId) {
-        if (peerId <= 0 || peerId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+        if (peerId == 0 || peerId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+            return false;
+        }
+        // A group is an MLS group of n, which is what MLS was built for - the
+        // protocol does not care whether a leaf belongs to a second person or
+        // to a second phone of the first (#40).
+        //
+        // A channel is not: broadcasting is a different thing and none of it is
+        // built (#16). A folder id is not a conversation at all.
+        if (peerId < 0 && !DialogObject.isChatDialog(peerId)) {
             return false;
         }
         Long asked = withoutDevices.get(peerId);
         return asked == null || System.currentTimeMillis() - asked > 600_000L;
+    }
+
+    /**
+     * Everybody who has to be able to read what is written here.
+     *
+     * One person for a conversation between two; every member but this account
+     * for a group. Returns null when the membership is not known yet - the
+     * caller then sends in the clear rather than encrypting to a list it is
+     * guessing at, which would leave somebody out of their own conversation.
+     */
+    private List<Long> membersOf(long peerId) {
+        if (peerId > 0) {
+            return java.util.Collections.singletonList(peerId);
+        }
+        TLRPC.ChatFull full = MessagesController.getInstance(currentAccount).getChatFull(-peerId);
+        if (full == null || full.participants == null || full.participants.participants.isEmpty()) {
+            return null;
+        }
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        java.util.ArrayList<Long> members = new java.util.ArrayList<>();
+        for (int i = 0; i < full.participants.participants.size(); i++) {
+            long id = full.participants.participants.get(i).user_id;
+            if (id != self && id > 0) {
+                members.add(id);
+            }
+        }
+        return members.isEmpty() ? null : members;
     }
 
     /**
@@ -860,15 +942,46 @@ public class MlsRuntime {
             return;
         }
 
+        List<Long> members = membersOf(peerId);
+        if (members == null) {
+            // The membership is not known here yet. Sending in the clear is
+            // right: a group encrypted to a guessed list leaves somebody out of
+            // their own conversation, and with unreadable messages hidden they
+            // would see an empty chat and never learn why.
+            giveUp(peerId, "no membership for " + peerId);
+            return;
+        }
+        claimEveryone(peerId, members);
+    }
+
+    /**
+     * Collects the key packages of every member, then builds the conversation.
+     *
+     * All of them or none: a member whose devices we cannot reach is a member
+     * who would sit in a chat where every message is hidden - which is worse
+     * than a chat that says it is not encrypted, because nothing on screen says
+     * why. So one empty answer sends the whole group in the clear.
+     *
+     * One at a time rather than in parallel. A group is a handful of people,
+     * this happens once per conversation, and a sequence is a thing that can be
+     * read in a log when it goes wrong.
+     */
+    private void claimEveryone(long peerId, List<Long> members) {
+        claimNext(peerId, members, 0, new ArrayList<>());
+    }
+
+    private void claimNext(long peerId, List<Long> members, int at, ArrayList<byte[]> collected) {
+        if (at >= members.size()) {
+            final ArrayList<byte[]> packages = collected;
+            Utilities.globalQueue.postRunnable(() -> begin(peerId, packages, members));
+            return;
+        }
+        long member = members.get(at);
         TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
-        request.user_id = peerId;
+        request.user_id = member;
         ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
             if (error != null || !(response instanceof TLRPCMls.TL_mls_keyPackages)) {
-                synchronized (MlsRuntime.this) {
-                    starting.remove(peerId);
-                }
-                settle(peerId);
-                FileLog.e("mls: no key packages for " + peerId
+                giveUp(peerId, "no key packages for " + member
                         + (error != null ? ": " + error.text : ""));
                 return;
             }
@@ -878,14 +991,27 @@ public class MlsRuntime {
                 // a device that has not published. Remembered so the next
                 // message does not pay for the same round trip.
                 synchronized (MlsRuntime.this) {
-                    starting.remove(peerId);
                     withoutDevices.put(peerId, System.currentTimeMillis());
                 }
-                settle(peerId);
+                giveUp(peerId, members.size() > 1
+                        ? "member " + member + " has no devices, so the group goes in the clear"
+                        : null);
                 return;
             }
-            Utilities.globalQueue.postRunnable(() -> begin(peerId, claimed.packages));
+            collected.addAll(claimed.packages);
+            claimNext(peerId, members, at + 1, collected);
         });
+    }
+
+    /** Ends the building of a conversation that will not happen, once. */
+    private void giveUp(long peerId, String why) {
+        synchronized (MlsRuntime.this) {
+            starting.remove(peerId);
+        }
+        settle(peerId);
+        if (why != null) {
+            FileLog.e("mls: " + why);
+        }
     }
 
     private static void fire(Runnable then) {
@@ -914,7 +1040,7 @@ public class MlsRuntime {
         }
     }
 
-    private void begin(long peerId, List<byte[]> keyPackages) {
+    private void begin(long peerId, List<byte[]> keyPackages, List<Long> members) {
         try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
             MlsCore.Group group = MlsCore.Group.create(identity);
             try {
@@ -927,26 +1053,10 @@ public class MlsRuntime {
                 MlsKeyPackages.getInstance(currentAccount).save(identity);
                 remember(peerId, groupId);
 
-                TLRPCMls.TL_mls_sendWelcome send = new TLRPCMls.TL_mls_sendWelcome();
-                send.user_id = peerId;
-                send.welcome = invitation.welcome;
-                ConnectionsManager.getInstance(currentAccount).sendRequest(send, (response, error) -> {
-                    synchronized (MlsRuntime.this) {
-                        starting.remove(peerId);
-                    }
-                    // After the welcome rather than after the group was made:
-                    // until they have been invited, a message encrypted into it
-                    // is one they cannot open.
-                    settle(peerId);
-                    if (error != null) {
-                        // The conversation exists here and they were never
-                        // invited. Sending in the clear is right: a message they
-                        // cannot read is worse than one the server can.
-                        FileLog.e("mls: the welcome for " + peerId + " was not delivered");
-                        return;
-                    }
-                    FileLog.d("mls: started conversation " + shortId(groupId) + " with " + peerId);
-                });
+                // One welcome, every member. add_members made a single one that
+                // serves all of them, and each has to be handed it separately
+                // because the mailbox is addressed to a person.
+                inviteEveryone(peerId, groupId, invitation.welcome, members, 0);
             } finally {
                 group.close();
             }
@@ -960,6 +1070,40 @@ public class MlsRuntime {
     }
 
     // ----------------------------------------------------------------------
+    /**
+     * Hands the welcome to every member, then lets the waiting sends go.
+     *
+     * Sequential, and the sends wait for the last of them: a message encrypted
+     * before somebody has been invited is one they can never open, and with
+     * unreadable messages hidden they would not even see that something was
+     * said.
+     */
+    private void inviteEveryone(long peerId, byte[] groupId, byte[] welcome,
+                                List<Long> members, int at) {
+        if (at >= members.size()) {
+            synchronized (MlsRuntime.this) {
+                starting.remove(peerId);
+            }
+            settle(peerId);
+            FileLog.d("mls: started conversation " + shortId(groupId) + " with "
+                    + members.size() + " member(s) of " + peerId);
+            return;
+        }
+        long member = members.get(at);
+        TLRPCMls.TL_mls_sendWelcome send = new TLRPCMls.TL_mls_sendWelcome();
+        send.user_id = member;
+        send.welcome = welcome;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(send, (response, error) -> {
+            if (error != null) {
+                // The conversation exists here and somebody was never invited.
+                // Sending in the clear from here on is right: a message they
+                // cannot read is worse than one the server can.
+                FileLog.e("mls: the welcome for " + member + " was not delivered");
+            }
+            inviteEveryone(peerId, groupId, welcome, members, at + 1);
+        });
+    }
+
     // The welcomes that let this device in
     // ----------------------------------------------------------------------
 
