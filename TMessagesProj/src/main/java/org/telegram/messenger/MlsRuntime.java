@@ -921,17 +921,12 @@ public class MlsRuntime {
         synchronized (this) {
             if (groupIdByPeer.containsKey(peerId)) {
                 fire(then);
-                // There is a conversation, and this is the moment to notice
-                // that somebody has joined the chat since it was built - the
-                // safety net behind the addition itself, for the times that
-                // failed or was never seen. Not on every message: it opens the
-                // group to compare it, so it is worth doing rarely.
-                Long last = reconciledAt.get(peerId);
-                if (DialogObject.isChatDialog(peerId)
-                        && (last == null || System.currentTimeMillis() - last > RECONCILE_EVERY)) {
-                    reconciledAt.put(peerId, System.currentTimeMillis());
-                    AndroidUtilities.runOnUIThread(() -> reconcile(peerId));
-                }
+                // Before a message goes out is the moment worth checking that
+                // the conversation still holds the people the chat does - it is
+                // the one moment where being wrong is about to matter. Cheap
+                // here: reconcile keeps its own interval and returns at once
+                // when it has just looked.
+                AndroidUtilities.runOnUIThread(() -> reconcile(peerId));
                 return;
             }
             if (then != null) {
@@ -1163,10 +1158,6 @@ public class MlsRuntime {
     /** When each conversation was last compared against its chat. */
     private final Map<Long, Long> reconciledAt = new HashMap<>();
 
-    /** How often that comparison is worth making. It is a safety net, not the
-     *  way membership normally travels - adding somebody says so directly. */
-    private static final long RECONCILE_EVERY = 60_000L;
-
     /** How a device of this person is named: the user id, a slash, and which
      *  device. So the person is the prefix, and removing them means removing
      *  every name that starts with it. */
@@ -1272,36 +1263,39 @@ public class MlsRuntime {
         }
     }
 
-    /** Taking somebody out, and with them every phone they hold. */
+    /** Taking people out, and with each of them every phone they hold. */
     private final class Removing extends Change {
-        private final long userId;
+        private final List<Long> leaving;
 
-        Removing(long peerId, long userId) {
+        Removing(long peerId, List<Long> leaving) {
             super(peerId);
-            this.userId = userId;
+            this.leaving = leaving;
         }
 
         @Override
         byte[] build(MlsCore.Identity identity, MlsCore.Group group) throws MlsCore.MlsException {
+            List<byte[]> prefixes = new ArrayList<>();
+            for (Long userId : leaving) {
+                prefixes.add(nameOf(userId));
+            }
             // Null when nobody matched, and that is not a failure: two people
             // removing the same person at once is ordinary, and the second is
             // looking at a group that already looks the way they wanted.
-            return group.removeMembers(identity,
-                    java.util.Collections.singletonList(nameOf(userId)));
+            return group.removeMembers(identity, prefixes);
         }
 
         @Override
         List<Long> audience(List<Long> members) {
-            // Not the person being removed. They cannot apply it - being unable
+            // Not the people being removed. They cannot apply it - being unable
             // to is the whole point - and it would sit in their box for ever.
             List<Long> rest = new ArrayList<>(members);
-            rest.remove(userId);
+            rest.removeAll(leaving);
             return rest;
         }
 
         @Override
         String describe() {
-            return "removing " + userId + " from " + peerId;
+            return "removing " + leaving + " from " + peerId;
         }
     }
 
@@ -1468,9 +1462,15 @@ public class MlsRuntime {
         letIn(peerId, java.util.Collections.singletonList(userId), 1);
     }
 
-    /** Somebody was taken out of a chat, by this device. */
+    /** Somebody was taken out of a chat. */
     public void memberRemoved(long peerId, long userId) {
-        removeMember(peerId, userId, 1);
+        removeMembers(peerId, java.util.Collections.singletonList(userId), 1);
+    }
+
+    private void removeMembers(long peerId, List<Long> leaving, int attempt) {
+        for (Long userId : leaving) {
+            removeMember(peerId, userId, attempt);
+        }
     }
 
     private void removeMember(long peerId, long userId, int attempt) {
@@ -1497,32 +1497,148 @@ public class MlsRuntime {
             return;
         }
         Utilities.globalQueue.postRunnable(() -> commitChange(
-                new Removing(peerId, userId),
+                new Removing(peerId, java.util.Collections.singletonList(userId)),
                 () -> removeMember(peerId, userId, attempt + 1)));
     }
 
     /**
-     * Compares who is in the conversation with who is in the chat, and lets in
-     * anybody missing.
+     * Makes the conversation match the chat: lets in whoever is missing, puts
+     * out whoever should not be there any more.
      *
-     * Additive on purpose. Adding somebody who is already there is caught here
-     * and costs nothing; removing on this evidence would be destructive and the
-     * evidence is not good enough - the local idea of a chat's membership can
-     * be out of date, and somebody would be cut out of a conversation nobody
-     * asked to remove them from. Removal stays where the intention is plain.
+     * This exists because hanging the two changes on the places where they are
+     * made does not work. A removal arrives at a device by more than one route -
+     * the reply to whoever pressed the button, a service message, the
+     * difference after being away - and hooking one of them is how somebody goes
+     * on reading a group they were thrown out of. Membership is a fact about the
+     * chat, not an event, so it is checked as a fact.
      *
-     * This is also what makes an addition that failed - a dropped connection,
-     * a newcomer whose client had not published anything yet - recover by
-     * itself rather than leaving somebody in a chat where nothing appears.
+     * The two halves are not symmetrical, and deliberately so. A wrong addition
+     * costs a round trip. A missed removal is somebody reading a conversation
+     * they are not in, for ever, with nothing on any screen to say so. So when
+     * the two disagree and it is not clear which is stale, this takes the side
+     * that fails safely: it removes.
+     *
+     * It also repairs an addition that failed - a dropped connection, a newcomer
+     * whose client had not published a key package yet - instead of leaving
+     * somebody sitting in a chat where nothing ever appears.
      */
-    public void reconcile(long peerId) {
-        reconcile(peerId, 1);
+    /**
+     * @param listIsFromTheServer whether the membership being compared against
+     *     was just handed over by the server, rather than remembered here.
+     *     Only a fresh list may take somebody out: a remembered one can be
+     *     missing people who joined while this device was away, and acting on
+     *     it cuts them out of a conversation nobody asked to remove them from.
+     *     It happened on the first run of this - a stale list dropped a member
+     *     and the next comparison had to invite them back, which costs them
+     *     every message in between.
+     *
+     *     Letting people in needs no such care, so it happens either way.
+     */
+    public void reconcile(long peerId, boolean listIsFromTheServer) {
+        reconcile(peerId, listIsFromTheServer, 1);
     }
 
-    private void reconcile(long peerId, int attempt) {
+    /** With a list of unknown provenance, so additions only. */
+    public void reconcile(long peerId) {
+        reconcile(peerId, false, 1);
+    }
+
+    /** How long to leave between two comparisons of one conversation. Short,
+     *  because a removal that waits is a removal that has not happened; long
+     *  enough that a burst of chat-info loads does not open the group each time. */
+    private static final long RECONCILE_NOT_BEFORE = 5_000L;
+
+    private void reconcile(long peerId, boolean listIsFromTheServer, int attempt) {
+        if (!DialogObject.isChatDialog(peerId) || groupOf(peerId) == null) {
+            return;
+        }
+        synchronized (this) {
+            Long last = reconciledAt.get(peerId);
+            if (last != null && System.currentTimeMillis() - last < RECONCILE_NOT_BEFORE) {
+                return;
+            }
+            reconciledAt.put(peerId, System.currentTimeMillis());
+        }
         List<Long> members = membersOf(peerId);
-        if (members != null) {
-            letIn(peerId, members, attempt);
+        if (members == null) {
+            // Not known here yet. Doing nothing is right: acting on a list this
+            // device has never seen would be acting on nothing at all.
+            return;
+        }
+        if (listIsFromTheServer) {
+            putOutTheRest(peerId, members, attempt);
+        }
+        letIn(peerId, members, attempt);
+    }
+
+    /**
+     * Removes from the conversation everybody the chat no longer holds.
+     *
+     * This account is never among them, whatever the list says. A person's own
+     * membership is not something they work out by comparison - they are in the
+     * chat or the chat is gone - and a device that removed itself would be left
+     * holding a group it can no longer read or repair.
+     */
+    private void putOutTheRest(long peerId, List<Long> members, int attempt) {
+        byte[] groupId = groupOf(peerId);
+        if (groupId == null) {
+            return;
+        }
+        java.util.Set<Long> belong = new java.util.HashSet<>(members);
+        belong.add(UserConfig.getInstance(currentAccount).getClientUserId());
+
+        List<Long> extra = whoIsExtra(groupId, belong);
+        if (extra == null || extra.isEmpty()) {
+            return;
+        }
+        FileLog.d("mls: " + extra + " are in " + shortId(groupId)
+                + " and no longer in " + peerId);
+        removeMembers(peerId, extra, attempt);
+    }
+
+    /**
+     * Who is in the conversation and should not be.
+     *
+     * A leaf is named <user>/<device>, so the person is what comes before the
+     * slash - and one person with two phones is two leaves that answer to the
+     * same id. Null when the group cannot be opened, which is not the same as
+     * nobody being extra.
+     */
+    private List<Long> whoIsExtra(byte[] groupId, java.util.Set<Long> belong) {
+        try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+            MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+            if (group == null) {
+                return null;
+            }
+            try {
+                java.util.LinkedHashSet<Long> extra = new java.util.LinkedHashSet<>();
+                for (byte[] name : group.memberNames()) {
+                    long userId = userIdIn(name);
+                    if (userId != 0 && !belong.contains(userId)) {
+                        extra.add(userId);
+                    }
+                }
+                return new ArrayList<>(extra);
+            } finally {
+                group.close();
+            }
+        } catch (MlsCore.MlsException e) {
+            FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** The person a leaf belongs to, or 0 when the name is not one of ours. */
+    private static long userIdIn(byte[] name) {
+        String text = new String(name);
+        int slash = text.indexOf('/');
+        if (slash <= 0) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(text.substring(0, slash));
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
@@ -1664,6 +1780,50 @@ public class MlsRuntime {
     public void collectCommits() {
         collectCommits(null);
     }
+
+    /**
+     * Catches this conversation up on everything waiting for it, then reads
+     * again what could not be opened.
+     *
+     * Called from wherever a message would not open. The invitation or the
+     * membership change that opens it travels by a different route from the
+     * message and regularly arrives second, so the message is put aside behind
+     * a lock and this is what comes back for it.
+     *
+     * The chat is named by the caller rather than worked out from the group,
+     * and that is not a detail. An invitation says who sent it and nothing
+     * else, so a device that has just joined has the conversation written down
+     * against the person who invited it - reading again by that name reloads a
+     * private chat while the group it was really about stays locked. Whoever
+     * saw the locked message knows which chat it was in; nothing else does
+     * until one of them opens (#40).
+     */
+    public void catchUp(long peerId) {
+        // Once in a while per chat, and this is not tidiness. Reading again is
+        // what asks the server for the history, and some of that history can
+        // never be opened - a device that was out of the group for a while
+        // holds ciphertexts from epochs it will never reach. So every reading
+        // finds something it cannot open, which asks to catch up, which reads
+        // again: a phone talking to the server several times a second and a
+        // chat that never settles. It ran exactly that way before this line.
+        synchronized (this) {
+            Long last = caughtUpAt.get(peerId);
+            if (last != null && System.currentTimeMillis() - last < CATCH_UP_NOT_BEFORE) {
+                return;
+            }
+            caughtUpAt.put(peerId, System.currentTimeMillis());
+        }
+        collectWelcomes();
+        collectCommits(() -> reopen(peerId));
+    }
+
+    /** When this chat last asked for everything waiting for it. */
+    private final Map<Long, Long> caughtUpAt = new HashMap<>();
+
+    /** How long before it is worth asking again. Long enough that a history
+     *  full of what cannot be opened does not turn into a loop, short enough
+     *  that a welcome arriving late still surfaces the messages it opens. */
+    private static final long CATCH_UP_NOT_BEFORE = 15_000L;
 
     /**
      * Collects the membership changes waiting on the server and applies each.

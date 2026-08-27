@@ -7744,8 +7744,10 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (old != null) {
                         res.full_chat.inviterId = old.inviterId;
                     }
-                    fullChats.put(chatId, res.full_chat);
-                    getTranslateController().updateDialogFull(-chatId);
+                    // The third copy of the same two lines, and the one that
+                    // matters most: this is the participant list straight from
+                    // the server, which is what a membership change ends with.
+                    putChatFull(res.full_chat);
 
                     applyDialogNotificationsSettings(-chatId, 0, res.full_chat.notify_settings);
                     for (int a = 0; a < res.full_chat.bot_info.size(); a++) {
@@ -10465,8 +10467,25 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void putChatFull(TLRPC.ChatFull chatFull) {
+        putChatFull(chatFull, false);
+    }
+
+    /**
+     * @param fromCache whether this list was remembered here rather than just
+     *     handed over by the server. It decides whether the encrypted
+     *     conversation may take somebody out on the strength of it: a
+     *     remembered list can be missing people who joined while this device
+     *     was away (#40).
+     */
+    public void putChatFull(TLRPC.ChatFull chatFull, boolean fromCache) {
         fullChats.put(chatFull.id, chatFull);
         getTranslateController().updateDialogFull(-chatFull.id);
+        // Whoever is in the chat should be in its encrypted conversation, and
+        // this is where that becomes knowable: a participant list has just
+        // arrived. Hanging it on the places membership is *changed* does not
+        // work - a removal reaches a device by several routes, and hooking one
+        // of them leaves somebody reading a group they were thrown out of.
+        MlsRuntime.getInstance(currentAccount).reconcile(-chatFull.id, !fromCache);
     }
 
     public void processChatInfo(long chatId, TLRPC.ChatFull info, ArrayList<TLRPC.User> usersArr, ArrayList<TLRPC.Chat> chatsArr, boolean fromCache, boolean force, boolean byChannelUsers, ArrayList<Integer> pinnedMessages, HashMap<Integer, MessageObject> pinnedMessagesMap, int totalPinnedCount, boolean pinnedEndReached) {
@@ -10479,8 +10498,10 @@ public class MessagesController extends BaseController implements NotificationCe
             }
             if (info != null) {
                 if (fullChats.get(chatId) == null) {
-                    fullChats.put(chatId, info);
-                    getTranslateController().updateDialogFull(-chatId);
+                    // The same three lines putChatFull is, and now it is that
+                    // one call: two copies of where a participant list lands is
+                    // two places anything watching for it has to be hung.
+                    putChatFull(info, fromCache);
                 }
                 putUsers(usersArr, fromCache);
                 putChats(chatsArr, fromCache);
@@ -12032,10 +12053,13 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         }
         if (anyLocked) {
-            // Something here cannot be opened yet, and the invitation that would
-            // open it may be waiting on the server.
-            mls.collectWelcomes();
-            mls.collectCommits();
+            // Something here cannot be opened yet, and what would open it - an
+            // invitation, or a membership change this device has not applied -
+            // may be waiting on the server. Named by this chat, because a
+            // conversation just joined is written down against whoever sent the
+            // invitation, and reading again by that name reloads the wrong
+            // dialog while this one stays locked (#40).
+            mls.catchUp(dialogId);
         }
 
         long startProcessTime = SystemClock.elapsedRealtime();
@@ -15965,8 +15989,13 @@ public class MessagesController extends BaseController implements NotificationCe
                 if (!hasJoinMessage && inputUser instanceof TLRPC.TL_inputUserSelf) {
                     generateJoinMessage(chatId, true);
                 }
-                AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
             }
+            // Asked for every kind of chat, not only channels. The list the
+            // server holds is the truth about who is in it, and it is what
+            // tells the encrypted conversation who to let in and who to put
+            // out - guessing it locally is how somebody goes on reading a
+            // group they were thrown out of (#40).
+            AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
             if (isChannel && inputUser instanceof TLRPC.TL_inputUserSelf) {
                 getMessagesStorage().updateDialogsWithDeletedMessages(-chatId, chatId, new ArrayList<>(), null);
             }
@@ -16064,9 +16093,12 @@ public class MessagesController extends BaseController implements NotificationCe
             }
             TLRPC.Updates updates = (TLRPC.Updates) response;
             processUpdates(updates, false);
-            if (isChannel && !self) {
-                AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
-            }
+            // Asked for every kind of chat, not only channels. The list the
+            // server holds is the truth about who is in it, and it is what
+            // tells the encrypted conversation who to let in and who to put
+            // out - guessing it locally is how somebody goes on reading a
+            // group they were thrown out of (#40).
+            AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
             if (whenDone != null) {
                 AndroidUtilities.runOnUIThread(whenDone);
             }
@@ -16150,9 +16182,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 TLRPC.Updates updates = (TLRPC.Updates) response;
                 processUpdates(updates, false);
             }
-            if (isChannel && !UserObject.isUserSelf(user)) {
-                AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
-            }
+            // Asked for every kind of chat, not only channels. The list the
+            // server holds is the truth about who is in it, and it is what
+            // tells the encrypted conversation who to let in and who to put
+            // out - guessing it locally is how somebody goes on reading a
+            // group they were thrown out of (#40).
+            AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
         }, ConnectionsManager.RequestFlagInvokeAfter);
     }
 
@@ -18693,8 +18728,8 @@ public class MessagesController extends BaseController implements NotificationCe
                 // lets this device into the conversation has arrived.
                 if (MlsRuntime.isCiphertext(message.message)) {
                     if (!MlsRuntime.getInstance(currentAccount).open(message)) {
-                        MlsRuntime.getInstance(currentAccount).collectWelcomes();
-                        MlsRuntime.getInstance(currentAccount).collectCommits();
+                        MlsRuntime.getInstance(currentAccount)
+                                .catchUp(MessageObject.getDialogId(message));
                     }
                 }
                 if (newMessageCallback != null && newMessageCallback.onMessageReceived(message)) {
