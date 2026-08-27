@@ -18872,9 +18872,22 @@ public class MessagesController extends BaseController implements NotificationCe
                 // until an unrelated four-minute check happened to run (#110).
                 //
                 // The same message every member gets, like the removal above.
-                if (message.action instanceof TLRPC.TL_messageActionChatAddUser
+                //
+                // All three ways in, not just the one somebody presses. A person
+                // who follows a link or is let in from a request joins without
+                // anybody choosing them, so no device is running the addition -
+                // they are let into the conversation by whoever next compares it
+                // with the chat, and until they fetch that welcome they sit in a
+                // group where nothing appears (#40, step 4.3).
+                if ((message.action instanceof TLRPC.TL_messageActionChatAddUser
+                        || message.action instanceof TLRPC.TL_messageActionChatJoinedByLink
+                        || message.action instanceof TLRPC.TL_messageActionChatJoinedByRequest)
                         && message.peer_id != null && message.peer_id.chat_id != 0) {
                     MlsRuntime.getInstance(currentAccount).invited();
+                    // And the group has somebody in it that the conversation
+                    // does not. Nobody pressed a button, so nothing else will
+                    // notice until the next message goes out.
+                    MlsRuntime.getInstance(currentAccount).reconcile(-message.peer_id.chat_id);
                 }
 
                 ImageLoader.saveMessageThumbs(message);
