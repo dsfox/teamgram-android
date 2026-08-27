@@ -576,8 +576,12 @@ public class MlsRuntime {
     // Writing
     // ----------------------------------------------------------------------
 
-    /** Peers this device asked about and found no device for, and when. Asked
-     *  again after a while rather than before every message. */
+    /** People this device asked about and found no device for, and when. Asked
+     *  again after a while rather than before every message.
+     *
+     *  Keyed by whoever was asked about, which for a conversation between two
+     *  is the peer and for a member of a group is that person. The two cannot
+     *  collide: a group's peer id is negative. */
     private final Map<Long, Long> withoutDevices = new HashMap<>();
 
     private final java.util.Set<Long> starting = new java.util.HashSet<>();
@@ -1457,7 +1461,11 @@ public class MlsRuntime {
             // welcome is on its way from whoever did it.
             return;
         }
-        reconcile(peerId, 1);
+        // Named rather than worked out from the chat. This runs the moment the
+        // server confirms the addition, and the local idea of who is in the chat
+        // has not caught up yet - so a comparison here would find nobody missing
+        // and the person would wait for the next sweep to be let in.
+        letIn(peerId, java.util.Collections.singletonList(userId), 1);
     }
 
     /** Somebody was taken out of a chat, by this device. */
@@ -1501,38 +1509,52 @@ public class MlsRuntime {
     }
 
     private void reconcile(long peerId, int attempt) {
+        List<Long> members = membersOf(peerId);
+        if (members != null) {
+            letIn(peerId, members, attempt);
+        }
+    }
+
+    /**
+     * Lets into the conversation whichever of these people are not in it yet.
+     *
+     * The filtering is here rather than in the callers because it is what makes
+     * a second attempt safe: whether the list came from one addition or from
+     * comparing the whole chat, anybody already in the group is dropped, so
+     * nobody is ever added twice.
+     */
+    private void letIn(long peerId, List<Long> candidates, int attempt) {
         if (!DialogObject.isChatDialog(peerId)) {
             return;
         }
         byte[] groupId = groupOf(peerId);
         if (groupId == null) {
+            // Not an encrypted chat, and joining one does not make it so: the
+            // rule for a group is all of them or none, and that was settled
+            // when the conversation began.
             return;
         }
         if (attempt > COMMIT_ATTEMPTS) {
-            FileLog.e("mls: gave up adding to " + peerId + " after "
-                    + COMMIT_ATTEMPTS + " attempts");
-            return;
-        }
-        List<Long> members = membersOf(peerId);
-        if (members == null) {
+            FileLog.e("mls: gave up letting " + candidates.size() + " into " + peerId
+                    + " after " + COMMIT_ATTEMPTS + " attempts");
             return;
         }
         if (!beginChanging(peerId)) {
             return;
         }
         Utilities.globalQueue.postRunnable(() -> {
-            List<Long> missing = whoIsMissing(groupId, members);
+            List<Long> missing = whoIsMissing(groupId, candidates);
             if (missing == null || missing.isEmpty()) {
                 doneChanging(peerId);
                 return;
             }
-            FileLog.d("mls: " + peerId + " has " + missing.size()
-                    + " member(s) not in " + shortId(groupId) + " yet");
+            FileLog.d("mls: " + missing.size() + " of " + peerId
+                    + " are not in " + shortId(groupId) + " yet");
             claimFor(peerId, missing, 0, new ArrayList<>(), attempt);
         });
     }
 
-    /** Who is in the chat and not in the conversation. Null when the group
+    /** Which of these people are not in the conversation. Null when the group
      *  cannot be opened, which is not the same as nobody missing. */
     private List<Long> whoIsMissing(byte[] groupId, List<Long> members) {
         try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
@@ -1590,7 +1612,7 @@ public class MlsRuntime {
             final ArrayList<byte[]> packages = collected;
             final List<Long> newcomers = reachable;
             commitChange(new Adding(peerId, newcomers, packages),
-                    () -> reconcile(peerId, attempt + 1));
+                    () -> letIn(peerId, missing, attempt + 1));
             return;
         }
         long member = missing.get(at);
