@@ -169,9 +169,19 @@ public class TLRPCMls {
      * nothing about a conversation starting has to be hidden from a chat list.
      */
     public static class TL_mls_sendWelcome extends TLObject {
-        public static final int constructor = -773834602;
+        public static final int constructor = 2042714623;
 
         public long user_id;
+        /**
+         * Which chat the invitation is for, as a dialog id - negative for a
+         * group.
+         *
+         * Without it a welcome says only who sent it, and the device joining
+         * files the conversation under that person: a group ends up recorded as
+         * the conversation with whoever invited them, and a private message to
+         * that person is then written with the group's keys (#115).
+         */
+        public long peer_id;
         public byte[] welcome;
 
         public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
@@ -181,16 +191,20 @@ public class TLRPCMls {
         public void serializeToStream(OutputSerializedData stream) {
             stream.writeInt32(constructor);
             stream.writeInt64(user_id);
+            stream.writeInt64(peer_id);
             stream.writeByteArray(welcome);
         }
     }
 
-    /** mls.welcome id:long from_id:long welcome:bytes = mls.Welcome; */
+    /** mls.welcome id:long from_id:long peer_id:long welcome:bytes = mls.Welcome; */
     public static class TL_mls_welcome extends TLObject {
-        public static final int constructor = -180214709;
+        public static final int constructor = 215890102;
 
         public long id;
         public long from_id;
+        /** The chat this invitation is for; zero for one written before
+         *  invitations carried it, and then the sender is all there is. */
+        public long peer_id;
         public byte[] welcome;
 
         public static TL_mls_welcome TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
@@ -208,6 +222,7 @@ public class TLRPCMls {
         public void readParams(InputSerializedData stream, boolean exception) {
             id = stream.readInt64(exception);
             from_id = stream.readInt64(exception);
+            peer_id = stream.readInt64(exception);
             welcome = stream.readByteArray(exception);
         }
 

@@ -1120,7 +1120,7 @@ public class MlsRuntime {
      */
     private void inviteEveryone(long peerId, byte[] groupId, byte[] welcome,
                                 List<Long> members, int at) {
-        handWelcomeTo(welcome, members, at, () -> {
+        handWelcomeTo(peerId, welcome, members, at, () -> {
             synchronized (MlsRuntime.this) {
                 starting.remove(peerId);
             }
@@ -1139,7 +1139,7 @@ public class MlsRuntime {
      * once per conversation and a sequence is something that can be read in a
      * log when it goes wrong.
      */
-    private void handWelcomeTo(byte[] welcome, List<Long> members, int at, Runnable then) {
+    private void handWelcomeTo(long peerId, byte[] welcome, List<Long> members, int at, Runnable then) {
         if (at >= members.size()) {
             fire(then);
             return;
@@ -1147,6 +1147,10 @@ public class MlsRuntime {
         long member = members.get(at);
         TLRPCMls.TL_mls_sendWelcome send = new TLRPCMls.TL_mls_sendWelcome();
         send.user_id = member;
+        // Which chat, so that whoever takes this does not have to guess from
+        // who sent it. Guessing filed a group as the conversation with the
+        // person who invited them (#115).
+        send.peer_id = peerId;
         send.welcome = welcome;
         ConnectionsManager.getInstance(currentAccount).sendRequest(send, (response, error) -> {
             if (error != null) {
@@ -1155,7 +1159,7 @@ public class MlsRuntime {
                 // cannot read is worse than one the server can.
                 FileLog.e("mls: the welcome for " + member + " was not delivered");
             }
-            handWelcomeTo(welcome, members, at + 1, then);
+            handWelcomeTo(peerId, welcome, members, at + 1, then);
         });
     }
 
@@ -1279,7 +1283,7 @@ public class MlsRuntime {
             // After the commit, not before. A welcome describes the group as it
             // is once the commit has been applied, so somebody who acts on it
             // first joins a conversation that does not exist yet.
-            handWelcomeTo(welcome, newcomers, 0, then);
+            handWelcomeTo(peerId, welcome, newcomers, 0, then);
         }
 
         @Override
@@ -2316,15 +2320,24 @@ public class MlsRuntime {
                         // is, then the confirmation. Any other order leaves one of
                         // the three behind if the app dies between them.
                         MlsKeyPackages.getInstance(currentAccount).save(identity);
-                        remember(welcome.from_id, groupId);
+                        // Where the invitation says, and only otherwise under
+                        // the person who sent it. That guess is right for a
+                        // chat between two and wrong for a group - it recorded
+                        // the group as the conversation with whoever invited
+                        // them, so a private message to that person went into
+                        // the group, and a commit meant for the group went to
+                        // one member (#115).
+                        long belongsTo = welcome.peer_id != 0 ? welcome.peer_id : welcome.from_id;
+                        remember(belongsTo, groupId);
                         joined.add(welcome.id);
-                        FileLog.d("mls: joined " + shortId(groupId) + " with " + welcome.from_id);
+                        FileLog.d("mls: joined " + shortId(groupId) + " for " + belongsTo
+                                + ", invited by " + welcome.from_id);
                         // What is already stored for this person was unreadable a
                         // moment ago and is not any more. A message and the welcome
                         // that opens it travel by different routes and the message
                         // usually wins, so without this the first thing anybody
                         // ever receives stays a ciphertext.
-                        reopen(welcome.from_id);
+                        reopen(belongsTo);
                     } catch (MlsCore.MlsException e) {
                         // One invitation that cannot be joined must not stop the
                         // others: they are from different people.
