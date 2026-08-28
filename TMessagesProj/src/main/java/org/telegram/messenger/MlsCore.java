@@ -54,6 +54,7 @@ public final class MlsCore {
     private static native int applyCommit(long group, long identity, byte[] commit);
 
     private static native byte[] messageGroupId0(byte[] ciphertext);
+    private static native byte[] keyPackageName0(byte[] keyPackage);
 
     private static native byte[] recoveryPhrase(int words);
 
@@ -96,6 +97,22 @@ public final class MlsCore {
             return null;
         }
         return messageGroupId0(ciphertext);
+    }
+
+    /**
+     * Which device a key package belongs to.
+     *
+     * A phone letting the other phones of its own account into a conversation
+     * asks for this account's key packages and is handed one per device -
+     * including its own, because the server cannot tell which caller is which
+     * leaf. Adding that one back would give this device a second leaf it holds
+     * no keys for, and every message written to it would go to nobody.
+     */
+    public static byte[] keyPackageName(byte[] keyPackage) {
+        if (keyPackage == null || keyPackage.length == 0) {
+            return null;
+        }
+        return keyPackageName0(keyPackage);
     }
 
     /**

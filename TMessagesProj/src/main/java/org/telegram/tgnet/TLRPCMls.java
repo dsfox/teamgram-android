@@ -44,9 +44,9 @@ public class TLRPCMls {
         }
     }
 
-    /** mls.publishResult added:int available:int should_refill:Bool = mls.PublishResult; */
+    /** mls.publishResult added:int available:int should_refill:Bool devices:int = mls.PublishResult; */
     public static class TL_mls_publishResult extends TLObject {
-        public static final int constructor = -1429473241;
+        public static final int constructor = -472421573;
 
         public int added;
         public int available;
@@ -55,6 +55,15 @@ public class TLRPCMls {
          * device is the only one that can make them.
          */
         public boolean should_refill;
+        /**
+         * How many devices of this account have published anything.
+         *
+         * The one thing that tells this phone another phone of the same person
+         * has signed in: comparing a conversation with its chat is about
+         * people, so a second device of somebody already in it is invisible
+         * there (#41).
+         */
+        public int devices;
 
         public static TL_mls_publishResult TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
             if (TL_mls_publishResult.constructor != constructor) {
@@ -72,6 +81,7 @@ public class TLRPCMls {
             added = stream.readInt32(exception);
             available = stream.readInt32(exception);
             should_refill = stream.readBool(exception);
+            devices = stream.readInt32(exception);
         }
 
         public void serializeToStream(OutputSerializedData stream) {
@@ -79,6 +89,7 @@ public class TLRPCMls {
             stream.writeInt32(added);
             stream.writeInt32(available);
             stream.writeBool(should_refill);
+            stream.writeInt32(devices);
         }
     }
 

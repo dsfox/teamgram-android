@@ -203,6 +203,19 @@ Java_org_telegram_messenger_MlsCore_messageGroupId0(JNIEnv *env, jclass class, j
     return take(env, out);
 }
 
+// Which device a key package belongs to. A phone letting its own account's other
+// phones into a conversation is handed one package per device, its own included -
+// the server cannot tell which caller is which leaf - and adding that one back
+// would give this device a second leaf it holds no keys for.
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_keyPackageName0(JNIEnv *env, jclass class, jbyteArray keyPackage) {
+    jsize len = (*env)->GetArrayLength(env, keyPackage);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, keyPackage, NULL);
+    struct MlsBuffer out = mls_key_package_name((const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, keyPackage, bytes, JNI_ABORT);
+    return take(env, out);
+}
+
 // Every device of theirs at once. One welcome comes back and it lets all of
 // them in; added one at a time, only the last welcome survives and which of
 // their phones can join is chance.

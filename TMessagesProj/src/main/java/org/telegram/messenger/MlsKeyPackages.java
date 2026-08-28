@@ -110,6 +110,37 @@ public class MlsKeyPackages {
         return identity;
     }
 
+    /**
+     * How many devices of this account have published anything, as the server
+     * last said.
+     *
+     * The one thing that tells this phone another phone of the same person has
+     * signed in. Comparing a conversation with its chat is about people, so a
+     * second device of somebody already in it is invisible there - it was
+     * exactly this that left a phone signed in beside another one reading
+     * nothing but padlocks (#41).
+     *
+     * Zero means nobody has asked yet, and nothing is concluded from it.
+     */
+    private volatile int devices = 0;
+
+    public int devices() {
+        return devices;
+    }
+
+    private void noteDevices(TLRPCMls.TL_mls_publishResult result) {
+        boolean grew = result.devices > devices;
+        FileLog.d("mls: the server says this account has " + result.devices + " device(s)");
+        devices = result.devices;
+        if (grew) {
+            FileLog.d("mls: this account now has " + result.devices + " device(s)");
+            // At once, rather than at whatever happens next. The count going up
+            // is a phone that has just signed in, and the person holding the
+            // old one is watching the new one show padlocks.
+            MlsRuntime.getInstance(currentAccount).letInMyOtherDevicesEverywhere();
+        }
+    }
+
     public void save(MlsCore.Identity identity) throws MlsCore.MlsException {
         storage().edit()
                 .putString("state", Base64.encodeToString(identity.export(), Base64.NO_WRAP))
@@ -146,6 +177,7 @@ public class MlsKeyPackages {
                 }
                 return;
             }
+            noteDevices((TLRPCMls.TL_mls_publishResult) response);
             int available = ((TLRPCMls.TL_mls_publishResult) response).available;
             if (available >= PACKAGES_PER_REFILL) {
                 synchronized (MlsKeyPackages.this) {
@@ -187,6 +219,7 @@ public class MlsKeyPackages {
                     }
                     if (response instanceof TLRPCMls.TL_mls_publishResult) {
                         TLRPCMls.TL_mls_publishResult result = (TLRPCMls.TL_mls_publishResult) response;
+                        noteDevices(result);
                         FileLog.d("mls: published " + result.added + ", " + result.available + " available");
                     }
                 });

@@ -1617,6 +1617,147 @@ public class MlsRuntime {
             putOutTheRest(peerId, members, attempt);
         }
         letIn(peerId, members, attempt);
+        letInMyOtherDevices(peerId, attempt);
+    }
+
+    /**
+     * Lets the other phones of this account into a conversation this one is
+     * already in.
+     *
+     * The comparison above is about people: a leaf is named `<user>/<device>`
+     * and everything there reads the part before the slash, so a second phone
+     * of somebody already in the group is invisible to it. That is right for
+     * everybody else - their devices are their business, and they were all
+     * added at once when the person was - and wrong for this account, which is
+     * the one whose new phone nobody else is going to notice.
+     *
+     * A phone that signs in publishes key packages, and the server says how
+     * many devices this account has published from. More of those than leaves
+     * of this account in the conversation means a phone that signed in after
+     * the conversation started, and it is let in here.
+     *
+     * Deliberately without asking anybody. The case this is for is a person
+     * adding their own second device while holding the first, and a
+     * confirmation there is ceremony: an account somebody else has taken over
+     * already reads the messages arriving in it (#41).
+     */
+    private void letInMyOtherDevices(long peerId, int attempt) {
+        byte[] groupId = groupOf(peerId);
+        if (groupId == null || attempt > COMMIT_ATTEMPTS) {
+            return;
+        }
+        int devices = MlsKeyPackages.getInstance(currentAccount).devices();
+        if (devices <= 1) {
+            // One device, or nobody has asked the server yet. Either way there
+            // is nothing here to conclude.
+            return;
+        }
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        List<byte[]> mine = myLeaves(groupId, self);
+        if (mine == null || mine.size() >= devices) {
+            return;
+        }
+        if (!beginChanging(peerId)) {
+            return;
+        }
+        FileLog.d("mls: this account has " + devices + " device(s) and " + mine.size()
+                + " of them are in " + shortId(groupId));
+
+        TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
+        request.user_id = self;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+            if (error != null || !(response instanceof TLRPCMls.TL_mls_keyPackages)) {
+                FileLog.e("mls: cannot reach this account's own devices"
+                        + (error != null ? ": " + error.text : ""));
+                doneChanging(peerId);
+                return;
+            }
+            ArrayList<byte[]> wanted = new ArrayList<>();
+            for (byte[] keyPackage : ((TLRPCMls.TL_mls_keyPackages) response).packages) {
+                byte[] name = MlsCore.keyPackageName(keyPackage);
+                // The server hands out one package per device, this one's
+                // among them - it cannot tell which caller is which leaf. Added
+                // back, it would give this device a second leaf it holds no keys
+                // for, and every message written to that leaf would go nowhere.
+                if (name != null && !holds(mine, name)) {
+                    wanted.add(keyPackage);
+                }
+            }
+            if (wanted.isEmpty()) {
+                doneChanging(peerId);
+                return;
+            }
+            FileLog.d("mls: letting " + wanted.size() + " more device(s) of this account into "
+                    + shortId(groupId));
+            // The welcome goes to this account, which means every device of it -
+            // the new one among them. The one that comes back here cannot be
+            // opened and says so, which is ordinary and already handled.
+            commitChange(new Adding(peerId, java.util.Collections.singletonList(self), wanted),
+                    () -> letInMyOtherDevices(peerId, attempt + 1));
+        });
+    }
+
+    /**
+     * Every conversation this device holds, looked at for phones of this
+     * account that are not in them.
+     *
+     * Called when the server says the count has gone up, which is the moment a
+     * second phone has signed in and published. Without it the new phone waits
+     * for something unrelated to happen - a message sent, a chat opened - and
+     * a person who has just set up their second phone is looking at padlocks
+     * with no idea why.
+     *
+     * Every conversation, not only groups: a chat between two is an MLS group
+     * of two and the new phone is as absent from it.
+     */
+    public void letInMyOtherDevicesEverywhere() {
+        List<Long> conversations;
+        synchronized (this) {
+            conversations = new ArrayList<>(groupIdByPeer.keySet());
+        }
+        for (Long peerId : conversations) {
+            if (peerId != null) {
+                letInMyOtherDevices(peerId, 1);
+            }
+        }
+    }
+
+    /** The leaves this account holds in a conversation, by name. */
+    private List<byte[]> myLeaves(byte[] groupId, long self) {
+        byte[] prefix = nameOf(self);
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return null;
+                }
+                try {
+                    List<byte[]> mine = new ArrayList<>();
+                    for (byte[] name : group.memberNames()) {
+                        if (startsWith(name, prefix)) {
+                            mine.add(name);
+                        }
+                    }
+                    return mine;
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot see this account's own leaves: " + e.getMessage());
+                return null;
+            }
+        }
+    }
+
+    private static boolean holds(List<byte[]> names, byte[] wanted) {
+        for (byte[] name : names) {
+            if (java.util.Arrays.equals(name, wanted)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
