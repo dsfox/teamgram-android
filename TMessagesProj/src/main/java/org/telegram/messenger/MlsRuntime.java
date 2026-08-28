@@ -1477,16 +1477,31 @@ public class MlsRuntime {
      * and that was decided when the conversation began.
      */
     public void memberAdded(long peerId, long userId) {
-        if (userId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+        memberAdded(peerId, java.util.Collections.singletonList(userId));
+    }
+
+    /** The same, for the several people one service message can name. */
+    public void memberAdded(long peerId, List<Long> userIds) {
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        List<Long> newcomers = new ArrayList<>();
+        for (Long userId : userIds) {
             // Somebody let us in. We cannot add ourselves to an MLS group; the
             // welcome is on its way from whoever did it.
+            if (userId != null && userId != self) {
+                newcomers.add(userId);
+            }
+        }
+        if (newcomers.isEmpty()) {
             return;
         }
         // Named rather than worked out from the chat. This runs the moment the
         // server confirms the addition, and the local idea of who is in the chat
         // has not caught up yet - so a comparison here would find nobody missing
         // and the person would wait for the next sweep to be let in.
-        letIn(peerId, java.util.Collections.singletonList(userId), 1);
+        //
+        // All of them in the one call, because one commit can carry the lot and
+        // a commit each would spend an epoch a person.
+        letIn(peerId, newcomers, 1);
     }
 
     /** Somebody was taken out of a chat. */

@@ -18885,9 +18885,22 @@ public class MessagesController extends BaseController implements NotificationCe
                         && message.peer_id != null && message.peer_id.chat_id != 0) {
                     MlsRuntime.getInstance(currentAccount).invited();
                     // And the group has somebody in it that the conversation
-                    // does not. Nobody pressed a button, so nothing else will
-                    // notice until the next message goes out.
-                    MlsRuntime.getInstance(currentAccount).reconcile(-message.peer_id.chat_id);
+                    // does not. Named, like the removal above, and for the same
+                    // reason turned round: this message arrives before the
+                    // participant list here catches up, so comparing the two
+                    // finds nobody missing and the newcomer waits for a sweep -
+                    // which is what happened to the first person who followed a
+                    // link into an encrypted group and sat in silence (#40, 4.3).
+                    ArrayList<Long> joined = new ArrayList<>();
+                    if (message.action.users != null && !message.action.users.isEmpty()) {
+                        joined.addAll(message.action.users);
+                    } else if (message.from_id instanceof TLRPC.TL_peerUser) {
+                        // A link or a request is followed by one person alone,
+                        // and the message they cause is from them.
+                        joined.add(message.from_id.user_id);
+                    }
+                    MlsRuntime.getInstance(currentAccount)
+                            .memberAdded(-message.peer_id.chat_id, joined);
                 }
 
                 ImageLoader.saveMessageThumbs(message);
