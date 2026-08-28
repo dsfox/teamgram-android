@@ -1250,6 +1250,13 @@ public class MlsRuntime {
             return members;
         }
 
+        /** Anybody who must be told besides the people the conversation
+         *  already holds - which means whoever is being let in, since they are
+         *  not a leaf yet and the commit is what makes them one. */
+        List<Long> alsoTell() {
+            return java.util.Collections.emptyList();
+        }
+
         /** What is left once the delivery service has taken it. */
         void taken(byte[] groupId, Runnable then) {
             fire(then);
@@ -1276,6 +1283,14 @@ public class MlsRuntime {
             MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
             welcome = invitation.welcome;
             return invitation.commit;
+        }
+
+        @Override
+        List<Long> alsoTell() {
+            // They are not a leaf until this commit is applied, so the
+            // conversation does not name them yet - and they need it as much as
+            // anybody, because their other devices apply it.
+            return newcomers;
         }
 
         @Override
@@ -1355,11 +1370,29 @@ public class MlsRuntime {
             doneChanging(peerId);
             return;
         }
-        List<Long> members = membersOf(peerId);
+        // Who the commit has to reach: everybody the conversation holds, read
+        // from the conversation itself rather than from this device's copy of
+        // the chat's participant list.
+        //
+        // The list was the obvious source and is wrong: it is fetched on its own
+        // schedule, so a device that has just been let in is missing from it,
+        // and a commit built here then never reaches them. They stay an epoch
+        // behind for ever - the commit that would catch them up was never
+        // addressed to them, and nothing after it applies without it. It
+        // happened on the stand and took a group apart (#116).
+        //
+        // The leaves are the definition of who must apply a commit, and anybody
+        // being let in is named separately by the change itself.
+        List<Long> members = whoTheConversationHolds(peerId, groupId);
         if (members == null) {
-            FileLog.e("mls: " + change.describe() + " - the membership is not known here");
+            FileLog.e("mls: " + change.describe() + " - the conversation cannot be opened");
             doneChanging(peerId);
             return;
+        }
+        for (Long newcomer : change.alsoTell()) {
+            if (newcomer != null && !members.contains(newcomer)) {
+                members.add(newcomer);
+            }
         }
 
         byte[] commit;
@@ -1402,6 +1435,8 @@ public class MlsRuntime {
         }
 
         final long staked = epoch;
+        FileLog.d("mls: " + change.describe() + " at epoch " + epoch
+                + ", telling " + members.size() + " member(s): " + members);
         TLRPCMls.TL_mls_sendCommit send = new TLRPCMls.TL_mls_sendCommit();
         send.group_id = groupId;
         send.epoch = epoch;
@@ -1472,7 +1507,27 @@ public class MlsRuntime {
         FileLog.d("mls: " + change.describe() + " lost epoch " + staked
                 + "; the group is at " + result.epoch + ", catching up");
         doneChanging(peerId);
-        collectCommits(retry);
+        final long ahead = result.epoch;
+        collectCommits(applied -> {
+            if (applied) {
+                fire(retry);
+                return;
+            }
+            // Losing is ordinary and the way back is the commit box. Losing and
+            // finding the box empty is not: it means the change that moved the
+            // group was never addressed to this device, and nothing that comes
+            // after it can be applied without the one that is missing. The
+            // device is out of the conversation and will not find its own way
+            // back (#116).
+            //
+            // Said as loudly as it can be, because until now it looked like
+            // nothing at all: the phone went on asking every four minutes,
+            // getting an empty answer, and reading none of what was said.
+            FileLog.e("mls: fallen out of " + shortId(groupOf(peerId))
+                    + " - staked epoch " + staked + ", the group is at " + ahead
+                    + ", and nothing is waiting to catch up with. This device has "
+                    + "to be taken out of the chat and let back in (#116)");
+        });
     }
 
     // ----------------------------------------------------------------------
@@ -1722,6 +1777,43 @@ public class MlsRuntime {
         for (Long peerId : conversations) {
             if (peerId != null) {
                 letInMyOtherDevices(peerId, 1);
+            }
+        }
+    }
+
+    /**
+     * Everybody the conversation holds, by the person before the slash in each
+     * leaf, without this account.
+     *
+     * This account is left out because the caller adds it: the commit has to
+     * come back to the other phones of whoever made it, and to this one, so it
+     * can learn the outcome if the answer never arrives.
+     */
+    private List<Long> whoTheConversationHolds(long peerId, byte[] groupId) {
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return null;
+                }
+                try {
+                    List<Long> holders = new ArrayList<>();
+                    for (byte[] name : group.memberNames()) {
+                        long who = userIdIn(name);
+                        if (who != 0 && who != self && !holders.contains(who)) {
+                            holders.add(who);
+                        }
+                    }
+                    return holders;
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot see who " + shortId(groupId) + " holds: " + e.getMessage());
+                return null;
             }
         }
     }
