@@ -874,6 +874,12 @@ public class MlsRuntime {
                     SerializedData out = new SerializedData();
                     content.serializeToStream(out);
 
+                    // Said before it is sent, with the epoch, because a message
+                    // that will not open on the other phone is almost always one
+                    // written in an epoch that phone is not in - and without
+                    // both numbers there is no telling which of the two moved.
+                    FileLog.d("mls: sending to " + peerId + " in " + shortId(groupId)
+                            + " at epoch " + group.epoch());
                     byte[] ciphertext = group.encrypt(identity, out.toByteArray());
                     // The ratchet has moved, so it is written back at once. Saving
                     // late is the same as not saving: the app can be killed at any
