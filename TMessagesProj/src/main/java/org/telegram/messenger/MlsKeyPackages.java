@@ -87,10 +87,34 @@ public class MlsKeyPackages {
     private final Object stateLock = new Object();
 
     public MlsCore.Identity identity() throws MlsCore.MlsException {
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        String mine = self + "/";
         String saved = storage().getString("state", null);
         if (saved != null) {
             try {
-                return MlsCore.Identity.open(Base64.decode(saved, Base64.NO_WRAP));
+                MlsCore.Identity identity = MlsCore.Identity.open(Base64.decode(saved, Base64.NO_WRAP));
+                byte[] name = identity.name();
+                if (self != 0 && name != null && !new String(name).startsWith(mine)) {
+                    // Built before this account had signed in, so its leaf is
+                    // named after nobody: the id was still zero and the name
+                    // came out `0/1234`. Nothing recognises such a leaf as
+                    // belonging to its owner - not the pass that lets this
+                    // account's other phones in, not the one that takes a lost
+                    // phone out, not the comparison with the chat - so the
+                    // device sits in every conversation as a member no person
+                    // owns.
+                    //
+                    // Seen on the stand: a second phone signed in, was let into
+                    // the group as `0/955551846`, and its owner's other phone
+                    // then reported one leaf of its own where there were two.
+                    // Started over rather than carried: a state named for the
+                    // wrong person can never be repaired into the right one.
+                    FileLog.e("mls: the stored state is named " + new String(name)
+                            + " and this account is " + self + ", starting over");
+                    identity.close();
+                } else {
+                    return identity;
+                }
             } catch (MlsCore.MlsException e) {
                 // A state that cannot be opened is not a state. Starting over
                 // loses the conversations it held, which is bad - and carrying
@@ -100,13 +124,18 @@ public class MlsKeyPackages {
             }
         }
 
+        if (self == 0) {
+            // No account yet. Making the identity now would name it after
+            // nobody and keep that name for the life of the install.
+            throw new MlsCore.MlsException("there is no account on this device yet");
+        }
+
         // A name that says which device this is. The account alone would name
         // the person, and then two phones would look like one member.
-        String name = UserConfig.getInstance(currentAccount).getClientUserId()
-                + "/" + new Random().nextInt(Integer.MAX_VALUE);
+        String name = mine + new Random().nextInt(Integer.MAX_VALUE);
         MlsCore.Identity identity = new MlsCore.Identity(name.getBytes());
         save(identity);
-        FileLog.d("mls: a device identity was made for this account");
+        FileLog.d("mls: a device identity was made for " + name);
         return identity;
     }
 

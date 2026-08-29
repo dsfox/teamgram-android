@@ -1655,6 +1655,10 @@ public class MlsRuntime {
                 newcomers.add(userId);
             }
         }
+        // Said before anything is decided. Without it "the service message never
+        // arrived" and "it arrived and nothing came of it" look the same from
+        // the log, and the two need opposite searches.
+        FileLog.d("mls: told that " + newcomers + " joined " + peerId);
         if (newcomers.isEmpty()) {
             return;
         }
@@ -1846,10 +1850,16 @@ public class MlsRuntime {
         }
         long self = UserConfig.getInstance(currentAccount).getClientUserId();
         List<byte[]> mine = myLeaves(groupId, self);
+        // Said whichever way it goes, because the interesting case is the one
+        // that decides to do nothing: a pass that returns in silence cannot be
+        // told apart from a pass that was never called.
+        FileLog.d("mls: looking at " + shortId(groupId) + ": " + devices + " device(s), "
+                + (mine == null ? "no" : String.valueOf(mine.size())) + " leaves of this account");
         if (mine == null || mine.size() <= devices) {
             return;
         }
         if (!beginChanging(peerId)) {
+            FileLog.d("mls: a change is already in flight for " + peerId + ", not now");
             return;
         }
         FileLog.d("mls: this account has " + devices + " device(s) and " + mine.size()
@@ -1906,11 +1916,20 @@ public class MlsRuntime {
     public void takeOutMyLostDevicesEverywhere() {
         List<Long> conversations;
         synchronized (this) {
+            loadConversations();
             conversations = new ArrayList<>(groupIdByPeer.keySet());
         }
+        // Counted out loud. Without it a pass over an empty list and a pass that
+        // was never called look exactly the same from the log, which is where
+        // an evening went.
+        FileLog.d("mls: looking for lost devices in " + conversations.size() + " conversation(s)");
         for (Long peerId : conversations) {
             if (peerId != null) {
-                takeOutMyLostDevices(peerId, 1);
+                try {
+                    takeOutMyLostDevices(peerId, 1);
+                } catch (Throwable trouble) {
+                    FileLog.e("mls: looking for lost devices in " + peerId + " failed: " + trouble);
+                }
             }
         }
     }
@@ -1987,8 +2006,16 @@ public class MlsRuntime {
     public void letInMyOtherDevicesEverywhere() {
         List<Long> conversations;
         synchronized (this) {
+            // Loaded before it is read. The map is filled on demand, and this
+            // runs from the answer to the first publish - which on a phone that
+            // has just started is before anything has asked for a conversation.
+            // The sweep then went over nothing and said nothing, so a second
+            // device signed in and waited for some unrelated thing to happen.
+            loadConversations();
             conversations = new ArrayList<>(groupIdByPeer.keySet());
         }
+        FileLog.d("mls: letting this account's other devices into "
+                + conversations.size() + " conversation(s)");
         for (Long peerId : conversations) {
             if (peerId != null) {
                 letInMyOtherDevices(peerId, 1);
@@ -2018,7 +2045,12 @@ public class MlsRuntime {
                     List<Long> holders = new ArrayList<>();
                     for (byte[] name : group.memberNames()) {
                         long who = userIdIn(name);
-                        if (who != 0 && who != self && !holders.contains(who)) {
+                        // Neither a name this device cannot read nor one that
+                        // says nobody: a commit addressed to the person with id
+                        // zero reaches nobody, and the delivery service would
+                        // be asked to find their devices for every change.
+                        if (who != NAME_UNREADABLE && who != 0
+                                && who != self && !holders.contains(who)) {
                             holders.add(who);
                         }
                     }
@@ -2046,11 +2078,19 @@ public class MlsRuntime {
                 }
                 try {
                     List<byte[]> mine = new ArrayList<>();
+                    StringBuilder everybody = new StringBuilder();
                     for (byte[] name : group.memberNames()) {
+                        if (everybody.length() > 0) {
+                            everybody.append(", ");
+                        }
+                        everybody.append(new String(name));
                         if (startsWith(name, prefix)) {
                             mine.add(name);
                         }
                     }
+                    // The leaves by name, because this is what the whole of #41
+                    // reasons about and a count alone cannot be argued with.
+                    FileLog.d("mls: " + shortId(groupId) + " holds " + everybody);
                     return mine;
                 } finally {
                     group.close();
@@ -2117,7 +2157,9 @@ public class MlsRuntime {
                     java.util.LinkedHashSet<Long> extra = new java.util.LinkedHashSet<>();
                     for (byte[] name : group.memberNames()) {
                         long userId = userIdIn(name);
-                        if (userId != 0 && !belong.contains(userId)) {
+                        // Nobody has the id zero, so a leaf that claims it can
+                        // never belong to anybody in this chat (#122).
+                        if (userId != NAME_UNREADABLE && !belong.contains(userId)) {
                             extra.add(userId);
                         }
                     }
@@ -2132,17 +2174,29 @@ public class MlsRuntime {
         }
     }
 
-    /** The person a leaf belongs to, or 0 when the name is not one of ours. */
+    /** A name this device cannot read at all - not the same as one that says
+     *  nobody, which is a real answer and a wrong one. */
+    static final long NAME_UNREADABLE = -1;
+
+    /** The person a leaf belongs to, or NAME_UNREADABLE when the name is not
+     *  one of ours.
+     *
+     * Zero used to mean both, and that hid a leaf nobody could remove: a device
+     * whose identity was made before its account had signed in is named `0/1234`
+     * (#122), and every comparison read that as "not one of ours, leave it
+     * alone". So it sat in the conversation for ever, belonging to a person who
+     * does not exist. Told apart now, because the two need opposite answers.
+     */
     private static long userIdIn(byte[] name) {
         String text = new String(name);
         int slash = text.indexOf('/');
         if (slash <= 0) {
-            return 0;
+            return NAME_UNREADABLE;
         }
         try {
             return Long.parseLong(text.substring(0, slash));
         } catch (NumberFormatException e) {
-            return 0;
+            return NAME_UNREADABLE;
         }
     }
 
