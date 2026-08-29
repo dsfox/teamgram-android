@@ -1507,27 +1507,92 @@ public class MlsRuntime {
         FileLog.d("mls: " + change.describe() + " lost epoch " + staked
                 + "; the group is at " + result.epoch + ", catching up");
         doneChanging(peerId);
-        final long ahead = result.epoch;
+        lookForTheWinningCommit(peerId, groupId, staked, result.epoch, retry, 0);
+    }
+
+    /**
+     * How long to wait before looking again, in milliseconds.
+     *
+     * The gap being waited out is the server's own: it moves the epoch and then
+     * fills the boxes, and a device refused in between is told the group has
+     * moved before the commit that moved it can be fetched. Measured at 156
+     * milliseconds on the stand; the ladder is long enough to survive a slow
+     * answer and short enough that a device genuinely out of the group hears so
+     * while somebody is still looking at it.
+     */
+    private static final long[] LOOK_AGAIN_AFTER = {2_000L, 6_000L, 15_000L};
+
+    /**
+     * Waits until this device stands where the group does, or gives up and says
+     * it has fallen out.
+     *
+     * The question is where this device is standing, not what this particular
+     * call managed to apply (#118). An empty commit box means nothing on its
+     * own: it is equally what a device sees when it has already caught up, and
+     * that is the common case rather than a rare one - the collector runs on its
+     * own rhythm and gets there first. Measured: a phone applied the winning
+     * commit 45 milliseconds after losing, and twenty-three seconds later this
+     * told it, wrongly and loudly, that it had fallen out of the conversation
+     * and had to be taken out of the chat and let back in.
+     *
+     * Asking the epoch cannot be fooled that way. Ahead of us and nothing
+     * arriving is the real thing; standing level is fine however we got there.
+     */
+    private void lookForTheWinningCommit(long peerId, byte[] groupId, long staked, long ahead,
+                                         Runnable retry, int attempt) {
         collectCommits(applied -> {
-            if (applied) {
+            if (standingWhereTheGroupIs(groupId, ahead)) {
+                // Whoever applied it. The change this device wanted has still
+                // not happened, so it is built again on top of where the group
+                // is now - which is what `retry` does.
                 fire(retry);
                 return;
             }
+            if (attempt < LOOK_AGAIN_AFTER.length) {
+                AndroidUtilities.runOnUIThread(() -> Utilities.globalQueue.postRunnable(
+                        () -> lookForTheWinningCommit(peerId, groupId, staked, ahead, retry,
+                                attempt + 1)),
+                        LOOK_AGAIN_AFTER[attempt]);
+                return;
+            }
             // Losing is ordinary and the way back is the commit box. Losing and
-            // finding the box empty is not: it means the change that moved the
-            // group was never addressed to this device, and nothing that comes
-            // after it can be applied without the one that is missing. The
-            // device is out of the conversation and will not find its own way
-            // back (#116).
+            // still standing behind the group after all that time is not: the
+            // change that moved it was never addressed to this device, and
+            // nothing that comes after it can be applied without the one that
+            // is missing. The device is out of the conversation and will not
+            // find its own way back (#116).
             //
             // Said as loudly as it can be, because until now it looked like
             // nothing at all: the phone went on asking every four minutes,
             // getting an empty answer, and reading none of what was said.
-            FileLog.e("mls: fallen out of " + shortId(groupOf(peerId))
+            FileLog.e("mls: fallen out of " + shortId(groupId)
                     + " - staked epoch " + staked + ", the group is at " + ahead
-                    + ", and nothing is waiting to catch up with. This device has "
+                    + ", and nothing arrived to catch up with. This device has "
                     + "to be taken out of the chat and let back in (#116)");
         });
+    }
+
+    /** Whether this device stands where the server says the group does. */
+    private boolean standingWhereTheGroupIs(byte[] groupId, long ahead) {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return false;
+                }
+                try {
+                    return group.epoch() >= ahead;
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot read the epoch of " + shortId(groupId)
+                        + ": " + e.getMessage());
+                return false;
+            }
+        }
     }
 
     // ----------------------------------------------------------------------
