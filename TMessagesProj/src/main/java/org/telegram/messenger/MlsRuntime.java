@@ -1913,6 +1913,45 @@ public class MlsRuntime {
     /** Every conversation this device holds, looked at for phones of this
      *  account that have gone. Called when the server says the count has
      *  fallen, which is the moment somebody signed a phone out. */
+    /**
+     * Asks for the membership of every group this device holds a conversation
+     * for, once, when the app comes back.
+     *
+     * A change that happened while the app was not running never arrives as an
+     * update - it is already in the history by then - and the hook that acts on
+     * membership hangs on updates. So somebody who joined by a link while the
+     * phone was off stayed outside the conversation: in the chat, and in a chat
+     * where nothing would ever appear for them. The other direction is worse:
+     * somebody removed while the phone was off keeps reading (#124).
+     *
+     * Asking for the chat is enough. The answer carries the participant list,
+     * and the comparison already runs when one arrives - which is also why this
+     * is a request rather than a second copy of that logic.
+     *
+     * On every round rather than once at the start. Once was written first and
+     * measured wrong: the change this is for does not only happen while the app
+     * is down, it also happens while the app is up and the update never
+     * arrives - seen on the stand, with a phone running, connected, publishing
+     * every four minutes, and never told that somebody had followed a link into
+     * its group. Asking on each round bounds that at one round rather than for
+     * ever.
+     */
+    public void catchUpOnMembership() {
+        List<Long> conversations;
+        synchronized (this) {
+            loadConversations();
+            conversations = new ArrayList<>(groupIdByPeer.keySet());
+        }
+        int asked = 0;
+        for (Long peerId : conversations) {
+            if (peerId != null && DialogObject.isChatDialog(peerId)) {
+                MessagesController.getInstance(currentAccount).loadFullChat(-peerId, 0, true);
+                asked++;
+            }
+        }
+        FileLog.d("mls: asked for the membership of " + asked + " group(s) after starting");
+    }
+
     public void takeOutMyLostDevicesEverywhere() {
         List<Long> conversations;
         synchronized (this) {

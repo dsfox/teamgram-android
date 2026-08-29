@@ -181,6 +181,9 @@ public class MlsKeyPackages {
         // leaves against the count, so it is asked every time and costs nothing
         // when there is nothing to do (#41).
         MlsRuntime.getInstance(currentAccount).takeOutMyLostDevicesEverywhere();
+        // And whatever changed while this phone was not running, which no
+        // update will ever tell it about (#124).
+        MlsRuntime.getInstance(currentAccount).catchUpOnMembership();
     }
 
     public void save(MlsCore.Identity identity) throws MlsCore.MlsException {
