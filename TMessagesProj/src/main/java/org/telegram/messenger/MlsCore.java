@@ -55,6 +55,7 @@ public final class MlsCore {
 
     private static native byte[] messageGroupId0(byte[] ciphertext);
     private static native byte[] keyPackageName0(byte[] keyPackage);
+    private static native byte[] identityName0(long identity);
 
     private static native byte[] recoveryPhrase(int words);
 
@@ -150,6 +151,19 @@ public final class MlsCore {
          *             Per device rather than per person: that is what makes
          *             several devices possible at all.
          */
+        /**
+         * The name this device goes under, which is the name of its own leaf.
+         *
+         * Written into the state and read back with it, so this survives a
+         * restart without a copy kept beside it. Asked when a phone of the
+         * account has gone and the leaves have to be told apart: every other
+         * leaf of this account is a candidate for removal and this one never
+         * is.
+         */
+        public byte[] name() {
+            return identityName0(this.handle);
+        }
+
         public Identity(byte[] name) throws MlsException {
             this.handle = identityNew(name);
             if (this.handle == 0) {

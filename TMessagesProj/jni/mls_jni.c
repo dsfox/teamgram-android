@@ -216,6 +216,14 @@ Java_org_telegram_messenger_MlsCore_keyPackageName0(JNIEnv *env, jclass class, j
     return take(env, out);
 }
 
+// The name this device goes under, which is the name of its own leaf. Asked
+// when a phone of the account has gone: every other leaf of this account is a
+// candidate for removal and this one never is.
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_identityName0(JNIEnv *env, jclass class, jlong identity) {
+    return take(env, mls_identity_name((const struct Identity *) (intptr_t) identity));
+}
+
 // Every device of theirs at once. One welcome comes back and it lets all of
 // them in; added one at a time, only the last welcome survives and which of
 // their phones can join is chance.

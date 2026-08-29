@@ -130,6 +130,7 @@ public class MlsKeyPackages {
 
     private void noteDevices(TLRPCMls.TL_mls_publishResult result) {
         boolean grew = result.devices > devices;
+        boolean shrank = devices > 0 && result.devices < devices;
         FileLog.d("mls: the server says this account has " + result.devices + " device(s)");
         devices = result.devices;
         if (grew) {
@@ -139,6 +140,18 @@ public class MlsKeyPackages {
             // old one is watching the new one show padlocks.
             MlsRuntime.getInstance(currentAccount).letInMyOtherDevicesEverywhere();
         }
+        if (shrank) {
+            FileLog.d("mls: a device of this account is gone");
+        }
+        // Every time the count is known, and not only when it has just fallen.
+        //
+        // The trend lives in memory: a phone restarted after the other one was
+        // signed out starts from nothing, reads "one device" as a rise, and
+        // never looks. It was measured that way - the leaf stayed and the epoch
+        // did not move. The pass itself needs no trend, because it compares
+        // leaves against the count, so it is asked every time and costs nothing
+        // when there is nothing to do (#41).
+        MlsRuntime.getInstance(currentAccount).takeOutMyLostDevicesEverywhere();
     }
 
     public void save(MlsCore.Identity identity) throws MlsCore.MlsException {

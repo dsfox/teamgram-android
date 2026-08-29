@@ -1308,6 +1308,40 @@ public class MlsRuntime {
     }
 
     /** Taking people out, and with each of them every phone they hold. */
+    /**
+     * One device of this account, taken out by its own name.
+     *
+     * `Removing` is asked about a person and answers about every leaf they
+     * hold, which is right for somebody leaving a group and wrong here: this
+     * takes out one phone and leaves the person's other one reading. A device's
+     * full name is `<user>/<device>`, and a full name is a prefix of exactly one
+     * leaf, so the same call in the core answers both questions.
+     */
+    private final class Dropping extends Change {
+        private final List<byte[]> leaves;
+
+        Dropping(long peerId, List<byte[]> leaves) {
+            super(peerId);
+            this.leaves = leaves;
+        }
+
+        @Override
+        byte[] build(MlsCore.Identity identity, MlsCore.Group group) throws MlsCore.MlsException {
+            return group.removeMembers(identity, leaves);
+        }
+
+        // The audience is left alone on purpose. Everybody else is named by user
+        // id, and the device going out shares this account's id - excluding it
+        // would exclude this phone from its own change. The commit it cannot
+        // apply lands in a box that was emptied when it signed out and that
+        // nobody will ever ask for again.
+
+        @Override
+        String describe() {
+            return "taking " + leaves.size() + " device(s) of this account out of " + peerId;
+        }
+    }
+
     private final class Removing extends Change {
         private final List<Long> leaving;
 
@@ -1765,6 +1799,122 @@ public class MlsRuntime {
      * confirmation there is ceremony: an account somebody else has taken over
      * already reads the messages arriving in it (#41).
      */
+    /**
+     * Takes the phones of this account that are gone out of a conversation.
+     *
+     * The mirror of letting them in, and the half that makes losing a phone
+     * mean anything. Signing a device out takes its key packages off the server
+     * so nobody can add it again - but the leaf it already holds stays, and a
+     * leaf is what reading is. Until it is removed and the epoch moves, the
+     * phone in the drawer opens everything said afterwards (#41).
+     *
+     * Two questions, answered by two different things. *Whether* a device is
+     * gone is the count: more leaves of mine here than devices the server knows
+     * of. *Which* one is the names: the server hands out one key package per
+     * live device, so a leaf of mine with no package behind it is a phone that
+     * has signed out.
+     *
+     * The count is asked first because the names alone would be dangerous. A
+     * device that is merely offline still has packages, but one that had run
+     * out would look gone - and evicting a live phone is the worst thing this
+     * code could do. Requiring the count to say a device is missing means the
+     * names are only ever used to pick between candidates.
+     */
+    /** The name this device goes under, or null when there is no state yet. */
+    private byte[] ownName() {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                return identity.name();
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot read this device's own name: " + e.getMessage());
+                return null;
+            }
+        }
+    }
+
+    private void takeOutMyLostDevices(long peerId, int attempt) {
+        byte[] groupId = groupOf(peerId);
+        if (groupId == null || attempt > COMMIT_ATTEMPTS) {
+            return;
+        }
+        int devices = MlsKeyPackages.getInstance(currentAccount).devices();
+        if (devices <= 0) {
+            // Nobody has asked the server yet, and zero is not an answer.
+            return;
+        }
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        List<byte[]> mine = myLeaves(groupId, self);
+        if (mine == null || mine.size() <= devices) {
+            return;
+        }
+        if (!beginChanging(peerId)) {
+            return;
+        }
+        FileLog.d("mls: this account has " + devices + " device(s) and " + mine.size()
+                + " leaves in " + shortId(groupId) + ", so one has gone");
+
+        TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
+        request.user_id = self;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+            if (error != null || !(response instanceof TLRPCMls.TL_mls_keyPackages)) {
+                FileLog.e("mls: cannot ask which devices of this account are still there"
+                        + (error != null ? ": " + error.text : ""));
+                doneChanging(peerId);
+                return;
+            }
+            List<byte[]> alive = new ArrayList<>();
+            for (byte[] keyPackage : ((TLRPCMls.TL_mls_keyPackages) response).packages) {
+                byte[] name = MlsCore.keyPackageName(keyPackage);
+                if (name != null) {
+                    alive.add(name);
+                }
+            }
+            // This device is not among them to be sure of: the server hands out
+            // one package per device and cannot tell which caller is which leaf,
+            // so its own package may or may not be in the answer. Kept by name
+            // rather than by hope.
+            byte[] ours = ownName();
+            List<byte[]> gone = new ArrayList<>();
+            for (byte[] leaf : mine) {
+                if (ours != null && java.util.Arrays.equals(leaf, ours)) {
+                    continue;
+                }
+                if (!holds(alive, leaf)) {
+                    gone.add(leaf);
+                }
+            }
+            if (gone.isEmpty()) {
+                // The count said one was missing and the names cannot say which.
+                // Nothing is removed on a guess.
+                FileLog.d("mls: a device of this account is gone from " + shortId(groupId)
+                        + " and the server's answer does not say which - leaving it alone");
+                doneChanging(peerId);
+                return;
+            }
+            FileLog.d("mls: taking " + gone.size() + " device(s) of this account out of "
+                    + shortId(groupId));
+            commitChange(new Dropping(peerId, gone),
+                    () -> takeOutMyLostDevices(peerId, attempt + 1));
+        });
+    }
+
+    /** Every conversation this device holds, looked at for phones of this
+     *  account that have gone. Called when the server says the count has
+     *  fallen, which is the moment somebody signed a phone out. */
+    public void takeOutMyLostDevicesEverywhere() {
+        List<Long> conversations;
+        synchronized (this) {
+            conversations = new ArrayList<>(groupIdByPeer.keySet());
+        }
+        for (Long peerId : conversations) {
+            if (peerId != null) {
+                takeOutMyLostDevices(peerId, 1);
+            }
+        }
+    }
+
     private void letInMyOtherDevices(long peerId, int attempt) {
         byte[] groupId = groupOf(peerId);
         if (groupId == null || attempt > COMMIT_ATTEMPTS) {
