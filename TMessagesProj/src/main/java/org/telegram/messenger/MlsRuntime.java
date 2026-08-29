@@ -2706,6 +2706,7 @@ public class MlsRuntime {
 
     private void join(TLRPCMls.TL_mls_welcomes welcomes, Utilities.Callback<Boolean> then) {
         List<Long> joined = new ArrayList<>();
+        List<Long> spent = new ArrayList<>();
         // One at a time: the state is one blob and every
         // operation rewrites all of it (#112).
         synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
@@ -2743,6 +2744,25 @@ public class MlsRuntime {
                         // others: they are from different people.
                         FileLog.e("mls: cannot join an invitation from "
                                 + welcome.from_id + ": " + e.getMessage());
+                        // An invitation whose key package has already been spent
+                        // can never be opened - it was opened once, which is what
+                        // spent it, and the commonest one is this account's own
+                        // copy of a welcome it sent to itself when letting in a
+                        // second phone. Left unconfirmed it is handed back every
+                        // round for ever, and every attempt fails the same way:
+                        // on the stand one had been failing for seventeen days.
+                        // The cost is not the work but the line it prints, which
+                        // is word for word what a person genuinely unable to open
+                        // their invitation to a group would print.
+                        //
+                        // Anything else is left alone: it may be this device that
+                        // is not ready, and an invitation dropped in that state is
+                        // a conversation that exists on one side only. iOS settled
+                        // on this shape first; this is the same rule, said the
+                        // same way.
+                        if (String.valueOf(e.getMessage()).contains("NoMatchingKeyPackage")) {
+                            spent.add(welcome.id);
+                        }
                     }
                 }
             } catch (MlsCore.MlsException e) {
@@ -2750,6 +2770,15 @@ public class MlsRuntime {
                 answer(then, false);
                 return;
             }
+        }
+
+        if (!spent.isEmpty()) {
+            // Forgotten without ceremony: nothing here can use them.
+            FileLog.d("mls: forgetting " + spent.size()
+                    + " invitation(s) whose key package is spent");
+            TLRPCMls.TL_mls_confirmWelcomes forget = new TLRPCMls.TL_mls_confirmWelcomes();
+            forget.ids.addAll(spent);
+            ConnectionsManager.getInstance(currentAccount).sendRequest(forget, (r, e) -> { });
         }
 
         if (joined.isEmpty()) {
