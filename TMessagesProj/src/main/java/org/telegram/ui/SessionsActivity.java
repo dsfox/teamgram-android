@@ -49,6 +49,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.MlsKeyPackages;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -354,6 +355,7 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
                                 });
                             }
                             ConnectionsManager.getInstance(currentAccount).sendRequest(new TLRPC.TL_auth_resetAuthorizations(), (response, error) -> {
+                            MlsKeyPackages.getInstance(currentAccount).publish();   // (#121)
                                 AndroidUtilities.runOnUIThread(() -> {
                                     if (getParentActivity() == null) {
                                         return;
@@ -394,6 +396,7 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
                 builder.setPositiveButton(buttonText, (dialogInterface, i) -> {
                     if (currentType == 0) {
                         ConnectionsManager.getInstance(currentAccount).sendRequest(new TLRPC.TL_auth_resetAuthorizations(), (response, error) -> {
+                            MlsKeyPackages.getInstance(currentAccount).publish();   // (#121)
                             AndroidUtilities.runOnUIThread(() -> {
                                 if (getParentActivity() == null) {
                                     return;
@@ -525,6 +528,12 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
                         TL_account.resetAuthorization req = new TL_account.resetAuthorization();
                         req.hash = authorization.hash;
                         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                            // The phone that just lost a device is this one, and
+                            // it is the one that has to take that device's leaf
+                            // out of every conversation. Left to its own rhythm
+                            // it would notice minutes later, and until then the
+                            // phone that was signed out goes on reading (#121).
+                            MlsKeyPackages.getInstance(currentAccount).publish();
                             try {
                                 progressDialog.dismiss();
                             } catch (Exception e) {
@@ -581,6 +590,7 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
                         TL_account.resetAuthorization req = new TL_account.resetAuthorization();
                         req.hash = authorization.hash;
                         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                            MlsKeyPackages.getInstance(currentAccount).publish();   // (#121)
                             if (error == null) {
                                 sessions.remove(authorization);
                                 passwordSessions.remove(authorization);
@@ -613,6 +623,7 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
                 TL_account.resetAuthorization req = new TL_account.resetAuthorization();
                 req.hash = authorization.hash;
                 ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                    MlsKeyPackages.getInstance(currentAccount).publish();   // (#121)
                     if (error == null) {
                         sessions.remove(authorization);
                         passwordSessions.remove(authorization);
