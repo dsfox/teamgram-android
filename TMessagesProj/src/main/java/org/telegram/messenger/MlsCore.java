@@ -71,6 +71,8 @@ public final class MlsCore {
 
     private static native long groupLoad(long identity, byte[] id);
 
+    private static native boolean groupForget(long identity, byte[] id);
+
     private static native byte[] groupId(long group);
 
     private static native int memberCount(long group);
@@ -241,6 +243,24 @@ public final class MlsCore {
         public static Group load(Identity identity, byte[] id) {
             long handle = groupLoad(identity.handle, id);
             return handle == 0 ? null : new Group(handle);
+        }
+
+        /**
+         * Throws away everything this device kept about a conversation.
+         *
+         * For one this device made and then learned was not the chat's: the
+         * first claim on a chat wins, and a device whose claim loses has made a
+         * conversation nobody will ever use (#135). Left behind it is never
+         * referenced again and never removed either - and everything this
+         * device knows about encryption is one blob, read whole and written
+         * whole on every message (#112), so what is never removed is carried
+         * for ever.
+         *
+         * Answering true for a conversation this device does not have is right:
+         * what was asked for is that it should be gone.
+         */
+        public static boolean forget(Identity identity, byte[] id) {
+            return groupForget(identity.handle, id);
         }
 
         /**

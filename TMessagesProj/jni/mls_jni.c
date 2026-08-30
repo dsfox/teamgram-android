@@ -172,6 +172,16 @@ Java_org_telegram_messenger_MlsCore_groupLoad(JNIEnv *env, jclass class, jlong i
     return to_handle(group);
 }
 
+JNIEXPORT jboolean JNICALL
+Java_org_telegram_messenger_MlsCore_groupForget(JNIEnv *env, jclass class, jlong identity, jbyteArray id) {
+    jsize len = (*env)->GetArrayLength(env, id);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, id, NULL);
+    bool gone = mls_group_forget((const Identity *) from_handle(identity),
+                                 (const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, id, bytes, JNI_ABORT);
+    return gone ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT jbyteArray JNICALL
 Java_org_telegram_messenger_MlsCore_groupId(JNIEnv *env, jclass class, jlong group) {
     return take(env, mls_group_id((const Group *) from_handle(group)));

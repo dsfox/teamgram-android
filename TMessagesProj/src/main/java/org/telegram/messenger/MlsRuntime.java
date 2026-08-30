@@ -1108,6 +1108,32 @@ public class MlsRuntime {
     }
 
     /**
+     * Throws away a conversation this device made and will never use.
+     *
+     * Nobody is bound to it, so nothing would ever look at it again - but
+     * everything this device knows about encryption is one blob, read whole and
+     * written whole on every message (#112), and what is never removed is
+     * carried for ever. Somebody typing while they wait to be let in makes one
+     * of these per message.
+     */
+    private void letGoOf(byte[] groupId) {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                if (MlsCore.Group.forget(identity, groupId)) {
+                    MlsKeyPackages.getInstance(currentAccount).save(identity);
+                    FileLog.d("mls: let go of " + shortId(groupId) + ", which was nobody's");
+                }
+            } catch (MlsCore.MlsException e) {
+                // Untidy and nothing more: it is bound to no chat, so it costs
+                // room and never an answer.
+                FileLog.e("mls: cannot let go of " + shortId(groupId) + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /**
      * Asks whether this chat's conversation is the one just made, and invites
      * everybody only if it is.
      *
@@ -1153,7 +1179,8 @@ public class MlsRuntime {
             }
             if (!java.util.Arrays.equals(held, groupId)) {
                 FileLog.d("mls: " + peerId + " already has conversation " + shortId(held)
-                        + ", leaving the one just made alone and waiting to be let in");
+                        + ", letting go of the one just made and waiting to be let in");
+                letGoOf(groupId);
                 synchronized (MlsRuntime.this) {
                     starting.remove(peerId);
                 }
