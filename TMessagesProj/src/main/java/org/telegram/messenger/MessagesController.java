@@ -18572,6 +18572,14 @@ public class MessagesController extends BaseController implements NotificationCe
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("need get diff TL_updatesTooLong");
             }
+            // The server has said "you may have missed something". One of the
+            // things this client may have missed is a phone of its own being
+            // signed out - and the leaf that phone holds in every conversation
+            // goes on reading until another of this person's phones takes it
+            // out. Only the count of devices says one has gone, and this client
+            // asks for it every four minutes; the server sends this the moment
+            // a session ends, so the four minutes stop being the answer (#121).
+            MlsKeyPackages.getInstance(currentAccount).publish();
             needGetDiff = true;
         } else if (updates instanceof UserActionUpdatesSeq) {
             getMessagesStorage().setLastSeqValue(updates.seq);
