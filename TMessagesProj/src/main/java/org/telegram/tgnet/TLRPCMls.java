@@ -17,9 +17,9 @@ package org.telegram.tgnet;
  */
 public class TLRPCMls {
 
-    /** mls.publishKeyPackages key_packages:Vector&lt;bytes&gt; last_resort:bytes = mls.PublishResult; */
+    /** mls.publishKeyPackages key_packages:Vector&lt;bytes&gt; last_resort:bytes name:bytes = mls.PublishResult; */
     public static class TL_mls_publishKeyPackages extends TLObject {
-        public static final int constructor = 940659472;
+        public static final int constructor = -913436181;
 
         public java.util.ArrayList<byte[]> key_packages = new java.util.ArrayList<>();
         /**
@@ -28,6 +28,18 @@ public class TLRPCMls {
          * a conversation can still start.
          */
         public byte[] last_resort = new byte[0];
+
+        /**
+         * The leaf name of the identity these belong to.
+         *
+         * A device that starts its state over leaves what it published under
+         * the old identity on the server, which counts a supply by the device
+         * rather than by the identity: it sees a full one, never asks for more,
+         * and every invitation built from what was left behind can never be
+         * opened (#136). Empty means "I cannot say", and the server then leaves
+         * the supply alone.
+         */
+        public byte[] name = new byte[0];
 
         public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
             return TL_mls_publishResult.TLdeserialize(stream, constructor, exception);
@@ -41,6 +53,7 @@ public class TLRPCMls {
                 stream.writeByteArray(keyPackage);
             }
             stream.writeByteArray(last_resort);
+            stream.writeByteArray(name);
         }
     }
 

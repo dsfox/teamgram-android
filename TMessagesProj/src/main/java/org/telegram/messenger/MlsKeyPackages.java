@@ -215,6 +215,14 @@ public class MlsKeyPackages {
         // answer says to - the shape the other client already took, and the
         // server holds it with a test of its own.
         TLRPCMls.TL_mls_publishKeyPackages ask = new TLRPCMls.TL_mls_publishKeyPackages();
+        // Which identity this device has now, said even when nothing is being
+        // published. A device that starts its state over leaves what it made
+        // under the old one on the server; the server counts a supply by the
+        // device rather than by the identity, sees a full one, never asks for
+        // more - and every invitation built from what was left behind can never
+        // be opened (#136). Naming it here is what lets the old ones go, and
+        // this empty publish is the one call every device makes on every round.
+        ask.name = ownName();
         ConnectionsManager.getInstance(currentAccount).sendRequest(ask, (response, error) -> {
             if (error != null || !(response instanceof TLRPCMls.TL_mls_publishResult)) {
                 synchronized (MlsKeyPackages.this) {
@@ -238,6 +246,20 @@ public class MlsKeyPackages {
         });
     }
 
+    /** The leaf name of the identity this device has now, or nothing when there
+     *  is no state yet - and nothing means "I cannot say", which the server
+     *  answers by leaving the supply alone. */
+    private byte[] ownName() {
+        synchronized (this) {
+            try (MlsCore.Identity identity = identity()) {
+                byte[] name = identity.name();
+                return name == null ? new byte[0] : name;
+            } catch (MlsCore.MlsException e) {
+                return new byte[0];
+            }
+        }
+    }
+
     /** Makes a fresh supply and hands it over. Only reached when the server
      *  said the shelf is running low. */
     private void refill() {
@@ -250,6 +272,8 @@ public class MlsKeyPackages {
                 // One handed out repeatedly once the others run out, so a
                 // conversation can still start with a device that has been quiet.
                 request.last_resort = identity.keyPackage();
+                byte[] mine = identity.name();
+                request.name = mine == null ? new byte[0] : mine;
 
                 // Saved before publishing, not after: a package published but
                 // not saved is one this device cannot answer for, and the
