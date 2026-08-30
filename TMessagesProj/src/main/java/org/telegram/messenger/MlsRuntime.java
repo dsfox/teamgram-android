@@ -1319,10 +1319,19 @@ public class MlsRuntime {
      */
     private final class Dropping extends Change {
         private final List<byte[]> leaves;
+        private final String what;
 
         Dropping(long peerId, List<byte[]> leaves) {
+            this(peerId, leaves, "device(s) of this account");
+        }
+
+        /** @param what whose leaves these are, for the log. The same call takes
+         *      out a phone of this account and a leaf that belongs to nobody
+         *      (#122), and the two read as opposite things. */
+        Dropping(long peerId, List<byte[]> leaves, String what) {
             super(peerId);
             this.leaves = leaves;
+            this.what = what;
         }
 
         @Override
@@ -1338,7 +1347,7 @@ public class MlsRuntime {
 
         @Override
         String describe() {
-            return "taking " + leaves.size() + " device(s) of this account out of " + peerId;
+            return "taking " + leaves.size() + " " + what + " out of " + peerId;
         }
     }
 
@@ -1950,6 +1959,103 @@ public class MlsRuntime {
             }
         }
         FileLog.d("mls: asked for the membership of " + asked + " group(s) after starting");
+    }
+
+    /** The leaves of this conversation that name nobody, by their full names. */
+    private List<byte[]> leavesOfNobody(byte[] groupId) {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return null;
+                }
+                try {
+                    List<byte[]> nobody = new ArrayList<>();
+                    for (byte[] name : group.memberNames()) {
+                        // Zero and only zero. A name this device cannot read at
+                        // all is a different thing and needs the opposite
+                        // answer: it may belong to somebody under a naming
+                        // scheme this build does not know, and evicting on that
+                        // guess is the one mistake there is no way back from.
+                        if (userIdIn(name) == 0) {
+                            nobody.add(name);
+                        }
+                    }
+                    return nobody;
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Takes out the leaves that belong to nobody.
+     *
+     * A device whose identity was made before its account had signed in is
+     * named `0/1234`: the id was still zero when the name was built, and a name
+     * is part of the cryptography and cannot be changed afterwards. Nothing
+     * recognises such a leaf as anybody's - not the pass that lets this
+     * account's other phones in, not the one that takes a lost phone out, not
+     * the comparison of a chat with its conversation - so it sits there as a
+     * member no person owns, reading everything said (#122).
+     *
+     * Making them stopped when the identity learned to refuse a nameless
+     * account. The ones already sitting in conversations were left, because
+     * there was nobody to claim them - which is exactly why this removes them
+     * by name rather than by owner.
+     *
+     * Every conversation, not only groups. The comparison with the chat is
+     * about a participant list and a chat between two has none, so it returns
+     * at once for those - and the leaf measured on the stand was in one of
+     * them, where nothing had ever looked.
+     *
+     * Nobody has the id zero, so this needs no list to be sure: it is true in
+     * every conversation, whoever else is in it. And it is recoverable, which
+     * removing a leaf usually is not - the phone holding it starts its state
+     * over on its next launch, under its real name, and the ordinary comparison
+     * lets it back in.
+     */
+    public void takeOutLeavesThatBelongToNobody() {
+        List<Long> conversations;
+        synchronized (this) {
+            loadConversations();
+            conversations = new ArrayList<>(groupIdByPeer.keySet());
+        }
+        for (Long peerId : conversations) {
+            if (peerId != null) {
+                try {
+                    takeOutLeavesThatBelongToNobody(peerId, 1);
+                } catch (Throwable trouble) {
+                    FileLog.e("mls: looking for nameless leaves in " + peerId
+                            + " failed: " + trouble);
+                }
+            }
+        }
+    }
+
+    private void takeOutLeavesThatBelongToNobody(long peerId, int attempt) {
+        byte[] groupId = groupOf(peerId);
+        if (groupId == null || attempt > COMMIT_ATTEMPTS) {
+            return;
+        }
+        List<byte[]> nobody = leavesOfNobody(groupId);
+        if (nobody == null || nobody.isEmpty()) {
+            return;
+        }
+        if (!beginChanging(peerId)) {
+            FileLog.d("mls: a change is already in flight for " + peerId + ", not now");
+            return;
+        }
+        FileLog.d("mls: " + shortId(groupId) + " holds " + nobody.size()
+                + " leaf/leaves that belong to nobody, taking them out");
+        commitChange(new Dropping(peerId, nobody, "leaf/leaves belonging to nobody"),
+                () -> takeOutLeavesThatBelongToNobody(peerId, attempt + 1));
     }
 
     public void takeOutMyLostDevicesEverywhere() {

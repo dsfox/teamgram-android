@@ -3,6 +3,9 @@ package org.telegram.messenger;
 import android.content.SharedPreferences;
 
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLRPC;
+
+import java.util.ArrayList;
 import org.telegram.tgnet.TLRPCMls;
 
 /**
@@ -128,13 +131,41 @@ public class MlsRecoveryPhrase {
         });
     }
 
+    /** The account every client shows service messages from. */
+    private static final long SERVICE = 777000L;
+
     /**
-     * Puts the words where their owner will find them: the chat with
-     * themselves, which is the one place a person can always get back to.
+     * Puts the words where their owner will find them, and nowhere else.
+     *
+     * Written into this device's own copy of the service chat and never sent.
+     * It used to go through the ordinary send path into Saved Messages, an
+     * ordinary cloud chat - so the one secret that gets an account back was
+     * handed to the server in the clear, beside the id of whose it was. On the
+     * stand that had happened for thirty-three accounts between 17 and 29
+     * August before anybody looked (#131). A messenger whose premise is that
+     * the third party learns nothing cannot post it the key to the account.
+     *
+     * The service chat rather than Saved Messages, which is iOS's choice and
+     * the right one: a local message does not put Saved Messages in the chat
+     * list, so the words would be written where their owner could not see them
+     * (#45). The service chat is the one chat a freshly registered account
+     * already has, and the sign-in code is in it.
+     *
+     * Both halves of putting it there, and that is not belt and braces: the
+     * list and the history are two tables, and a message written to one of them
+     * shows in the chat list and cannot be opened - which is exactly the fault
+     * iOS has with the same message (#130).
      */
     private void show(String phrase) {
         AndroidUtilities.runOnUIThread(() -> {
-            long self = UserConfig.getInstance(currentAccount).getClientUserId();
+            MessagesController controller = MessagesController.getInstance(currentAccount);
+            if (controller.getUser(SERVICE) == null) {
+                // Not yet: the service chat arrives from the server a moment
+                // after registering. Nothing is written where it cannot be
+                // read, and ensure() asks again.
+                FileLog.d("mls: no service chat to write the recovery phrase into yet");
+                return;
+            }
             // Word for word what iOS writes. The scenarios read this back with
             // a pattern, and a phrase worded differently on one client is a
             // phrase the tests stop finding on that one.
@@ -142,8 +173,28 @@ public class MlsRecoveryPhrase {
                     + " and keep it. It is the only way back into this account if the"
                     + " phone is lost, it works once, and nobody - including this"
                     + " service - can give it to you again.";
-            SendMessagesHelper.getInstance(currentAccount).sendMessage(
-                    SendMessagesHelper.SendMessageParams.of(text, self));
+
+            TLRPC.TL_message message = new TLRPC.TL_message();
+            message.id = message.local_id = UserConfig.getInstance(currentAccount).getNewMessageId();
+            UserConfig.getInstance(currentAccount).saveConfig(false);
+            message.dialog_id = SERVICE;
+            message.peer_id = controller.getPeer(SERVICE);
+            message.from_id = controller.getPeer(SERVICE);
+            message.flags |= TLRPC.MESSAGE_FLAG_HAS_FROM_ID;
+            message.date = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
+            message.message = text;
+            message.out = false;
+            message.unread = false;
+            message.media = new TLRPC.TL_messageMediaEmpty();
+
+            ArrayList<MessageObject> objects = new ArrayList<>();
+            objects.add(new MessageObject(currentAccount, message, true, true));
+            ArrayList<TLRPC.Message> messages = new ArrayList<>();
+            messages.add(message);
+            controller.updateInterfaceWithMessages(SERVICE, objects, 0);
+            MessagesStorage.getInstance(currentAccount).putMessages(
+                    messages, false, true, false, 0, false, 0, 0);
+            FileLog.d("mls: the recovery phrase was written into this device's service chat");
         });
     }
 }

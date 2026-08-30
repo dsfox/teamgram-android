@@ -181,6 +181,9 @@ public class MlsKeyPackages {
         // leaves against the count, so it is asked every time and costs nothing
         // when there is nothing to do (#41).
         MlsRuntime.getInstance(currentAccount).takeOutMyLostDevicesEverywhere();
+        // And the leaves that belong to nobody at all, which no comparison can
+        // claim and no owner will come for (#122).
+        MlsRuntime.getInstance(currentAccount).takeOutLeavesThatBelongToNobody();
         // And whatever changed while this phone was not running, which no
         // update will ever tell it about (#124).
         MlsRuntime.getInstance(currentAccount).catchUpOnMembership();
