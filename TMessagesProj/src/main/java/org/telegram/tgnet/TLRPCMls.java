@@ -131,6 +131,61 @@ public class TLRPCMls {
      * spend one doing it, so a group asking on its rhythm would empty
      * everybody's supply within the hour.
      */
+    /**
+     * mls.claimConversation peer_id:long group_id:bytes = mls.Conversation;
+     *
+     * Which conversation this chat has, settled by whoever asks first. Nothing
+     * settled it before, and three people beginning a group within a minute
+     * ended in two conversations that cannot read each other (#135).
+     */
+    public static class TL_mls_claimConversation extends TLObject {
+        public static final int constructor = -1101602434;
+
+        public long peer_id;
+        public byte[] group_id;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_conversation.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(peer_id);
+            stream.writeByteArray(group_id);
+        }
+    }
+
+    /** mls.conversation peer_id:long group_id:bytes = mls.Conversation; */
+    public static class TL_mls_conversation extends TLObject {
+        public static final int constructor = 622211617;
+
+        public long peer_id;
+        public byte[] group_id;
+
+        public static TL_mls_conversation TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_conversation.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.conversation", constructor));
+                }
+                return null;
+            }
+            TL_mls_conversation result = new TL_mls_conversation();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            peer_id = stream.readInt64(exception);
+            group_id = stream.readByteArray(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(peer_id);
+            stream.writeByteArray(group_id);
+        }
+    }
+
     public static class TL_mls_devicesOf extends TLObject {
         public static final int constructor = -657797125;
 

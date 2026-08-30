@@ -1090,12 +1090,10 @@ public class MlsRuntime {
                     // conversation this device has forgotten is one the other side
                     // can join and nobody can talk in.
                     MlsKeyPackages.getInstance(currentAccount).save(identity);
-                    remember(peerId, groupId);
 
-                    // One welcome, every member. add_members made a single one that
-                    // serves all of them, and each has to be handed it separately
-                    // because the mailbox is addressed to a person.
-                    inviteEveryone(peerId, groupId, invitation.welcome, members, 0);
+                    // And only now asked whether this chat is ours to start.
+                    // Outside this lock, because it is a round trip (#135).
+                    claimThenInvite(peerId, groupId, invitation.welcome, members);
                 } finally {
                     group.close();
                 }
@@ -1107,6 +1105,67 @@ public class MlsRuntime {
                 FileLog.e("mls: cannot start a conversation with " + peerId + ": " + e.getMessage());
             }
         }
+    }
+
+    /**
+     * Asks whether this chat's conversation is the one just made, and invites
+     * everybody only if it is.
+     *
+     * Nothing decided which conversation a chat's was, so every device that
+     * wanted to send into one without a conversation started its own. Between
+     * two people that almost always lands on one; three people beginning a
+     * group within a minute ended in two conversations that cannot read each
+     * other, with no way back (#135).
+     *
+     * The devices cannot settle it among themselves: whoever loses has to be
+     * told, and when everybody is offline and arrives in a random order there
+     * is nobody to tell them. The server settles it - first claim wins - and
+     * everybody after is told the same answer.
+     *
+     * A claim that loses leaves the group made here unused. It is never bound
+     * to the chat, so nothing looks at it again; the way in is the ordinary
+     * one, because this device is in the chat and has no leaf in the
+     * conversation that won, and the members of that one let it in.
+     *
+     * An unanswered claim adopts nothing. Going ahead on a claim that was not
+     * granted is exactly the split this exists to stop, and it is the one
+     * mistake here with no way back - a chat can wait for the next attempt,
+     * and until then a message goes as it always did.
+     */
+    private void claimThenInvite(long peerId, byte[] groupId, byte[] welcome,
+                                 List<Long> members) {
+        TLRPCMls.TL_mls_claimConversation claim = new TLRPCMls.TL_mls_claimConversation();
+        claim.peer_id = peerId;
+        claim.group_id = groupId;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(claim, (response, error) -> {
+            byte[] held = null;
+            if (error == null && response instanceof TLRPCMls.TL_mls_conversation) {
+                held = ((TLRPCMls.TL_mls_conversation) response).group_id;
+            }
+            if (held == null) {
+                FileLog.e("mls: nobody said whose conversation " + peerId + " is"
+                        + (error != null ? ": " + error.text : "") + ", not starting one");
+                synchronized (MlsRuntime.this) {
+                    starting.remove(peerId);
+                }
+                settle(peerId);
+                return;
+            }
+            if (!java.util.Arrays.equals(held, groupId)) {
+                FileLog.d("mls: " + peerId + " already has conversation " + shortId(held)
+                        + ", leaving the one just made alone and waiting to be let in");
+                synchronized (MlsRuntime.this) {
+                    starting.remove(peerId);
+                }
+                settle(peerId);
+                return;
+            }
+            remember(peerId, groupId);
+            // One welcome, every member. add_members made a single one that
+            // serves all of them, and each has to be handed it separately
+            // because the mailbox is addressed to a person.
+            inviteEveryone(peerId, groupId, welcome, members, 0);
+        });
     }
 
     // ----------------------------------------------------------------------
