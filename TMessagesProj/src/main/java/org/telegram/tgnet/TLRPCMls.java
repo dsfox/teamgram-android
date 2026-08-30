@@ -118,6 +118,85 @@ public class TLRPCMls {
     }
 
     /** mls.claimKeyPackages user_id:long = mls.KeyPackages; */
+    /**
+     * mls.devicesOf users:Vector&lt;long&gt; = mls.DeviceCounts;
+     *
+     * How many devices each of these people has published from. It is what
+     * tells a leaf whose device is gone from a leaf that is still somebody's -
+     * and without it a person who replaces a phone is never let back into a
+     * group, because the leaf of the device that has gone still stands for
+     * them (#132).
+     *
+     * Counting by claiming key packages would answer the same question and
+     * spend one doing it, so a group asking on its rhythm would empty
+     * everybody's supply within the hour.
+     */
+    public static class TL_mls_devicesOf extends TLObject {
+        public static final int constructor = -657797125;
+
+        public java.util.ArrayList<Long> users = new java.util.ArrayList<>();
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_deviceCounts.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(users.size());
+            for (Long id : users) {
+                stream.writeInt64(id);
+            }
+        }
+    }
+
+    /** mls.deviceCounts counts:Vector&lt;int&gt; = mls.DeviceCounts; */
+    public static class TL_mls_deviceCounts extends TLObject {
+        public static final int constructor = 661412983;
+
+        /**
+         * One count per person asked about, in the order they were asked. Zero
+         * means the server could not say, and nothing is concluded from it - it
+         * already means "nobody has asked yet" everywhere this is read.
+         */
+        public java.util.ArrayList<Integer> counts = new java.util.ArrayList<>();
+
+        public static TL_mls_deviceCounts TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_deviceCounts.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.deviceCounts", constructor));
+                }
+                return null;
+            }
+            TL_mls_deviceCounts result = new TL_mls_deviceCounts();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            int magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int count = stream.readInt32(exception);
+            for (int i = 0; i < count; i++) {
+                counts.add(stream.readInt32(exception));
+            }
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(counts.size());
+            for (Integer n : counts) {
+                stream.writeInt32(n);
+            }
+        }
+    }
+
     public static class TL_mls_claimKeyPackages extends TLObject {
         public static final int constructor = 88879177;
 

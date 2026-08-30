@@ -2373,15 +2373,85 @@ public class MlsRuntime {
             return;
         }
         Utilities.globalQueue.postRunnable(() -> {
-            List<Long> missing = whoIsMissing(groupId, candidates);
-            if (missing == null || missing.isEmpty()) {
+            List<byte[]> here = leavesIn(groupId);
+            if (here == null) {
                 doneChanging(peerId);
                 return;
             }
-            FileLog.d("mls: " + missing.size() + " of " + peerId
-                    + " are not in " + shortId(groupId) + " yet");
-            claimFor(peerId, missing, 0, new ArrayList<>(), attempt);
+            // How many leaves each person has, which is the question rather
+            // than whether they have any. "Is this person in the group" was the
+            // question until #132, and it is the wrong one the moment somebody
+            // replaces a phone: the leaf of the device that has gone still says
+            // yes, so nobody counts them as missing, nobody lets the phone they
+            // now hold in, and they sit in the chat watching padlocks for ever.
+            java.util.Map<Long, Integer> leaves = new HashMap<>();
+            for (byte[] name : here) {
+                long who = userIdIn(name);
+                if (who != NAME_UNREADABLE) {
+                    Integer had = leaves.get(who);
+                    leaves.put(who, had == null ? 1 : had + 1);
+                }
+            }
+
+            TLRPCMls.TL_mls_devicesOf asking = new TLRPCMls.TL_mls_devicesOf();
+            asking.users.addAll(candidates);
+            ConnectionsManager.getInstance(currentAccount).sendRequest(asking, (response, error) -> {
+                List<Long> wanting = new ArrayList<>();
+                if (error == null && response instanceof TLRPCMls.TL_mls_deviceCounts
+                        && ((TLRPCMls.TL_mls_deviceCounts) response).counts.size() == candidates.size()) {
+                    java.util.ArrayList<Integer> counts =
+                            ((TLRPCMls.TL_mls_deviceCounts) response).counts;
+                    for (int i = 0; i < candidates.size(); i++) {
+                        Integer had = leaves.get(candidates.get(i));
+                        if (counts.get(i) > (had == null ? 0 : had)) {
+                            wanting.add(candidates.get(i));
+                        }
+                    }
+                } else {
+                    // The server did not say. Falling back to the old question
+                    // is right rather than tidy: it lets in whoever is plainly
+                    // absent and does nothing about a leaf that may or may not
+                    // be dead, which is the safe half.
+                    FileLog.e("mls: the server did not say how many devices " + peerId
+                            + " has, going by who is absent"
+                            + (error != null ? ": " + error.text : ""));
+                    List<Long> absent = whoIsMissing(groupId, candidates);
+                    if (absent != null) {
+                        wanting.addAll(absent);
+                    }
+                }
+                if (wanting.isEmpty()) {
+                    doneChanging(peerId);
+                    return;
+                }
+                FileLog.d("mls: " + wanting.size() + " of " + peerId
+                        + " have a device that " + shortId(groupId) + " does not hold");
+                claimFor(peerId, wanting, 0, new ArrayList<>(), attempt, here);
+            });
         });
+    }
+
+    /** Every leaf this conversation holds, by name. Null when the group cannot
+     *  be opened, which is not the same as a conversation with nobody in it. */
+    private List<byte[]> leavesIn(byte[] groupId) {
+        // One at a time: the state is one blob and every
+        // operation rewrites all of it (#112).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group == null) {
+                    return null;
+                }
+                try {
+                    return new ArrayList<>(group.memberNames());
+                } finally {
+                    group.close();
+                }
+            } catch (MlsCore.MlsException e) {
+                FileLog.e("mls: cannot see who is in " + shortId(groupId) + ": " + e.getMessage());
+                return null;
+            }
+        }
     }
 
     /** Which of these people are not in the conversation. Null when the group
@@ -2431,7 +2501,7 @@ public class MlsRuntime {
      * once it has.
      */
     private void claimFor(long peerId, List<Long> missing, int at,
-                          ArrayList<byte[]> collected, int attempt) {
+                          ArrayList<byte[]> collected, int attempt, List<byte[]> here) {
         if (at >= missing.size()) {
             List<Long> reachable = new ArrayList<>();
             for (Long member : missing) {
@@ -2462,7 +2532,18 @@ public class MlsRuntime {
                         withoutDevices.put(member, System.currentTimeMillis());
                     }
                 } else {
-                    collected.addAll(claimed.packages);
+                    // Not the leaves already standing here. A person being
+                    // caught up has live devices in the group as well as the
+                    // one that is missing, and adding a leaf that is already
+                    // there gives them two, one of which holds no keys anybody
+                    // has.
+                    for (byte[] keyPackage : claimed.packages) {
+                        byte[] name = MlsCore.keyPackageName(keyPackage);
+                        if (name != null && holds(here, name)) {
+                            continue;
+                        }
+                        collected.add(keyPackage);
+                    }
                     synchronized (MlsRuntime.this) {
                         withoutDevices.remove(member);
                     }
@@ -2474,7 +2555,7 @@ public class MlsRuntime {
                     withoutDevices.put(member, System.currentTimeMillis());
                 }
             }
-            claimFor(peerId, missing, at + 1, collected, attempt);
+            claimFor(peerId, missing, at + 1, collected, attempt, here);
         });
     }
 
