@@ -2485,8 +2485,23 @@ public class MlsRuntime {
                 List<Long> wanting = new ArrayList<>();
                 if (error == null && response instanceof TLRPCMls.TL_mls_deviceCounts
                         && ((TLRPCMls.TL_mls_deviceCounts) response).counts.size() == candidates.size()) {
-                    java.util.ArrayList<Integer> counts =
-                            ((TLRPCMls.TL_mls_deviceCounts) response).counts;
+                    TLRPCMls.TL_mls_deviceCounts said = (TLRPCMls.TL_mls_deviceCounts) response;
+                    java.util.ArrayList<Integer> counts = said.counts;
+
+                    // The other direction first: a leaf whose device is gone.
+                    // Taken before anybody is let in because it is the smaller
+                    // group that results, and because letting somebody in while
+                    // the tree still holds their dead leaf is how one person
+                    // came to hold three.
+                    List<byte[]> dead = whoseDeviceIsGone(candidates, said, here, leaves);
+                    if (!dead.isEmpty()) {
+                        FileLog.d("mls: " + dead.size() + " leaf/leaves in " + shortId(groupId)
+                                + " belong to devices that are gone");
+                        commitChange(new Dropping(peerId, dead, "leaf(es) whose device is gone"),
+                                () -> letIn(peerId, candidates, attempt + 1));
+                        return;
+                    }
+
                     for (int i = 0; i < candidates.size(); i++) {
                         Integer had = leaves.get(candidates.get(i));
                         if (counts.get(i) > (had == null ? 0 : had)) {
@@ -2538,6 +2553,81 @@ public class MlsRuntime {
                 return null;
             }
         }
+    }
+
+    /**
+     * The leaves in this conversation whose device no longer exists.
+     *
+     * The mirror of letting somebody in, and the half that had no way to be
+     * written until the server could name a device without spending a key
+     * package. A person replaces a phone: the new one is let in, and the leaf
+     * of the old one stays, because whoever compares the chat with the
+     * conversation reasons about people and that person is still there. Nobody
+     * removes it - `takeOutMyLostDevices` only ever looks at this account - so
+     * it stays for the life of the group, and every commit is encrypted to it.
+     * Four people on the stand were carrying twelve leaves (#139).
+     *
+     * Two questions, answered by two halves of one answer, and in this order.
+     * *Whether* a device is gone is the count: more leaves of theirs here than
+     * devices the server knows of. *Which* one is the names. The count is asked
+     * first because the names alone would be dangerous, and it is the same rule
+     * this account's own leaves are taken out by - evicting a live phone is the
+     * worst thing this code can do.
+     *
+     * Three things stop it, each of which would otherwise cost somebody their
+     * conversation:
+     *
+     *   - an answer that cannot be cut. `namesOf` says so rather than guessing,
+     *     and a guess would attribute one person's devices to the next.
+     *   - a device that cannot be named. A key package published before they
+     *     carried an identity (#136) is counted and has an empty name, so a
+     *     leaf of theirs would look unaccounted for when it is merely old.
+     *   - this account. Its own leaves are somebody else's job, with a guard of
+     *     its own about the name this device goes under; two passes removing
+     *     the same leaf is a race nobody needs.
+     */
+    private List<byte[]> whoseDeviceIsGone(List<Long> candidates,
+                                           TLRPCMls.TL_mls_deviceCounts said,
+                                           List<byte[]> here,
+                                           Map<Long, Integer> leaves) {
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        List<byte[]> dead = new ArrayList<>();
+        for (int i = 0; i < candidates.size(); i++) {
+            long who = candidates.get(i);
+            if (who == self) {
+                continue;
+            }
+            Integer had = leaves.get(who);
+            if (had == null || had <= said.counts.get(i)) {
+                // The count does not say anybody of theirs is missing. Nothing
+                // is removed on the names alone.
+                continue;
+            }
+            List<byte[]> alive = said.namesOf(i);
+            if (alive == null) {
+                FileLog.e("mls: the devices of " + who + " cannot be read out of the answer");
+                continue;
+            }
+            boolean nameless = false;
+            for (byte[] name : alive) {
+                if (name == null || name.length == 0) {
+                    nameless = true;
+                    break;
+                }
+            }
+            if (nameless) {
+                FileLog.d("mls: " + who + " has a device that cannot be named, "
+                        + "so none of their leaves is touched");
+                continue;
+            }
+            byte[] prefix = nameOf(who);
+            for (byte[] leaf : here) {
+                if (startsWith(leaf, prefix) && !holds(alive, leaf)) {
+                    dead.add(leaf);
+                }
+            }
+        }
+        return dead;
     }
 
     /** Which of these people are not in the conversation. Null when the group
