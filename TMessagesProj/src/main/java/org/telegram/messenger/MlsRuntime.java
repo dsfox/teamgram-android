@@ -1864,8 +1864,28 @@ public class MlsRuntime {
      *  enough that a burst of chat-info loads does not open the group each time. */
     private static final long RECONCILE_NOT_BEFORE = 5_000L;
 
+    /**
+     * Whether this conversation is one to compare with its chat.
+     *
+     * A group, and a chat between two - which was left out of the comparison
+     * with "a chat between two never changes who is in it" written beside it on
+     * both clients. Who is in it does not change; how many devices they have
+     * does, and that is what this has been about since #132. In a group
+     * somebody notices a phone that has been replaced and lets the new one in.
+     * In a chat between two nobody was looking, so the person sat there
+     * watching padlocks with nothing on any screen to say why - and the settled
+     * answer for that chat could never be put right either, because the moment
+     * that puts it right is the end of this very comparison (#139, #142).
+     *
+     * A channel is not: broadcasting is a different thing and none of it is
+     * built (#16). A folder id is not a conversation at all.
+     */
+    private boolean worthComparing(long peerId) {
+        return peerId > 0 || DialogObject.isChatDialog(peerId);
+    }
+
     private void reconcile(long peerId, boolean listIsFromTheServer, int attempt) {
-        if (!DialogObject.isChatDialog(peerId) || groupOf(peerId) == null) {
+        if (!worthComparing(peerId) || groupOf(peerId) == null) {
             return;
         }
         synchronized (this) {
@@ -1881,7 +1901,12 @@ public class MlsRuntime {
             // device has never seen would be acting on nothing at all.
             return;
         }
-        if (listIsFromTheServer) {
+        // Only for a group, and only on a fresh list. A chat between two has
+        // nobody who could have to leave it - the membership is the two of them
+        // and there is no removal to miss - so the half that fails safely by
+        // removing has nothing to do here and every mistake it could make would
+        // be a person cut out of their own conversation.
+        if (listIsFromTheServer && DialogObject.isChatDialog(peerId)) {
             putOutTheRest(peerId, members, attempt);
         }
         letIn(peerId, members, attempt);
@@ -2451,7 +2476,7 @@ public class MlsRuntime {
      * nobody is ever added twice.
      */
     private void letIn(long peerId, List<Long> candidates, int attempt) {
-        if (!DialogObject.isChatDialog(peerId)) {
+        if (!worthComparing(peerId)) {
             return;
         }
         byte[] groupId = groupOf(peerId);
