@@ -145,17 +145,26 @@ public class TLRPCMls {
      * everybody's supply within the hour.
      */
     /**
-     * mls.claimConversation peer_id:long group_id:bytes = mls.Conversation;
+     * mls.claimConversation peer_id:long group_id:bytes holds_everybody:Bool = mls.Conversation;
      *
      * Which conversation this chat has, settled by whoever asks first. Nothing
      * settled it before, and three people beginning a group within a minute
      * ended in two conversations that cannot read each other (#135).
+     *
+     * holds_everybody is the other thing to say here, and the only one that
+     * replaces an answer already settled: this device is inside the
+     * conversation and has just found a leaf there for every device of every
+     * member of the chat. Without it the first answer stood for ever, and one
+     * won by a conversation that a rebuilding device made and nobody followed
+     * sends every device starting from nothing to a group with nobody in it, to
+     * wait for an invitation that cannot come (#139).
      */
     public static class TL_mls_claimConversation extends TLObject {
-        public static final int constructor = -1101602434;
+        public static final int constructor = -936499491;
 
         public long peer_id;
         public byte[] group_id;
+        public boolean holds_everybody;
 
         public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
             return TL_mls_conversation.TLdeserialize(stream, constructor, exception);
@@ -165,6 +174,7 @@ public class TLRPCMls {
             stream.writeInt32(constructor);
             stream.writeInt64(peer_id);
             stream.writeByteArray(group_id);
+            stream.writeBool(holds_everybody);
         }
     }
 

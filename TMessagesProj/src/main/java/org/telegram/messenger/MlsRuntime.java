@@ -590,6 +590,11 @@ public class MlsRuntime {
 
     private final java.util.Set<Long> starting = new java.util.HashSet<>();
 
+    /** Chats this run has already told the server hold everybody, and in which
+     *  conversation. The comparison runs on the rhythm of sending and the answer
+     *  does not change between two messages, so it is said once. */
+    private final Map<Long, byte[]> vouchedFor = new HashMap<>();
+
     /** Sends held back until a conversation with that peer exists, by peer. */
     private final Map<Long, java.util.ArrayList<Waiter>> waitingForConversation = new HashMap<>();
 
@@ -1163,6 +1168,12 @@ public class MlsRuntime {
         TLRPCMls.TL_mls_claimConversation claim = new TLRPCMls.TL_mls_claimConversation();
         claim.peer_id = peerId;
         claim.group_id = groupId;
+        // Not holds_everybody: this conversation was made a moment ago and holds
+        // only whoever was invited into it. Saying otherwise here would let a
+        // device that has just built a second conversation take the chat away
+        // from the one everybody is in, which is the split this call exists to
+        // prevent (#139).
+        claim.holds_everybody = false;
         ConnectionsManager.getInstance(currentAccount).sendRequest(claim, (response, error) -> {
             byte[] held = null;
             if (error == null && response instanceof TLRPCMls.TL_mls_conversation) {
@@ -2483,8 +2494,14 @@ public class MlsRuntime {
             asking.users.addAll(candidates);
             ConnectionsManager.getInstance(currentAccount).sendRequest(asking, (response, error) -> {
                 List<Long> wanting = new ArrayList<>();
-                if (error == null && response instanceof TLRPCMls.TL_mls_deviceCounts
-                        && ((TLRPCMls.TL_mls_deviceCounts) response).counts.size() == candidates.size()) {
+                // Which of the two questions was answered. Only the count is
+                // evidence enough to tell the server this conversation holds
+                // everybody: the fallback below answers who is plainly absent,
+                // which is the question that was wrong until #132 - a person who
+                // has replaced a phone is not absent and is not here either.
+                boolean counted = error == null && response instanceof TLRPCMls.TL_mls_deviceCounts
+                        && ((TLRPCMls.TL_mls_deviceCounts) response).counts.size() == candidates.size();
+                if (counted) {
                     TLRPCMls.TL_mls_deviceCounts said = (TLRPCMls.TL_mls_deviceCounts) response;
                     java.util.ArrayList<Integer> counts = said.counts;
 
@@ -2522,6 +2539,13 @@ public class MlsRuntime {
                     }
                 }
                 if (wanting.isEmpty()) {
+                    if (counted) {
+                        // Nobody missing, on the answer that can say so. This is
+                        // the one moment this device knows as a fact that the
+                        // conversation holds the chat, so it is the moment to
+                        // say it.
+                        sayItHoldsEverybody(peerId, groupId);
+                    }
                     doneChanging(peerId);
                     return;
                 }
@@ -2529,6 +2553,69 @@ public class MlsRuntime {
                         + " have a device that " + shortId(groupId) + " does not hold");
                 claimFor(peerId, wanting, 0, new ArrayList<>(), attempt, here);
             });
+        });
+    }
+
+    /**
+     * Tells the server that this conversation is the chat's, having just found
+     * a leaf in it for every device of every member.
+     *
+     * Which conversation a chat has is settled by the first device to ask
+     * (#135), and until this that first answer was the answer for ever. One chat
+     * on the stand had it won by a conversation that a device rebuilding on a
+     * misreading made and nobody followed: everybody talks in another one, and
+     * every device that starts from nothing is sent to a group with nobody in it
+     * to wait for an invitation that cannot come. Neither a message nor an
+     * invitation is ever compared with that answer, so nothing undoes it (#139).
+     *
+     * Said only from the comparison, and only where the count answered it. That
+     * is what makes it a fact and not a hope: this device is in the conversation
+     * and has just looked. It hands nobody anything new either - a member can
+     * already take the chat into a conversation of their own by inviting
+     * everybody to it - so all it does is write down where the chat ended up.
+     *
+     * It moves nobody. A device holding the wrong conversation is still brought
+     * across by the invitation it will be sent; this only stops the next device
+     * that starts from nothing being sent somewhere empty.
+     */
+    private void sayItHoldsEverybody(long peerId, byte[] groupId) {
+        synchronized (this) {
+            byte[] already = vouchedFor.get(peerId);
+            if (already != null && java.util.Arrays.equals(already, groupId)) {
+                return;
+            }
+            vouchedFor.put(peerId, groupId);
+        }
+        TLRPCMls.TL_mls_claimConversation saying = new TLRPCMls.TL_mls_claimConversation();
+        saying.peer_id = peerId;
+        saying.group_id = groupId;
+        saying.holds_everybody = true;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(saying, (response, error) -> {
+            byte[] held = null;
+            if (error == null && response instanceof TLRPCMls.TL_mls_conversation) {
+                held = ((TLRPCMls.TL_mls_conversation) response).group_id;
+            }
+            if (held == null) {
+                // Forgotten, so the next comparison says it again. One that was
+                // never delivered but remembered as said is the same silence
+                // this exists to end.
+                synchronized (MlsRuntime.this) {
+                    vouchedFor.remove(peerId);
+                }
+                FileLog.e("mls: could not say that " + shortId(groupId) + " holds all of "
+                        + peerId + (error != null ? ": " + error.text : ""));
+                return;
+            }
+            if (!java.util.Arrays.equals(held, groupId)) {
+                // Nothing to do about it from here, and everything to say: a
+                // server that keeps another answer after being told this one is
+                // the state the whole pass exists to find.
+                FileLog.e("mls: " + shortId(groupId) + " holds all of " + peerId
+                        + " and the server still says " + shortId(held));
+                return;
+            }
+            FileLog.d("mls: " + peerId + " is settled on " + shortId(groupId)
+                    + ", which holds everybody");
         });
     }
 
