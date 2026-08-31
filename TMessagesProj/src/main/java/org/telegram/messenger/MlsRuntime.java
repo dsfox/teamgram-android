@@ -433,6 +433,15 @@ public class MlsRuntime {
             // sender read their own ciphertext, so keeping it buys nothing.
             // A lock, and where there is a file the path to it is left alone -
             // attachPath is the only record of where that file is.
+            //
+            // Said out loud, because this is the moment a person's own message
+            // would be lost if the words were not already in the database. The
+            // storage layer refuses to write this over them - see
+            // MessagesStorage.mlsKeepWhatIsReadable - and this line is how the
+            // two halves can be told apart in a log.
+            FileLog.d("mls: the server's copy of message " + message.id + " in "
+                    + MessageObject.getDialogId(message)
+                    + " came back, and this device wrote it - nothing here can open it");
             if (message.media == null) {
                 message.attachPath = message.message;
             }

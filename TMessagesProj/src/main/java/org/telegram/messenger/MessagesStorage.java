@@ -11966,6 +11966,116 @@ public class MessagesStorage extends BaseController {
 
     }
 
+    /** What a message that cannot be read is stored as: the lock that stands in
+     *  for the ciphertext, or the ciphertext itself. */
+    private static boolean mlsUnreadable(String text) {
+        return MlsRuntime.LOCKED.equals(text) || MlsRuntime.isCiphertext(text);
+    }
+
+    /**
+     * Keeps the words a stored message already has when the copy arriving has
+     * none (#143).
+     *
+     * MLS gives a sender no way to open their own ciphertext - that is the
+     * design, and the core holds it in `the_sender_cannot_read_their_own_message`.
+     * So for a message this device wrote, the local copy is the only readable
+     * one that will ever exist here, and the server sends its own copy back by
+     * half a dozen routes: the confirmation of a send, a history load, the
+     * dialog list, the difference after a restart. Each of them arrives as a
+     * lock over a ciphertext, and storing that over the words is how a person
+     * loses their own message - locally, silently, and beyond recovery, because
+     * what is left on the server can never be opened by this device.
+     *
+     * The same holds for a message received and opened once: MLS opens a
+     * ciphertext exactly once, so a copy arriving a second time is worth less
+     * than the one already stored.
+     *
+     * This sits where messages reach the database rather than at whichever
+     * route was found first, because the copy comes back by routes nobody has
+     * thought of yet and the next one will too. The other client settled on the
+     * same rule in the same place - `mlsKeepingWhatIsReadable`.
+     */
+    private void mlsKeepWhatIsReadable(ArrayList<TLRPC.Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return;
+        }
+        for (int a = 0; a < messages.size(); a++) {
+            TLRPC.Message message = messages.get(a);
+            // A message with no id of its own has nothing stored to compare
+            // against: it is being written for the first time.
+            if (message == null || message.id <= 0 || !mlsUnreadable(message.message)) {
+                continue;
+            }
+            long dialogId = MessageObject.getDialogId(message);
+            TLRPC.Message stored = null;
+            SQLiteCursor cursor = null;
+            try {
+                cursor = database.queryFinalized(String.format(Locale.US,
+                        "SELECT data FROM messages_v2 WHERE mid = %d AND uid = %d LIMIT 1",
+                        message.id, dialogId));
+                if (cursor.next()) {
+                    NativeByteBuffer data = cursor.byteBufferValue(0);
+                    if (data != null) {
+                        stored = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                        if (stored != null) {
+                            stored.readAttachPath(data, getUserConfig().clientUserId);
+                        }
+                        data.reuse();
+                    }
+                }
+            } catch (Exception e) {
+                checkSQLException(e);
+            } finally {
+                if (cursor != null) {
+                    cursor.dispose();
+                }
+            }
+            if (stored == null || mlsUnreadable(stored.message)) {
+                continue;
+            }
+            // Readable means words or a file: a picture sent without a caption
+            // has nothing to say and is still the thing this device is holding.
+            // Asking for words alone would leave every uncaptioned photo
+            // replaced by the server's blob in the sender's own chat.
+            if (TextUtils.isEmpty(stored.message) && stored.media == null) {
+                continue;
+            }
+            message.message = stored.message;
+            // The formatting is local too, and for the same reason: it went
+            // inside the ciphertext, so the copy coming back carries none and
+            // taking it would leave the message readable but stripped of its
+            // bold and its links.
+            message.entities = stored.entities;
+            if (stored.entities != null && !stored.entities.isEmpty()) {
+                message.flags |= TLRPC.MESSAGE_FLAG_HAS_ENTITIES;
+            } else {
+                message.flags &= ~TLRPC.MESSAGE_FLAG_HAS_ENTITIES;
+            }
+            // And the file. What arrives is the blob of noise the server was
+            // given; the picture is the one already here, made by this device.
+            if (stored.media != null) {
+                message.media = stored.media;
+            }
+            // A forward into an encrypted conversation travels as an ordinary
+            // message, so the copy coming back says nothing about who wrote it
+            // first, and taking that would turn somebody else's words into the
+            // sender's own.
+            if (message.fwd_from == null && stored.fwd_from != null) {
+                message.fwd_from = stored.fwd_from;
+                message.flags |= TLRPC.MESSAGE_FLAG_FWD;
+            }
+            // attachPath is where the path to the file is kept, and where a
+            // ciphertext waiting to be opened is put aside. The stored copy is
+            // readable, so what it holds is the path.
+            message.attachPath = stored.attachPath;
+            // Said out loud, because silence is the whole of this fault. The
+            // line means the words were about to be replaced by a lock and were
+            // not.
+            FileLog.d("mls: kept the words of message " + message.id + " in " + dialogId
+                    + " - the copy that arrived had none");
+        }
+    }
+
     private void putMessagesInternal(ArrayList<TLRPC.Message> messages, boolean withTransaction, boolean doNotUpdateDialogDate, int downloadMask, boolean ifNoLastMessage, int mode, long threadMessageId) {
         if (messages != null) {
             ArrayList<TL_ephemeral.EphemeralMessage> ephemeralMessages = null;
@@ -12008,6 +12118,11 @@ public class MessagesStorage extends BaseController {
                 if (threadMessageId == 0) {
                     threadMessageId = MessageObject.getQuickReplyId(currentAccount, messages.get(0));
                 }
+            }
+            // Before anything is stored: a copy that arrived unreadable must
+            // not replace words this device already holds (#143).
+            if (mode == ChatActivity.MODE_DEFAULT) {
+                mlsKeepWhatIsReadable(messages);
             }
             if (messages != null && mode == ChatActivity.MODE_DEFAULT) {
                 int currentTime = -1;
@@ -15966,6 +16081,12 @@ public class MessagesStorage extends BaseController {
                     MessageObject.getDialogId(message);
                 }
 
+                // Asked for again from the server, which hands back a ciphertext
+                // where this device is holding the words (#143).
+                ArrayList<TLRPC.Message> replaced = new ArrayList<>(1);
+                replaced.add(message);
+                mlsKeepWhatIsReadable(replaced);
+
                 fixUnsupportedMedia(message);
                 MessageObject.normalizeFlags(message);
                 NativeByteBuffer data = new NativeByteBuffer(message.getObjectSize());
@@ -16305,6 +16426,10 @@ public class MessagesStorage extends BaseController {
                     database.commitTransaction();
                     broadcastScheduledMessagesChange(dialogId);
                 } else {
+                    // A history load from the server carries the server's copy of
+                    // every message, including the ones this device wrote and can
+                    // never read back (#143).
+                    mlsKeepWhatIsReadable(messages.messages);
                     int mentionCountUpdate = Integer.MAX_VALUE;
                     boolean isTopic = threadMessageId != 0;
                     String holesTableName = isTopic ? "messages_holes_topics" : "messages_holes";
@@ -17439,6 +17564,9 @@ public class MessagesStorage extends BaseController {
         SQLiteCursor cursor = null;
         try {
             database.beginTransaction();
+            // The top message of every chat is written here too, and it is as
+            // often as not the last thing this device said (#143).
+            mlsKeepWhatIsReadable(dialogs.messages);
             LongSparseArray<TLRPC.Message> new_dialogMessage = new LongSparseArray<>(dialogs.messages.size());
             for (int a = 0; a < dialogs.messages.size(); a++) {
                 TLRPC.Message message = dialogs.messages.get(a);
