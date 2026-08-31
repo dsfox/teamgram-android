@@ -218,9 +218,9 @@ public class TLRPCMls {
         }
     }
 
-    /** mls.deviceCounts counts:Vector&lt;int&gt; = mls.DeviceCounts; */
+    /** mls.deviceCounts counts:Vector&lt;int&gt; names:Vector&lt;bytes&gt; = mls.DeviceCounts; */
     public static class TL_mls_deviceCounts extends TLObject {
-        public static final int constructor = 661412983;
+        public static final int constructor = 1890672928;
 
         /**
          * One count per person asked about, in the order they were asked. Zero
@@ -228,6 +228,19 @@ public class TLRPCMls {
          * already means "nobody has asked yet" everywhere this is read.
          */
         public java.util.ArrayList<Integer> counts = new java.util.ArrayList<>();
+
+        /**
+         * The leaf name of every one of those devices, all of them in one list:
+         * the counts say where to cut it. One entry per counted device, so the
+         * cut is always right, and empty for a device that published before key
+         * packages said which identity they belong to (#136).
+         *
+         * In the same answer as the counts on purpose. Taking a leaf out asks
+         * two questions - whether a device is missing, which the count answers,
+         * and which leaf is it, which these answer - and while they came from
+         * two calls they could disagree (#139).
+         */
+        public java.util.ArrayList<byte[]> names = new java.util.ArrayList<>();
 
         public static TL_mls_deviceCounts TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
             if (TL_mls_deviceCounts.constructor != constructor) {
@@ -253,6 +266,18 @@ public class TLRPCMls {
             for (int i = 0; i < count; i++) {
                 counts.add(stream.readInt32(exception));
             }
+
+            magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int named = stream.readInt32(exception);
+            for (int i = 0; i < named; i++) {
+                names.add(stream.readByteArray(exception));
+            }
         }
 
         public void serializeToStream(OutputSerializedData stream) {
@@ -262,6 +287,36 @@ public class TLRPCMls {
             for (Integer n : counts) {
                 stream.writeInt32(n);
             }
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(names.size());
+            for (byte[] name : names) {
+                stream.writeByteArray(name);
+            }
+        }
+
+        /**
+         * The names belonging to the person at that place in the answer, or
+         * null when the answer cannot be cut there.
+         *
+         * Null rather than an empty list, because the two mean opposite things:
+         * a person with no devices is a real answer and a list that does not
+         * add up is one nothing may be concluded from. Everything that removes
+         * a leaf goes through here, so a short or ragged answer stops it rather
+         * than shifting one person's devices onto the next.
+         */
+        public java.util.List<byte[]> namesOf(int who) {
+            if (who < 0 || who >= counts.size()) {
+                return null;
+            }
+            int at = 0;
+            for (int i = 0; i < who; i++) {
+                at += counts.get(i);
+            }
+            int mine = counts.get(who);
+            if (at < 0 || mine < 0 || at + mine > names.size()) {
+                return null;
+            }
+            return names.subList(at, at + mine);
         }
     }
 
