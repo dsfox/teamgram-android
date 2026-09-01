@@ -145,26 +145,18 @@ public class TLRPCMls {
      * everybody's supply within the hour.
      */
     /**
-     * mls.claimConversation peer_id:long group_id:bytes holds_everybody:Bool holds:Vector&lt;bytes&gt; = mls.Conversation;
+     * mls.claimConversation peer_id:long group_id:bytes holds:Vector&lt;bytes&gt; = mls.Conversation;
      *
      * Which conversation this chat has, settled by whoever asks first. Nothing
      * settled it before, and three people beginning a group within a minute
      * ended in two conversations that cannot read each other (#135).
      *
-     * holds_everybody is the other thing to say here, and the only one that
-     * replaces an answer already settled: this device is inside the
-     * conversation and has just found a leaf there for every device of every
-     * member of the chat. Without it the first answer stood for ever, and one
-     * won by a conversation that a rebuilding device made and nobody followed
-     * sends every device starting from nothing to a group with nobody in it, to
-     * wait for an invitation that cannot come (#139).
      */
     public static class TL_mls_claimConversation extends TLObject {
-        public static final int constructor = -1427126146;
+        public static final int constructor = -187340385;
 
         public long peer_id;
         public byte[] group_id;
-        public boolean holds_everybody;
         /** The same roster a commit carries, and it rides here because a
          *  group's first membership arrives with no commit at all: the creator
          *  accepts its own commit locally and never posts it (#147). */
@@ -178,7 +170,6 @@ public class TLRPCMls {
             stream.writeInt32(constructor);
             stream.writeInt64(peer_id);
             stream.writeByteArray(group_id);
-            stream.writeBool(holds_everybody);
             stream.writeInt32(0x1cb5c415);
             stream.writeInt32(holds.size());
             for (int i = 0; i < holds.size(); i++) {
