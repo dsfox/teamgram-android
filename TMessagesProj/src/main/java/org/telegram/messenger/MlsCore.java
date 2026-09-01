@@ -47,6 +47,9 @@ public final class MlsCore {
 
     private static native byte[] memberNames(long group);
 
+    /** The same, counting a commit staged and not yet applied (#147). */
+    private static native byte[] stagedMemberNames(long group);
+
     private static native boolean acceptCommit(long group, long identity);
 
     private static native boolean abandonCommit(long group, long identity);
@@ -377,7 +380,28 @@ public final class MlsCore {
          * and two joining leaves the count exactly where it was.
          */
         public java.util.List<byte[]> memberNames() {
-            byte[] packed = MlsCore.memberNames(this.handle);
+            return unpackNames(MlsCore.memberNames(this.handle));
+        }
+
+        /**
+         * The same, counting the commit this device has staged and not yet
+         * applied: a newcomer already in, somebody removed already out.
+         *
+         * It is what a committer tells the delivery service its group holds,
+         * and it has to be the membership *after* the commit - between offering
+         * one and hearing whether it was taken, the tree still shows the one
+         * before (#147). With nothing staged the two answers are the same.
+         */
+        public java.util.List<byte[]> stagedMemberNames() {
+            return unpackNames(MlsCore.stagedMemberNames(this.handle));
+        }
+
+        /**
+         * Length-prefixed names, as the core packs them. Written once: two
+         * copies of one wire format is how the two come to disagree, and a
+         * disagreement here reads as a membership that changed on its own.
+         */
+        private static java.util.List<byte[]> unpackNames(byte[] packed) {
             java.util.ArrayList<byte[]> names = new java.util.ArrayList<>();
             if (packed == null) {
                 return names;

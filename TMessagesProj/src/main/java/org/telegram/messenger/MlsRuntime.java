@@ -1183,6 +1183,27 @@ public class MlsRuntime {
         // from the one everybody is in, which is the split this call exists to
         // prevent (#139).
         claim.holds_everybody = false;
+        // And the roster, which is where the delivery service learns a new
+        // group's membership at all: the creator accepts its own commit locally
+        // and never posts it - there is nobody to have raced with - so no commit
+        // will ever carry this one (#147).
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                MlsCore.Group group = MlsCore.Group.load(identity, groupId);
+                if (group != null) {
+                    try {
+                        claim.holds.addAll(group.stagedMemberNames());
+                    } finally {
+                        group.close();
+                    }
+                }
+            } catch (MlsCore.MlsException e) {
+                // The claim still goes: an empty roster means nothing was said
+                // rather than that the group is empty, so this costs the server
+                // its knowledge of one group until the next commit repairs it.
+                FileLog.e("mls: cannot name who holds " + shortId(groupId) + ": " + e.getMessage());
+            }
+        }
         ConnectionsManager.getInstance(currentAccount).sendRequest(claim, (response, error) -> {
             byte[] held = null;
             if (error == null && response instanceof TLRPCMls.TL_mls_conversation) {
@@ -1546,6 +1567,11 @@ public class MlsRuntime {
 
         byte[] commit;
         long epoch;
+        // What the group will hold once this commit is applied, read from the
+        // same tree that built it. Staged rather than applied, so the tree on
+        // its own still shows the membership before the change - which is why
+        // this asks for the staged answer (#147).
+        java.util.List<byte[]> holds;
         // One at a time: the state is one blob and every
         // operation rewrites all of it (#112).
         synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
@@ -1563,6 +1589,7 @@ public class MlsRuntime {
                         return;
                     }
                     epoch = group.epoch();
+                    holds = group.stagedMemberNames();
                     // Written down before it is offered. The commit is staged
                     // rather than applied, and the answer may arrive after this
                     // process has been killed - or never, if the connection drops.
@@ -1596,6 +1623,7 @@ public class MlsRuntime {
         // anybody, and this phone needs its own copy back to learn the outcome
         // if the answer below never arrives.
         send.members.add(UserConfig.getInstance(currentAccount).getClientUserId());
+        send.holds.addAll(holds);
 
         ConnectionsManager.getInstance(currentAccount).sendRequest(send, (response, error) -> {
             if (error != null || !(response instanceof TLRPCMls.TL_mls_commitResult)) {
@@ -2624,6 +2652,10 @@ public class MlsRuntime {
         saying.peer_id = peerId;
         saying.group_id = groupId;
         saying.holds_everybody = true;
+        // No roster here, and empty means "nothing said" rather than "nobody in
+        // it". This call is about the claim; the roster comes from the two
+        // places that know it for certain - a commit, and the claim a new group
+        // makes (#147).
         ConnectionsManager.getInstance(currentAccount).sendRequest(saying, (response, error) -> {
             byte[] held = null;
             if (error == null && response instanceof TLRPCMls.TL_mls_conversation) {

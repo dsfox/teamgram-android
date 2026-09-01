@@ -145,7 +145,7 @@ public class TLRPCMls {
      * everybody's supply within the hour.
      */
     /**
-     * mls.claimConversation peer_id:long group_id:bytes holds_everybody:Bool = mls.Conversation;
+     * mls.claimConversation peer_id:long group_id:bytes holds_everybody:Bool holds:Vector&lt;bytes&gt; = mls.Conversation;
      *
      * Which conversation this chat has, settled by whoever asks first. Nothing
      * settled it before, and three people beginning a group within a minute
@@ -160,11 +160,15 @@ public class TLRPCMls {
      * wait for an invitation that cannot come (#139).
      */
     public static class TL_mls_claimConversation extends TLObject {
-        public static final int constructor = -936499491;
+        public static final int constructor = -1427126146;
 
         public long peer_id;
         public byte[] group_id;
         public boolean holds_everybody;
+        /** The same roster a commit carries, and it rides here because a
+         *  group's first membership arrives with no commit at all: the creator
+         *  accepts its own commit locally and never posts it (#147). */
+        public java.util.ArrayList<byte[]> holds = new java.util.ArrayList<>();
 
         public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
             return TL_mls_conversation.TLdeserialize(stream, constructor, exception);
@@ -175,6 +179,11 @@ public class TLRPCMls {
             stream.writeInt64(peer_id);
             stream.writeByteArray(group_id);
             stream.writeBool(holds_everybody);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(holds.size());
+            for (int i = 0; i < holds.size(); i++) {
+                stream.writeByteArray(holds.get(i));
+            }
         }
     }
 
@@ -1021,16 +1030,22 @@ public class TLRPCMls {
         }
     }
 
-    /** mls.sendCommit group_id:bytes epoch:long members:Vector&lt;long&gt; commit:bytes = mls.CommitResult; */
+    /** mls.sendCommit group_id:bytes epoch:long members:Vector&lt;long&gt; commit:bytes holds:Vector&lt;bytes&gt; = mls.CommitResult; */
     public static class TL_mls_sendCommit extends TLObject {
-        public static final int constructor = -945155929;
+        public static final int constructor = 781607113;
 
         public byte[] group_id;
         public long epoch;
-        /** Where to leave it. The server does not know who is in a group and
-         *  must not - it is told, not asked. */
+        /** Where to leave it: the mailboxes the server has to fill. */
         public java.util.ArrayList<Long> members = new java.util.ArrayList<>();
         public byte[] commit;
+        /** Who holds a leaf once this commit is applied - one entry per leaf,
+         *  each the leaf's identity as MLS carries it, which here is the bytes
+         *  of &lt;user_id&gt;/&lt;device_id&gt;. The committer is the one party
+         *  that knows for certain: it is this device's own tree and it has just
+         *  changed it. Whole rather than incremental, so any commit repairs
+         *  what the server holds (#147). */
+        public java.util.ArrayList<byte[]> holds = new java.util.ArrayList<>();
 
         public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
             return TL_mls_commitResult.TLdeserialize(stream, constructor, exception);
@@ -1046,6 +1061,11 @@ public class TLRPCMls {
                 stream.writeInt64(members.get(i));
             }
             stream.writeByteArray(commit);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(holds.size());
+            for (int i = 0; i < holds.size(); i++) {
+                stream.writeByteArray(holds.get(i));
+            }
         }
     }
 

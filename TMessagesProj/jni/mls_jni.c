@@ -263,6 +263,14 @@ Java_org_telegram_messenger_MlsCore_memberNames(JNIEnv *env, jclass class, jlong
     return take(env, mls_group_member_names((const Group *) from_handle(group)));
 }
 
+// The same, counting the commit this device has staged and not yet applied. It
+// is what a committer tells the delivery service its group holds, and it has to
+// be the membership after the commit rather than before it (#147).
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_stagedMemberNames(JNIEnv *env, jclass class, jlong group) {
+    return take(env, mls_group_staged_member_names((const Group *) from_handle(group)));
+}
+
 // A commit is left pending until the delivery service says it won its epoch.
 // These two are where that answer lands: taken, or let go of so the winner can
 // be applied and the change made again on top.
