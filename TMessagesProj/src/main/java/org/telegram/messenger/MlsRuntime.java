@@ -42,6 +42,18 @@ public class MlsRuntime {
      *  the crypto state. */
     private final Map<Long, byte[]> groupIdByPeer = new HashMap<>();
 
+    /** How new the thing was that taught us each of those, in server seconds.
+     *
+     *  A chat really can move to another conversation - the other side rebuilds
+     *  and starts a new one - so what a message says replaces what is here. That
+     *  is only true forwards. History arrives in any order, and a chat that has
+     *  moved leaves ciphertexts of the conversation it left lying in it for
+     *  ever; reading one of those must not drag the chat back to a group the
+     *  other side is no longer in. So a note is only replaced by something newer
+     *  than what wrote it. Zero for a note written before this existed, which
+     *  anything at all may correct. */
+    private final Map<Long, Integer> learntAtByPeer = new HashMap<>();
+
     private boolean loaded;
     private boolean collectingWelcomes;
 
@@ -92,43 +104,104 @@ public class MlsRuntime {
         loaded = true;
         String peers = storage().getString("peers", "");
         String groups = storage().getString("groups", "");
+        String dates = storage().getString("dates", "");
         if (peers.isEmpty() || groups.isEmpty()) {
             return;
         }
         String[] peerList = peers.split(",");
         String[] groupList = groups.split(",");
+        String[] dateList = dates.isEmpty() ? new String[0] : dates.split(",");
+        // Conversations filed under this account's own number, which are the
+        // wreckage of a chat between two whose invitation named the person being
+        // invited (#155). Nothing encrypts to itself - worthEncrypting refuses -
+        // so such a row can never be used, and while it sits here it is what a
+        // dump of the map shows instead of the answer.
+        long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        boolean dropped = false;
         for (int i = 0; i < peerList.length && i < groupList.length; i++) {
             try {
-                groupIdByPeer.put(Long.parseLong(peerList[i]),
-                        Base64.decode(groupList[i], Base64.NO_WRAP));
+                long peerId = Long.parseLong(peerList[i]);
+                byte[] groupId = Base64.decode(groupList[i], Base64.NO_WRAP);
+                if (peerId == self) {
+                    FileLog.d("mls: dropping " + shortId(groupId)
+                            + ", which was filed under this account itself");
+                    dropped = true;
+                    continue;
+                }
+                groupIdByPeer.put(peerId, groupId);
+                if (i < dateList.length) {
+                    learntAtByPeer.put(peerId, Integer.parseInt(dateList[i]));
+                }
             } catch (Exception ignored) {
                 // One unreadable row is not a reason to lose the others.
             }
+        }
+        if (dropped) {
+            saveConversations();
         }
     }
 
     private synchronized void saveConversations() {
         StringBuilder peers = new StringBuilder();
         StringBuilder groups = new StringBuilder();
+        StringBuilder dates = new StringBuilder();
         for (Map.Entry<Long, byte[]> each : groupIdByPeer.entrySet()) {
             if (peers.length() > 0) {
                 peers.append(',');
                 groups.append(',');
+                dates.append(',');
             }
             peers.append(each.getKey());
             groups.append(Base64.encodeToString(each.getValue(), Base64.NO_WRAP));
+            Integer learntAt = learntAtByPeer.get(each.getKey());
+            dates.append(learntAt == null ? 0 : learntAt);
         }
         storage().edit()
                 .putString("peers", peers.toString())
                 .putString("groups", groups.toString())
+                .putString("dates", dates.toString())
                 .apply();
     }
 
-    private synchronized void remember(long peerId, byte[] groupId) {
+    /** What is known now, and how new the thing that said so was. */
+    private synchronized void remember(long peerId, byte[] groupId, int learntAt) {
         loadConversations();
         groupIdByPeer.put(peerId, groupId);
+        learntAtByPeer.put(peerId, learntAt);
         saveConversations();
         FileLog.d("mls: conversation " + shortId(groupId) + " belongs to " + peerId);
+    }
+
+    /** For what this device did itself - joined, or was granted a claim. It is
+     *  happening now, and now is the newest anything can be. */
+    private void remember(long peerId, byte[] groupId) {
+        remember(peerId, groupId,
+                ConnectionsManager.getInstance(currentAccount).getCurrentTime());
+    }
+
+    /**
+     * Forgets a conversation this device cannot open, so that one is built.
+     *
+     * The note outlives the state it names: the conversation can be let go of,
+     * or the chat can move to one this device has not been let into yet. Until
+     * now that note was followed anyway - encrypt loaded nothing, gave up, and
+     * the message went in the clear, silently and for every message after it.
+     * Removing the note turns that into the ordinary "there is no conversation
+     * yet", which is a thing the client knows how to mend.
+     *
+     * Only if it still says what it said: a message arriving in between may have
+     * pointed the chat somewhere real, and that answer is the better one.
+     */
+    private synchronized boolean forgetConversation(long peerId, byte[] groupId) {
+        loadConversations();
+        byte[] known = groupIdByPeer.get(peerId);
+        if (known == null || !java.util.Arrays.equals(known, groupId)) {
+            return false;
+        }
+        groupIdByPeer.remove(peerId);
+        learntAtByPeer.remove(peerId);
+        saveConversations();
+        return true;
     }
 
     /**
@@ -137,6 +210,17 @@ public class MlsRuntime {
      * Quiet when it already agrees, and it replaces rather than refuses when it
      * does not: a chat really can move to another group - the other side
      * rebuilds, starts a new one, and from then on that is where the chat is.
+     *
+     * Asked of every message of ours, opened or not, and that is the point. The
+     * group id rides in the clear ahead of the ciphertext and needs no key to
+     * read, so the one message this is worth doing for is the one that would not
+     * open - the message from a conversation this device does not know it is
+     * meant to be in. It used to be asked only after a message had opened, which
+     * is to say only when the answer was already known: delta on the stand said
+     * "catching 136908607 up on what it could not open" and its note never
+     * changed (#155).
+     *
+     * Forwards only, by the date on the message. See learntAtByPeer.
      */
     private void attach(TLRPC.Message message, String ciphertext) {
         long dialogId = MessageObject.getDialogId(message);
@@ -162,8 +246,16 @@ public class MlsRuntime {
             if (known != null && java.util.Arrays.equals(known, groupId)) {
                 return;
             }
+            Integer learntAt = learntAtByPeer.get(dialogId);
+            if (known != null && learntAt != null && message.date < learntAt) {
+                // Old history of a chat that has since moved. Following it would
+                // put the chat back in a conversation the other side has left.
+                FileLog.d("mls: " + dialogId + " has a message from " + shortId(groupId)
+                        + " older than what named " + shortId(known) + ", leaving it be");
+                return;
+            }
         }
-        remember(dialogId, groupId);
+        remember(dialogId, groupId, message.date);
     }
 
     /** Short enough to read in a log and long enough to tell two apart. Every
@@ -456,6 +548,24 @@ public class MlsRuntime {
         if (carried == null) {
             return false;
         }
+        // Which conversation this group belongs to, learnt from the message
+        // rather than from the welcome.
+        //
+        // A welcome says who sent it and nothing else, which is enough for a
+        // conversation between two and wrong for a group: the joiner recorded
+        // the group against the person who invited them, so their own first
+        // message into the chat found no conversation and started a second one
+        // for the same chat. Every message carries its group id in the clear, so
+        // a message says which chat it is - and that is the only place both
+        // facts are known at once (#40).
+        //
+        // Before the message is opened rather than after, because the message
+        // this matters for is the one that will not open. Reading the id needs
+        // no key; it is the first thing in the message and it is not encrypted.
+        // Asked after, it only ever confirmed what was already right, and the
+        // device that most needed telling - the one holding a conversation the
+        // other side had stopped using - was never told (#155).
+        attach(message, carried);
         // Asked here first, and MLS only if this is genuinely new. The same
         // ciphertext arrives more than once through ordinary routes, and
         // handing it to MLS a second time is what destroys it.
@@ -465,17 +575,6 @@ public class MlsRuntime {
             if (before == null) {
                 rememberOpening(message, opened.plaintext);
             }
-            // Which conversation this group belongs to, learnt from a message
-            // rather than from the welcome.
-            //
-            // A welcome says who sent it and nothing else, which is enough for
-            // a conversation between two and wrong for a group: the joiner
-            // recorded the group against the person who invited them, so their
-            // own first message into the chat found no conversation and started
-            // a second one for the same chat. Every message carries its group id
-            // in the clear, so the first one that opens says which chat it is -
-            // and that is the only place both facts are known at once (#40).
-            attach(message, carried);
             message.message = opened.text;
             // A forward carries who wrote it first inside the ciphertext, since
             // the server copies by id and cannot copy something it cannot read.
@@ -856,6 +955,22 @@ public class MlsRuntime {
             try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
                 MlsCore.Group group = MlsCore.Group.load(identity, groupId);
                 if (group == null) {
+                    // The note outlived the conversation it names. Every send
+                    // from here used to give up quietly and go in the clear -
+                    // this one and every one after it, for as long as the note
+                    // stood, and nothing anywhere said so.
+                    //
+                    // The note goes, which turns this into "there is no
+                    // conversation yet" - a thing the client mends by itself:
+                    // it asks whose the chat is, and either starts one or is
+                    // told where the chat is and waits to be let in. This
+                    // message still goes in the clear; the next one need not.
+                    if (forgetConversation(peerId, groupId)) {
+                        FileLog.e("mls: " + peerId + " was written down as "
+                                + shortId(groupId) + ", which is not on this device; "
+                                + "asking whose that chat is rather than sending in the clear for ever");
+                        AndroidUtilities.runOnUIThread(() -> ensureConversation(peerId));
+                    }
                     return null;
                 }
                 try {
