@@ -131,27 +131,6 @@ public class TLRPCMls {
     }
 
     /** mls.claimKeyPackages user_id:long = mls.KeyPackages; */
-    /**
-     * mls.devicesOf users:Vector&lt;long&gt; = mls.DeviceCounts;
-     *
-     * How many devices each of these people has published from. It is what
-     * tells a leaf whose device is gone from a leaf that is still somebody's -
-     * and without it a person who replaces a phone is never let back into a
-     * group, because the leaf of the device that has gone still stands for
-     * them (#132).
-     *
-     * Counting by claiming key packages would answer the same question and
-     * spend one doing it, so a group asking on its rhythm would empty
-     * everybody's supply within the hour.
-     */
-    /**
-     * mls.claimConversation peer_id:long group_id:bytes holds:Vector&lt;bytes&gt; = mls.Conversation;
-     *
-     * Which conversation this chat has, settled by whoever asks first. Nothing
-     * settled it before, and three people beginning a group within a minute
-     * ended in two conversations that cannot read each other (#135).
-     *
-     */
     public static class TL_mls_claimConversation extends TLObject {
         public static final int constructor = -187340385;
 
@@ -209,62 +188,114 @@ public class TLRPCMls {
         }
     }
 
-    public static class TL_mls_devicesOf extends TLObject {
-        public static final int constructor = -657797125;
+    /**
+     * mls.membersOf peer_id:long group_id:bytes = mls.Members;
+     *
+     * What the delivery service holds about this conversation: the leaves it
+     * has been told the group holds, whether the device behind each one is
+     * still answering, and who among them has a device with no leaf here.
+     *
+     * One question in place of a dance. This client used to walk its own tree,
+     * count the leaves per person, ask how many devices each of those people
+     * had, and work the answer out by arithmetic - and the count and the names
+     * came from two calls that could disagree, so nobody dared act on them for
+     * anybody but their own account (#132, #136, #139).
+     */
+    public static class TL_mls_membersOf extends TLObject {
+        public static final int constructor = 1023161582;
 
-        public java.util.ArrayList<Long> users = new java.util.ArrayList<>();
+        public long peer_id;
+        public byte[] group_id;
 
         public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
-            return TL_mls_deviceCounts.TLdeserialize(stream, constructor, exception);
+            return TL_mls_members.TLdeserialize(stream, constructor, exception);
         }
 
         public void serializeToStream(OutputSerializedData stream) {
             stream.writeInt32(constructor);
-            stream.writeInt32(0x1cb5c415);
-            stream.writeInt32(users.size());
-            for (Long id : users) {
-                stream.writeInt64(id);
-            }
+            stream.writeInt64(peer_id);
+            stream.writeByteArray(group_id);
         }
     }
 
-    /** mls.deviceCounts counts:Vector&lt;int&gt; names:Vector&lt;bytes&gt; = mls.DeviceCounts; */
-    public static class TL_mls_deviceCounts extends TLObject {
-        public static final int constructor = 1890672928;
+    /** mls.leaf name:bytes user_id:long alive:Bool = mls.Leaf; */
+    public static class TL_mls_leaf extends TLObject {
+        public static final int constructor = 631366541;
 
+        /** The leaf's identity as MLS carries it: &lt;user_id&gt;/&lt;device_id&gt;. */
+        public byte[] name;
+        /** The part before the slash, read by the server rather than here. */
+        public long user_id;
         /**
-         * One count per person asked about, in the order they were asked. Zero
-         * means the server could not say, and nothing is concluded from it - it
-         * already means "nobody has asked yet" everywhere this is read.
-         */
-        public java.util.ArrayList<Integer> counts = new java.util.ArrayList<>();
-
-        /**
-         * The leaf name of every one of those devices, all of them in one list:
-         * the counts say where to cut it. One entry per counted device, so the
-         * cut is always right, and empty for a device that published before key
-         * packages said which identity they belong to (#136).
+         * Whether anybody is behind it. False means the device has gone -
+         * signed out, or reinstalled and come back as another - and the leaf it
+         * left is reading everything said since (#41).
          *
-         * In the same answer as the counts on purpose. Taking a leaf out asks
-         * two questions - whether a device is missing, which the count answers,
-         * and which leaf is it, which these answer - and while they came from
-         * two calls they could disagree (#139).
+         * True whenever the server cannot say otherwise, which is the safe
+         * direction: evicting a live phone is the worst thing this can lead to.
          */
-        public java.util.ArrayList<byte[]> names = new java.util.ArrayList<>();
+        public boolean alive;
 
-        public static TL_mls_deviceCounts TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
-            if (TL_mls_deviceCounts.constructor != constructor) {
+        public static TL_mls_leaf TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_leaf.constructor != constructor) {
                 if (exception) {
-                    throw new RuntimeException(String.format("can't parse magic %x in mls.deviceCounts", constructor));
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.leaf", constructor));
                 }
                 return null;
             }
-            TL_mls_deviceCounts result = new TL_mls_deviceCounts();
+            TL_mls_leaf result = new TL_mls_leaf();
             result.readParams(stream, exception);
             return result;
         }
 
         public void readParams(InputSerializedData stream, boolean exception) {
+            name = stream.readByteArray(exception);
+            user_id = stream.readInt64(exception);
+            alive = stream.readBool(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeByteArray(name);
+            stream.writeInt64(user_id);
+            stream.writeBool(alive);
+        }
+    }
+
+    /** mls.members epoch:long holds:Vector&lt;mls.Leaf&gt; wanting:Vector&lt;long&gt; = mls.Members; */
+    public static class TL_mls_members extends TLObject {
+        public static final int constructor = 2000012518;
+
+        /**
+         * What the delivery service believes the group is on, which is how a
+         * device learns it is behind without sending a commit to find out.
+         */
+        public long epoch;
+        /** The leaves the group has been reported to hold. */
+        public java.util.ArrayList<TL_mls_leaf> holds = new java.util.ArrayList<>();
+        /**
+         * People already in the conversation with a device answering and no
+         * leaf here for it. Somebody with none at all is the ordinary newcomer
+         * and this side works that out for itself from the chat's own list;
+         * somebody with one dead leaf and one live phone is #132, and only the
+         * server can see it.
+         */
+        public java.util.ArrayList<Long> wanting = new java.util.ArrayList<>();
+
+        public static TL_mls_members TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_members.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.members", constructor));
+                }
+                return null;
+            }
+            TL_mls_members result = new TL_mls_members();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            epoch = stream.readInt64(exception);
             int magic = stream.readInt32(exception);
             if (magic != 0x1cb5c415) {
                 if (exception) {
@@ -272,11 +303,15 @@ public class TLRPCMls {
                 }
                 return;
             }
-            int count = stream.readInt32(exception);
-            for (int i = 0; i < count; i++) {
-                counts.add(stream.readInt32(exception));
+            int held = stream.readInt32(exception);
+            for (int i = 0; i < held; i++) {
+                TL_mls_leaf leaf = TL_mls_leaf.TLdeserialize(
+                        stream, stream.readInt32(exception), exception);
+                if (leaf == null) {
+                    return;
+                }
+                holds.add(leaf);
             }
-
             magic = stream.readInt32(exception);
             if (magic != 0x1cb5c415) {
                 if (exception) {
@@ -284,49 +319,25 @@ public class TLRPCMls {
                 }
                 return;
             }
-            int named = stream.readInt32(exception);
-            for (int i = 0; i < named; i++) {
-                names.add(stream.readByteArray(exception));
+            int short_of = stream.readInt32(exception);
+            for (int i = 0; i < short_of; i++) {
+                wanting.add(stream.readInt64(exception));
             }
         }
 
         public void serializeToStream(OutputSerializedData stream) {
             stream.writeInt32(constructor);
+            stream.writeInt64(epoch);
             stream.writeInt32(0x1cb5c415);
-            stream.writeInt32(counts.size());
-            for (Integer n : counts) {
-                stream.writeInt32(n);
+            stream.writeInt32(holds.size());
+            for (TL_mls_leaf leaf : holds) {
+                leaf.serializeToStream(stream);
             }
             stream.writeInt32(0x1cb5c415);
-            stream.writeInt32(names.size());
-            for (byte[] name : names) {
-                stream.writeByteArray(name);
+            stream.writeInt32(wanting.size());
+            for (Long who : wanting) {
+                stream.writeInt64(who);
             }
-        }
-
-        /**
-         * The names belonging to the person at that place in the answer, or
-         * null when the answer cannot be cut there.
-         *
-         * Null rather than an empty list, because the two mean opposite things:
-         * a person with no devices is a real answer and a list that does not
-         * add up is one nothing may be concluded from. Everything that removes
-         * a leaf goes through here, so a short or ragged answer stops it rather
-         * than shifting one person's devices onto the next.
-         */
-        public java.util.List<byte[]> namesOf(int who) {
-            if (who < 0 || who >= counts.size()) {
-                return null;
-            }
-            int at = 0;
-            for (int i = 0; i < who; i++) {
-                at += counts.get(i);
-            }
-            int mine = counts.get(who);
-            if (at < 0 || mine < 0 || at + mine > names.size()) {
-                return null;
-            }
-            return names.subList(at, at + mine);
         }
     }
 

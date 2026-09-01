@@ -2000,69 +2000,59 @@ public class MlsRuntime {
         if (groupId == null || attempt > COMMIT_ATTEMPTS) {
             return;
         }
-        int devices = MlsKeyPackages.getInstance(currentAccount).devices();
-        if (devices <= 0) {
-            // Nobody has asked the server yet, and zero is not an answer.
-            return;
-        }
         long self = UserConfig.getInstance(currentAccount).getClientUserId();
         List<byte[]> mine = myLeaves(groupId, self);
         // Said whichever way it goes, because the interesting case is the one
         // that decides to do nothing: a pass that returns in silence cannot be
         // told apart from a pass that was never called.
-        FileLog.d("mls: looking at " + shortId(groupId) + ": " + devices + " device(s), "
+        FileLog.d("mls: looking at " + shortId(groupId) + ": "
                 + (mine == null ? "no" : String.valueOf(mine.size())) + " leaves of this account");
-        if (mine == null || mine.size() <= devices) {
+        if (mine == null || mine.size() <= 1) {
+            // One leaf is this device's own, and there is nothing to lose.
             return;
         }
         if (!beginChanging(peerId)) {
             FileLog.d("mls: a change is already in flight for " + peerId + ", not now");
             return;
         }
-        FileLog.d("mls: this account has " + devices + " device(s) and " + mine.size()
-                + " leaves in " + shortId(groupId) + ", so one has gone");
 
-        TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
-        request.user_id = self;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
-            if (error != null || !(response instanceof TLRPCMls.TL_mls_keyPackages)) {
-                FileLog.e("mls: cannot ask which devices of this account are still there"
+        TLRPCMls.TL_mls_membersOf asking = new TLRPCMls.TL_mls_membersOf();
+        asking.peer_id = peerId;
+        asking.group_id = groupId;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(asking, (response, error) -> {
+            if (error != null || !(response instanceof TLRPCMls.TL_mls_members)) {
+                FileLog.e("mls: cannot ask what " + shortId(groupId)
+                        + " holds, leaving this account's leaves alone"
                         + (error != null ? ": " + error.text : ""));
                 doneChanging(peerId);
                 return;
             }
-            List<byte[]> alive = new ArrayList<>();
-            for (byte[] keyPackage : ((TLRPCMls.TL_mls_keyPackages) response).packages) {
-                byte[] name = MlsCore.keyPackageName(keyPackage);
-                if (name != null) {
-                    alive.add(name);
+            java.util.List<byte[]> dead = new ArrayList<>();
+            for (TLRPCMls.TL_mls_leaf leaf : ((TLRPCMls.TL_mls_members) response).holds) {
+                if (!leaf.alive && leaf.name != null) {
+                    dead.add(leaf.name);
                 }
             }
-            // This device is not among them to be sure of: the server hands out
-            // one package per device and cannot tell which caller is which leaf,
-            // so its own package may or may not be in the answer. Kept by name
-            // rather than by hope.
+            // This device is never a candidate, whatever the server says about
+            // it: a phone that could not tell which leaf was its own would evict
+            // itself from every conversation it holds.
             byte[] ours = ownName();
-            List<byte[]> gone = new ArrayList<>();
+            List<byte[]> lost = new ArrayList<>();
             for (byte[] leaf : mine) {
                 if (ours != null && java.util.Arrays.equals(leaf, ours)) {
                     continue;
                 }
-                if (!holds(alive, leaf)) {
-                    gone.add(leaf);
+                if (holds(dead, leaf)) {
+                    lost.add(leaf);
                 }
             }
-            if (gone.isEmpty()) {
-                // The count said one was missing and the names cannot say which.
-                // Nothing is removed on a guess.
-                FileLog.d("mls: a device of this account is gone from " + shortId(groupId)
-                        + " and the server's answer does not say which - leaving it alone");
+            if (lost.isEmpty()) {
                 doneChanging(peerId);
                 return;
             }
-            FileLog.d("mls: taking " + gone.size() + " device(s) of this account out of "
+            FileLog.d("mls: taking " + lost.size() + " device(s) of this account out of "
                     + shortId(groupId));
-            commitChange(new Dropping(peerId, gone),
+            commitChange(new Dropping(peerId, lost),
                     () -> takeOutMyLostDevices(peerId, attempt + 1));
         });
     }
@@ -2526,42 +2516,54 @@ public class MlsRuntime {
                 doneChanging(peerId);
                 return;
             }
-            // How many leaves each person has, which is the question rather
-            // than whether they have any. "Is this person in the group" was the
-            // question until #132, and it is the wrong one the moment somebody
-            // replaces a phone: the leaf of the device that has gone still says
-            // yes, so nobody counts them as missing, nobody lets the phone they
-            // now hold in, and they sit in the chat watching padlocks for ever.
-            java.util.Map<Long, Integer> leaves = new HashMap<>();
+            // What this device's own tree holds, said out loud once a round.
+            //
+            // The roster the delivery service keeps is what it was told, and
+            // this is what is true; the two are compared after a walk, and until
+            // this line existed only one side of that comparison could be read
+            // at all (#147).
+            java.util.List<String> holding = new ArrayList<>();
             for (byte[] name : here) {
-                long who = userIdIn(name);
-                if (who != NAME_UNREADABLE) {
-                    Integer had = leaves.get(who);
-                    leaves.put(who, had == null ? 1 : had + 1);
-                }
+                holding.add(new String(name, java.nio.charset.StandardCharsets.UTF_8));
             }
-
-            TLRPCMls.TL_mls_devicesOf asking = new TLRPCMls.TL_mls_devicesOf();
-            asking.users.addAll(candidates);
+            java.util.Collections.sort(holding);
+            FileLog.d("mls: " + shortId(groupId) + " here holds: "
+                    + android.text.TextUtils.join(" ", holding));
+            TLRPCMls.TL_mls_membersOf asking = new TLRPCMls.TL_mls_membersOf();
+            asking.peer_id = peerId;
+            asking.group_id = groupId;
             ConnectionsManager.getInstance(currentAccount).sendRequest(asking, (response, error) -> {
                 List<Long> wanting = new ArrayList<>();
-                // Which of the two questions was answered. Only the count is
-                // evidence enough to tell the server this conversation holds
-                // everybody: the fallback below answers who is plainly absent,
-                // which is the question that was wrong until #132 - a person who
-                // has replaced a phone is not absent and is not here either.
-                boolean counted = error == null && response instanceof TLRPCMls.TL_mls_deviceCounts
-                        && ((TLRPCMls.TL_mls_deviceCounts) response).counts.size() == candidates.size();
-                if (counted) {
-                    TLRPCMls.TL_mls_deviceCounts said = (TLRPCMls.TL_mls_deviceCounts) response;
-                    java.util.ArrayList<Integer> counts = said.counts;
+                boolean answered = error == null && response instanceof TLRPCMls.TL_mls_members;
+                if (answered) {
+                    TLRPCMls.TL_mls_members held = (TLRPCMls.TL_mls_members) response;
 
                     // The other direction first: a leaf whose device is gone.
                     // Taken before anybody is let in because it is the smaller
                     // group that results, and because letting somebody in while
                     // the tree still holds their dead leaf is how one person
                     // came to hold three.
-                    List<byte[]> dead = whoseDeviceIsGone(candidates, said, here, leaves);
+                    //
+                    // Only leaves this tree actually has. The roster is what the
+                    // server was told and this tree is what this device can act
+                    // on; where they differ the tree wins (#147). And never this
+                    // account's own - those are another pass's job, with a guard
+                    // of its own, because a phone that could not tell which leaf
+                    // was its own would evict itself from everything.
+                    byte[] ourPrefix = (UserConfig.getInstance(currentAccount).getClientUserId()
+                            + "/").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    List<byte[]> dead = new ArrayList<>();
+                    for (TLRPCMls.TL_mls_leaf leaf : held.holds) {
+                        if (leaf.alive || leaf.name == null || startsWith(leaf.name, ourPrefix)) {
+                            continue;
+                        }
+                        for (byte[] mine : here) {
+                            if (java.util.Arrays.equals(mine, leaf.name)) {
+                                dead.add(mine);
+                                break;
+                            }
+                        }
+                    }
                     if (!dead.isEmpty()) {
                         FileLog.d("mls: " + dead.size() + " leaf/leaves in " + shortId(groupId)
                                 + " belong to devices that are gone");
@@ -2570,10 +2572,21 @@ public class MlsRuntime {
                         return;
                     }
 
-                    for (int i = 0; i < candidates.size(); i++) {
-                        Integer had = leaves.get(candidates.get(i));
-                        if (counts.get(i) > (had == null ? 0 : had)) {
-                            wanting.add(candidates.get(i));
+                    // Who the server says has a phone this group has never met.
+                    // That is the half no client could work out: somebody who
+                    // has replaced a phone is not absent and is not here either,
+                    // and until the server answered it both looked the same
+                    // (#132).
+                    java.util.Set<Long> short_of = new java.util.HashSet<>(held.wanting);
+                    // And whoever is plainly absent, which this side has always
+                    // been able to see for itself.
+                    List<Long> absent = whoIsMissing(groupId, candidates);
+                    if (absent != null) {
+                        short_of.addAll(absent);
+                    }
+                    for (Long who : candidates) {
+                        if (short_of.contains(who)) {
+                            wanting.add(who);
                         }
                     }
                 } else {
@@ -2581,8 +2594,8 @@ public class MlsRuntime {
                     // is right rather than tidy: it lets in whoever is plainly
                     // absent and does nothing about a leaf that may or may not
                     // be dead, which is the safe half.
-                    FileLog.e("mls: the server did not say how many devices " + peerId
-                            + " has, going by who is absent"
+                    FileLog.e("mls: the server did not say what " + shortId(groupId)
+                            + " holds, going by who is absent"
                             + (error != null ? ": " + error.text : ""));
                     List<Long> absent = whoIsMissing(groupId, candidates);
                     if (absent != null) {
@@ -2629,83 +2642,6 @@ public class MlsRuntime {
         }
     }
 
-    /**
-     * The leaves in this conversation whose device no longer exists.
-     *
-     * The mirror of letting somebody in, and the half that had no way to be
-     * written until the server could name a device without spending a key
-     * package. A person replaces a phone: the new one is let in, and the leaf
-     * of the old one stays, because whoever compares the chat with the
-     * conversation reasons about people and that person is still there. Nobody
-     * removes it - `takeOutMyLostDevices` only ever looks at this account - so
-     * it stays for the life of the group, and every commit is encrypted to it.
-     * Four people on the stand were carrying twelve leaves (#139).
-     *
-     * Two questions, answered by two halves of one answer, and in this order.
-     * *Whether* a device is gone is the count: more leaves of theirs here than
-     * devices the server knows of. *Which* one is the names. The count is asked
-     * first because the names alone would be dangerous, and it is the same rule
-     * this account's own leaves are taken out by - evicting a live phone is the
-     * worst thing this code can do.
-     *
-     * Three things stop it, each of which would otherwise cost somebody their
-     * conversation:
-     *
-     *   - an answer that cannot be cut. `namesOf` says so rather than guessing,
-     *     and a guess would attribute one person's devices to the next.
-     *   - a device that cannot be named. A key package published before they
-     *     carried an identity (#136) is counted and has an empty name, so a
-     *     leaf of theirs would look unaccounted for when it is merely old.
-     *   - this account. Its own leaves are somebody else's job, with a guard of
-     *     its own about the name this device goes under; two passes removing
-     *     the same leaf is a race nobody needs.
-     */
-    private List<byte[]> whoseDeviceIsGone(List<Long> candidates,
-                                           TLRPCMls.TL_mls_deviceCounts said,
-                                           List<byte[]> here,
-                                           Map<Long, Integer> leaves) {
-        long self = UserConfig.getInstance(currentAccount).getClientUserId();
-        List<byte[]> dead = new ArrayList<>();
-        for (int i = 0; i < candidates.size(); i++) {
-            long who = candidates.get(i);
-            if (who == self) {
-                continue;
-            }
-            Integer had = leaves.get(who);
-            if (had == null || had <= said.counts.get(i)) {
-                // The count does not say anybody of theirs is missing. Nothing
-                // is removed on the names alone.
-                continue;
-            }
-            List<byte[]> alive = said.namesOf(i);
-            if (alive == null) {
-                FileLog.e("mls: the devices of " + who + " cannot be read out of the answer");
-                continue;
-            }
-            boolean nameless = false;
-            for (byte[] name : alive) {
-                if (name == null || name.length == 0) {
-                    nameless = true;
-                    break;
-                }
-            }
-            if (nameless) {
-                FileLog.d("mls: " + who + " has a device that cannot be named, "
-                        + "so none of their leaves is touched");
-                continue;
-            }
-            byte[] prefix = nameOf(who);
-            for (byte[] leaf : here) {
-                if (startsWith(leaf, prefix) && !holds(alive, leaf)) {
-                    dead.add(leaf);
-                }
-            }
-        }
-        return dead;
-    }
-
-    /** Which of these people are not in the conversation. Null when the group
-     *  cannot be opened, which is not the same as nobody missing. */
     private List<Long> whoIsMissing(byte[] groupId, List<Long> members) {
         // One at a time: the state is one blob and every
         // operation rewrites all of it (#112).
