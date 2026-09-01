@@ -117,7 +117,7 @@ public class MlsRuntime {
         // so such a row can never be used, and while it sits here it is what a
         // dump of the map shows instead of the answer.
         long self = UserConfig.getInstance(currentAccount).getClientUserId();
-        boolean dropped = false;
+        boolean changed = false;
         for (int i = 0; i < peerList.length && i < groupList.length; i++) {
             try {
                 long peerId = Long.parseLong(peerList[i]);
@@ -125,18 +125,32 @@ public class MlsRuntime {
                 if (peerId == self) {
                     FileLog.d("mls: dropping " + shortId(groupId)
                             + ", which was filed under this account itself");
-                    dropped = true;
+                    changed = true;
                     continue;
                 }
                 groupIdByPeer.put(peerId, groupId);
                 if (i < dateList.length) {
                     learntAtByPeer.put(peerId, Integer.parseInt(dateList[i]));
+                } else {
+                    // A note written before it carried a date. Dated now, and
+                    // not left open: "no date" read as "anything may correct
+                    // this", and the first run after the change is exactly
+                    // where a chat's whole history of old ciphertexts is
+                    // waiting. One of them moved a live chat into a group two
+                    // days dead, on the stand, at the first attempt.
+                    //
+                    // Now is the honest answer: what is written here was true
+                    // as of this moment, so nothing older than this moment may
+                    // undo it, and the other side's next message still can.
+                    learntAtByPeer.put(peerId,
+                            ConnectionsManager.getInstance(currentAccount).getCurrentTime());
+                    changed = true;
                 }
             } catch (Exception ignored) {
                 // One unreadable row is not a reason to lose the others.
             }
         }
-        if (dropped) {
+        if (changed) {
             saveConversations();
         }
     }
