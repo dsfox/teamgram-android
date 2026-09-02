@@ -4699,8 +4699,6 @@
     <string name="OnlineCount_other">%1$d online</string>
     <string name="TelegramContacts_one">%1$d contact on ice9</string>
     <string name="TelegramContacts_other">%1$d contacts on ice9</string>
-    <string name="InviteTextNum_one">Hey, I\'m using ice9 to chat – and so are %1$d of our other contact. Join us! Download it here: %2$s</string>
-    <string name="InviteTextNum_other">Hey, I\'m using ice9 to chat – and so are %1$d of our other contacts. Join us! Download it here: %2$s</string>
     <string name="PeopleJoined_one">%1$d people joined</string>
     <string name="PeopleJoined_other">%1$d people joined</string>
     <string name="PeopleJoinedRemaining_one">%1$d remaining</string>

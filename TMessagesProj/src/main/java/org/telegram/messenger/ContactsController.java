@@ -374,16 +374,9 @@ public class ContactsController extends BaseController {
     }
 
     public String getInviteText(int contacts) {
+        // One invitation is one person (#47), so there is no plural any more.
         String link = inviteLink == null ? "https://ice9.app" : inviteLink;
-        if (contacts <= 1) {
-            return LocaleController.formatString(R.string.InviteText2, link);
-        } else {
-            try {
-                return String.format(LocaleController.getPluralString("InviteTextNum", contacts), contacts, link);
-            } catch (Exception e) {
-                return LocaleController.formatString(R.string.InviteText2, link);
-            }
-        }
+        return LocaleController.formatString(R.string.InviteText2, link);
     }
 
     public void checkAppAccount() {
