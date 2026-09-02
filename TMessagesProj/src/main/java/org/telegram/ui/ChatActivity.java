@@ -44979,16 +44979,8 @@ public class ChatActivity extends BaseFragment implements
                 options.addGap();
             }
             if (user == null) {
-                options.add(R.drawable.menu_invit_telegram, getString(R.string.InviteToTelegramShort), () -> {
-                    if (getParentActivity() == null) return;
-                    try {
-                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.fromParts("sms", phone, null));
-                        intent.putExtra("sms_body", ContactsController.getInstance(currentAccount).getInviteText(1));
-                        getParentActivity().startActivityForResult(intent, 500);
-                    } catch (Exception e) {
-                        FileLog.e(e);
-                    }
-                });
+                options.add(R.drawable.menu_invit_telegram, getString(R.string.InviteToTelegramShort), () ->
+                        InvitationComposer.invite(ChatActivity.this, phone, null));
                 options.add(R.drawable.msg_calls_regular, getString(R.string.VoiceCallViaCarrier), () -> {
                     Browser.openUrl(getContext(), "tel:" + phone);
                 });

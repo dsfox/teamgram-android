@@ -3603,15 +3603,8 @@ public class AlertsCreator {
         builder.setTitle(LocaleController.getString(R.string.ContactNotRegisteredTitle));
         builder.setMessage(LocaleController.formatString("ContactNotRegistered", R.string.ContactNotRegistered, ContactsController.formatName(fisrtName, lastName)));
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        builder.setPositiveButton(LocaleController.getString(R.string.Invite), (dialog, which) -> {
-            try {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.fromParts("sms", phone, null));
-                intent.putExtra("sms_body", ContactsController.getInstance(parentFragment.getCurrentAccount()).getInviteText(1));
-                parentFragment.getParentActivity().startActivityForResult(intent, 500);
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
-        });
+        builder.setPositiveButton(LocaleController.getString(R.string.Invite), (dialog, which) ->
+                InvitationComposer.invite(parentFragment, phone, null));
         parentFragment.showDialog(builder.create());
     }
 

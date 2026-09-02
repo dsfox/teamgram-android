@@ -27,7 +27,6 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.os.Build;
 import android.text.Editable;
 import android.text.InputType;
@@ -59,7 +58,6 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
-import org.telegram.tgnet.TLRPCInvite;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BackDrawable;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -71,7 +69,7 @@ import org.telegram.ui.Cells.InviteUserCell;
 import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCell;
 import org.telegram.ui.Components.AnimatedFloat;
-import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.InvitationComposer;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.FlickerLoadingView;
@@ -570,35 +568,7 @@ public class InviteContactsActivity extends BaseFragment implements Notification
                 return;
             }
             final ContactsController.Contact contact = allSpans.get(0).getContact();
-            final String phone = contact.phones.get(0);
-            // The code is bound to this number on the server (#47): only the
-            // phone the carrier delivers the SMS to can sign in with it.
-            TLRPCInvite.TL_invite_mint ask = new TLRPCInvite.TL_invite_mint();
-            ask.phone = phone;
-            getConnectionsManager().sendRequest(ask, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-                if (error != null || !(response instanceof TLRPCInvite.TL_invite_minted)) {
-                    // Said, not swallowed: an SMS without a code is useless.
-                    boolean here = error != null && error.text != null && error.text.contains("PHONE_ALREADY_HERE");
-                    FileLog.d("invite: no code for the contact - " + (error != null ? error.text : "wrong answer"));
-                    BulletinFactory.of(InviteContactsActivity.this)
-                            .createSimpleBulletin(R.raw.error, getString(here ? R.string.InviteAlreadyHere : R.string.InviteNoCode))
-                            .show();
-                    return;
-                }
-                String code = ((TLRPCInvite.TL_invite_minted) response).code;
-                String body = ContactsController.getInstance(currentAccount).getInviteText(1)
-                        + "\n" + LocaleController.formatString(R.string.InviteCodeLine, code);
-                // The walk reads this line: one number, and the code is in the body.
-                FileLog.d("invite: composing an SMS to one number with code " + code);
-                try {
-                    Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + phone));
-                    intent.putExtra("sms_body", body);
-                    getParentActivity().startActivityForResult(intent, 500);
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
-                finishFragment();
-            }));
+            InvitationComposer.invite(this, contact.phones.get(0), this::finishFragment);
         });
 
         actionBar.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundGray));

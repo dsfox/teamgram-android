@@ -95,6 +95,7 @@ import org.telegram.ui.Cells.UserCell;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.InvitationComposer;
 import org.telegram.ui.Components.ContactsEmptyView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.EditTextBoldCursor;
@@ -752,15 +753,8 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                         builder.setMessage(getString(R.string.InviteUser));
                         builder.setTitle(getString(R.string.AppName));
                         final String arg1 = usePhone;
-                        builder.setPositiveButton(getString(R.string.OK), (dialogInterface, i) -> {
-                            try {
-                                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.fromParts("sms", arg1, null));
-                                intent.putExtra("sms_body", ContactsController.getInstance(currentAccount).getInviteText(1));
-                                getParentActivity().startActivityForResult(intent, 500);
-                            } catch (Exception e) {
-                                FileLog.e(e);
-                            }
-                        });
+                        builder.setPositiveButton(getString(R.string.OK), (dialogInterface, i) ->
+                                InvitationComposer.invite(ContactsActivity.this, arg1, null));
                         builder.setNegativeButton(getString(R.string.Cancel), null);
                         showDialog(builder.create());
                     }
