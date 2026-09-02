@@ -172,6 +172,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagePreviewParams;
 import org.telegram.messenger.MessageSuggestionParams;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.MlsRuntime;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
@@ -25299,6 +25300,30 @@ public class ChatActivity extends BaseFragment implements
     }
     private void processNewMessages(ArrayList<MessageObject> arr, final boolean animatedFromBottom) {
         FileLog.d("processNewMessages " + arr.size() + " messages");
+
+        // A message this device cannot open is not drawn at all (#40) - and
+        // not as it arrives either. A load from storage already hides one; the
+        // live path drew it as a padlock, because the commit that opens it is
+        // polled and the message is pushed, so after any change of membership
+        // the next message overtakes its commit and stood on the screen as a
+        // lock for the round trip it takes to fetch that commit. When it
+        // opens, processLoadedMessages hands it over as new (#109). A new
+        // list rather than the one given, which other listeners are reading.
+        ArrayList<MessageObject> readable = null;
+        for (int a = 0, N = arr.size(); a < N; a++) {
+            MessageObject messageObject = arr.get(a);
+            boolean locked = messageObject.messageOwner != null
+                    && MlsRuntime.LOCKED.equals(messageObject.messageOwner.message);
+            if (locked && readable == null) {
+                readable = new ArrayList<>(arr.subList(0, a));
+            } else if (!locked && readable != null) {
+                readable.add(messageObject);
+            }
+        }
+        if (readable != null) {
+            FileLog.d("mls: " + (arr.size() - readable.size()) + " of them cannot be opened yet and are not drawn");
+            arr = readable;
+        }
 
         final boolean isBot = UserObject.isBot(currentUser);
         final boolean isStreamingTopic = isBot && BotForumHelper.getInstance(currentAccount).isStreamingTopic(getDialogId(), getTopicId());
