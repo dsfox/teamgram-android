@@ -30889,6 +30889,8 @@ public class TLRPC {
                     return new TL_update.TL_updateEditEphemeralMessage();
                 case TL_update.TL_updateEphemeralBotCallbackQuery.constructor:
                     return new TL_update.TL_updateEphemeralBotCallbackQuery();
+                case TLRPCMls.TL_updateMlsMailbox.constructor:
+                    return new TLRPCMls.TL_updateMlsMailbox();
                 default:
                     return null;
             }

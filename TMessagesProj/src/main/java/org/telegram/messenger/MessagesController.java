@@ -70,6 +70,7 @@ import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLMethod;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCMls;
 import org.telegram.tgnet.Vector;
 import org.telegram.tgnet.tl.TL_account;
 import org.telegram.tgnet.tl.TL_bots;
@@ -21080,6 +21081,13 @@ public class MessagesController extends BaseController implements NotificationCe
                         applyWebBrowserUpdate((TL_update.TL_updateWebBrowserSettings) baseUpdate);
                     } else if (baseUpdate instanceof TL_update.TL_updateWebBrowserException) {
                         applyWebBrowserUpdate((TL_update.TL_updateWebBrowserException) baseUpdate);
+                    } else if (baseUpdate instanceof TLRPCMls.TL_updateMlsMailbox) {
+                        // The server says there is a commit or a welcome waiting.
+                        // Fetch both boxes: the two travel by different routes and
+                        // a change of membership can leave one of each. This is
+                        // what used to be a poll on a ladder of delays (#156).
+                        MlsRuntime.getInstance(currentAccount).collectWelcomes();
+                        MlsRuntime.getInstance(currentAccount).collectCommits();
                     } else if (ApplicationLoader.applicationLoaderInstance != null) {
                         ApplicationLoader.applicationLoaderInstance.processUpdate(currentAccount, baseUpdate);
                     }

@@ -1189,4 +1189,25 @@ public class TLRPCMls {
             }
         }
     }
+
+    /**
+     * updateMlsMailbox = Update;
+     *
+     * The server saying, unasked, that there is something in this device's box:
+     * a commit to apply or a welcome to join. It carries nothing - the device
+     * fetches the box through the methods above - so there is one path to apply
+     * a commit and one to confirm it, not two. It exists because commits were
+     * polled while messages were pushed, so the first message after any change
+     * of membership overtook the commit that opens it (#156).
+     */
+    public static class TL_updateMlsMailbox extends TLRPC.Update {
+        public static final int constructor = -1291471772;
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+        }
+    }
 }

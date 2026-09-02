@@ -2911,47 +2911,19 @@ public class MlsRuntime {
      * until one of them opens (#40).
      */
     /**
-     * Somebody joined a chat, so an invitation may be waiting this second.
+     * Somebody joined a chat, so an invitation may be waiting.
      *
-     * Asked for straight away and without the interval that guards catchUp:
-     * this is not a guess prompted by something that would not open, it is the
-     * one moment when a welcome is known to have just been posted. A phone that
-     * waited for a guess to come round again sat three minutes in a chat it had
-     * been added to, showing nothing (#110).
+     * Once, not on a ladder of delays. The server now says when a welcome is
+     * actually posted - updateMlsMailbox, the moment mls.sendWelcome runs - so
+     * the guessing this used to do is answered by the one event that knows
+     * (#156). This stays as the belt to that suspenders: the service message
+     * and the push travel by different routes, and whichever lands first
+     * fetches, the second finding nothing to do.
      */
     public void invited() {
-        askForInvitations(1);
-    }
-
-    /**
-     * How long to leave between asking again, and how many times.
-     *
-     * The invitation is not there when the service message arrives. Joining a
-     * chat and joining its conversation are two different things done by two
-     * different machines: the person who added you has still to claim your key
-     * packages, build the commit, hear from the delivery service that it was
-     * taken, and only then post the welcome. Asking once, at the moment the
-     * message lands, is asking before it exists - which is exactly what
-     * happened, and left a phone sitting three minutes in an empty chat while
-     * the answer had been waiting for two minutes and fifty seconds of it.
-     *
-     * So it asks again, a few times, further apart each time. The cost is a
-     * handful of small requests per membership change; the cost of not doing it
-     * is a person who joins a group and sees nothing until something unrelated
-     * happens to wake the client.
-     */
-    private static final long[] ASK_AGAIN_AFTER = {3_000L, 8_000L, 20_000L, 45_000L};
-
-    private void askForInvitations(int attempt) {
-        FileLog.d("mls: asking for invitations after somebody joined (attempt "
-                + attempt + ")");
-        collectWelcomes(joined -> collectCommits(applied -> {
-            if (joined || applied || attempt > ASK_AGAIN_AFTER.length) {
-                return;
-            }
-            AndroidUtilities.runOnUIThread(
-                    () -> askForInvitations(attempt + 1), ASK_AGAIN_AFTER[attempt - 1]);
-        }));
+        FileLog.d("mls: someone joined, looking for a welcome");
+        collectWelcomes();
+        collectCommits();
     }
 
     public void catchUp(long peerId) {
