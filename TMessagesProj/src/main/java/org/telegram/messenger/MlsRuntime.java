@@ -1670,6 +1670,11 @@ public class MlsRuntime {
         return changing.add(peerId);
     }
 
+    /** Whether a change to this chat is in flight or a comparison waits behind one. */
+    private synchronized boolean busy(long peerId) {
+        return changing.contains(peerId) || afterChange.containsKey(peerId);
+    }
+
     private void doneChanging(long peerId) {
         Runnable next;
         synchronized (this) {
@@ -2102,7 +2107,11 @@ public class MlsRuntime {
         synchronized (this) {
             Long last = reconciledAt.get(peerId);
             if (last != null && System.currentTimeMillis() - last < RECONCILE_NOT_BEFORE) {
-                return false;
+                // Nothing new - but a change still in flight, or a comparison
+                // queued behind one, will end in doneChanging, and a send
+                // asking now has to wait for that rather than let every send
+                // waiting on this chat go at the old epoch.
+                return busy(peerId);
             }
             reconciledAt.put(peerId, System.currentTimeMillis());
         }
@@ -2110,7 +2119,7 @@ public class MlsRuntime {
         if (members == null) {
             // Not known here yet. Doing nothing is right: acting on a list this
             // device has never seen would be acting on nothing at all.
-            return false;
+            return busy(peerId);
         }
         // Only for a group, and only on a fresh list. A chat between two has
         // nobody who could have to leave it - the membership is the two of them
@@ -2692,7 +2701,7 @@ public class MlsRuntime {
         if (attempt > COMMIT_ATTEMPTS) {
             FileLog.e("mls: gave up letting " + candidates.size() + " into " + peerId
                     + " after " + COMMIT_ATTEMPTS + " attempts");
-            return false;
+            return busy(peerId);
         }
         // Another change to this chat is in flight. This comparison used to
         // return here in silence, and a round was lost each time it did: on
