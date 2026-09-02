@@ -727,6 +727,21 @@ public class MlsRuntime {
     private static final long CONVERSATION_WAIT = 10_000L;
 
     /**
+     * How long a message may wait for the conversation to be compared with
+     * the chat before it goes anyway.
+     *
+     * Before a message goes out is the one moment where a conversation short
+     * of somebody's new phone is about to cost that phone the message for
+     * good: on 2 September the send went 109 ms ahead of the add that let a
+     * reinstalled phone in, and that phone holds the message as ciphertext
+     * for ever (#158). A comparison is one round trip and at most one commit,
+     * so half the handshake's ten seconds; past it the message goes as it
+     * would have, because a message that never leaves is worse than one
+     * somebody cannot open.
+     */
+    private static final long COMPARISON_WAIT = 5_000L;
+
+    /**
      * One held-back send. Fires once and once only: it has both a deadline of
      * its own and the conversation to wait for, and whichever arrives first
      * must not let the other send the message twice.
@@ -1072,13 +1087,31 @@ public class MlsRuntime {
         boolean startNow;
         synchronized (this) {
             if (groupIdByPeer.containsKey(peerId)) {
-                fire(then);
                 // Before a message goes out is the moment worth checking that
                 // the conversation still holds the people the chat does - it is
-                // the one moment where being wrong is about to matter. Cheap
-                // here: reconcile keeps its own interval and returns at once
-                // when it has just looked.
-                AndroidUtilities.runOnUIThread(() -> reconcile(peerId));
+                // the one moment where being wrong is about to matter. Checked
+                // first and sent after, not beside (#158): the send waits here
+                // for the comparison, and for any change already in flight,
+                // which is exactly the change that matters. Cheap when nothing
+                // is wrong: reconcile keeps its own interval and says at once
+                // when it will not look, and the send goes.
+                if (then == null) {
+                    AndroidUtilities.runOnUIThread(() -> reconcile(peerId));
+                    return;
+                }
+                final Waiter compared = new Waiter(then);
+                java.util.ArrayList<Waiter> waiting = waitingForConversation.get(peerId);
+                if (waiting == null) {
+                    waiting = new java.util.ArrayList<>();
+                    waitingForConversation.put(peerId, waiting);
+                }
+                waiting.add(compared);
+                AndroidUtilities.runOnUIThread(compared::fire, COMPARISON_WAIT);
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (!reconcile(peerId)) {
+                        settle(peerId);
+                    }
+                });
                 return;
             }
             if (then != null) {
@@ -1428,6 +1461,8 @@ public class MlsRuntime {
     /** Conversations a change is being made to right now. Two at once on one
      *  device build two commits from one epoch and lose to each other. */
     private final java.util.Set<Long> changing = new java.util.HashSet<>();
+    /** A comparison that found a change in flight, to run the moment it ends (#158). */
+    private final Map<Long, Runnable> afterChange = new HashMap<>();
 
     /** When each conversation was last compared against its chat. */
     private final Map<Long, Long> reconciledAt = new HashMap<>();
@@ -1636,8 +1671,22 @@ public class MlsRuntime {
     }
 
     private void doneChanging(long peerId) {
+        Runnable next;
         synchronized (this) {
             changing.remove(peerId);
+            next = afterChange.remove(peerId);
+        }
+        if (next != null) {
+            // The comparison that lost the lock to this change. A send waiting
+            // on the chat is settled by that comparison's own end, not here.
+            next.run();
+            return;
+        }
+        // Only a conversation that exists can have a send waiting for its
+        // comparison; the ones waiting for a conversation to be built are
+        // settled by that build, and nothing changes a group before it is.
+        if (groupOf(peerId) != null) {
+            settle(peerId);
         }
     }
 
@@ -2005,13 +2054,13 @@ public class MlsRuntime {
      *
      *     Letting people in needs no such care, so it happens either way.
      */
-    public void reconcile(long peerId, boolean listIsFromTheServer) {
-        reconcile(peerId, listIsFromTheServer, 1);
+    public boolean reconcile(long peerId, boolean listIsFromTheServer) {
+        return reconcile(peerId, listIsFromTheServer, 1);
     }
 
     /** With a list of unknown provenance, so additions only. */
-    public void reconcile(long peerId) {
-        reconcile(peerId, false, 1);
+    public boolean reconcile(long peerId) {
+        return reconcile(peerId, false, 1);
     }
 
     /** How long to leave between two comparisons of one conversation. Short,
@@ -2039,14 +2088,21 @@ public class MlsRuntime {
         return peerId > 0 || DialogObject.isChatDialog(peerId);
     }
 
-    private void reconcile(long peerId, boolean listIsFromTheServer, int attempt) {
+    /**
+     * @return whether a comparison is now running, or queued behind a change
+     *     in flight, and will end in doneChanging - which is what a send
+     *     waiting on it is settled by. False means nothing will happen and
+     *     nobody should wait: the interval has not passed, the members are
+     *     not known here, or the chat is not one to compare.
+     */
+    private boolean reconcile(long peerId, boolean listIsFromTheServer, int attempt) {
         if (!worthComparing(peerId) || groupOf(peerId) == null) {
-            return;
+            return false;
         }
         synchronized (this) {
             Long last = reconciledAt.get(peerId);
             if (last != null && System.currentTimeMillis() - last < RECONCILE_NOT_BEFORE) {
-                return;
+                return false;
             }
             reconciledAt.put(peerId, System.currentTimeMillis());
         }
@@ -2054,7 +2110,7 @@ public class MlsRuntime {
         if (members == null) {
             // Not known here yet. Doing nothing is right: acting on a list this
             // device has never seen would be acting on nothing at all.
-            return;
+            return false;
         }
         // Only for a group, and only on a fresh list. A chat between two has
         // nobody who could have to leave it - the membership is the two of them
@@ -2064,8 +2120,9 @@ public class MlsRuntime {
         if (listIsFromTheServer && DialogObject.isChatDialog(peerId)) {
             putOutTheRest(peerId, members, attempt);
         }
-        letIn(peerId, members, attempt);
-        letInMyOtherDevices(peerId, attempt);
+        boolean running = letIn(peerId, members, attempt);
+        running |= letInMyOtherDevices(peerId, attempt);
+        return running;
     }
 
     /**
@@ -2346,24 +2403,24 @@ public class MlsRuntime {
         }
     }
 
-    private void letInMyOtherDevices(long peerId, int attempt) {
+    private boolean letInMyOtherDevices(long peerId, int attempt) {
         byte[] groupId = groupOf(peerId);
         if (groupId == null || attempt > COMMIT_ATTEMPTS) {
-            return;
+            return false;
         }
         int devices = MlsKeyPackages.getInstance(currentAccount).devices();
         if (devices <= 1) {
             // One device, or nobody has asked the server yet. Either way there
             // is nothing here to conclude.
-            return;
+            return false;
         }
         long self = UserConfig.getInstance(currentAccount).getClientUserId();
         List<byte[]> mine = myLeaves(groupId, self);
         if (mine == null || mine.size() >= devices) {
-            return;
+            return false;
         }
         if (!beginChanging(peerId)) {
-            return;
+            return false;
         }
         FileLog.d("mls: this account has " + devices + " device(s) and " + mine.size()
                 + " of them are in " + shortId(groupId));
@@ -2400,6 +2457,7 @@ public class MlsRuntime {
             commitChange(new Adding(peerId, java.util.Collections.singletonList(self), wanted),
                     () -> letInMyOtherDevices(peerId, attempt + 1));
         });
+        return true;
     }
 
     /**
@@ -2620,24 +2678,44 @@ public class MlsRuntime {
      * comparing the whole chat, anybody already in the group is dropped, so
      * nobody is ever added twice.
      */
-    private void letIn(long peerId, List<Long> candidates, int attempt) {
+    private boolean letIn(long peerId, List<Long> candidates, int attempt) {
         if (!worthComparing(peerId)) {
-            return;
+            return false;
         }
         byte[] groupId = groupOf(peerId);
         if (groupId == null) {
             // Not an encrypted chat, and joining one does not make it so: the
             // rule for a group is all of them or none, and that was settled
             // when the conversation began.
-            return;
+            return false;
         }
         if (attempt > COMMIT_ATTEMPTS) {
             FileLog.e("mls: gave up letting " + candidates.size() + " into " + peerId
                     + " after " + COMMIT_ATTEMPTS + " attempts");
-            return;
+            return false;
         }
-        if (!beginChanging(peerId)) {
-            return;
+        // Another change to this chat is in flight. This comparison used to
+        // return here in silence, and a round was lost each time it did: on
+        // 2 September the pass over this account's own devices held the lock
+        // when the chat's participant list arrived, and the group went
+        // uncompared until a send forced it (#158). Now it runs again the
+        // moment that change ends, and says so.
+        boolean queued;
+        synchronized (this) {
+            queued = changing.contains(peerId);
+            if (queued) {
+                afterChange.put(peerId, () -> {
+                    if (!letIn(peerId, candidates, attempt)) {
+                        settle(peerId);
+                    }
+                });
+            } else {
+                changing.add(peerId);
+            }
+        }
+        if (queued) {
+            FileLog.d("mls: a change to " + peerId + " is in flight, comparing again after it");
+            return true;
         }
         Utilities.globalQueue.postRunnable(() -> {
             List<byte[]> here = leavesIn(groupId);
@@ -2754,6 +2832,7 @@ public class MlsRuntime {
                 claimFor(peerId, wanting, 0, new ArrayList<>(), attempt, here);
             });
         });
+        return true;
     }
 
     
