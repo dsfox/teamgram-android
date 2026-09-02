@@ -59,6 +59,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.tgnet.TLRPCInvite;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BackDrawable;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -70,6 +71,7 @@ import org.telegram.ui.Cells.InviteUserCell;
 import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCell;
 import org.telegram.ui.Components.AnimatedFloat;
+import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.FlickerLoadingView;
@@ -253,6 +255,23 @@ public class InviteContactsActivity extends BaseFragment implements Notification
             animators.add(ObjectAnimator.ofFloat(addingSpan, View.SCALE_Y, 0.75f, 1.0f));
             animators.add(ObjectAnimator.ofFloat(addingSpan, View.ALPHA, 0.0f, 1.0f));
             addView(span);
+        }
+
+        /**
+         * One at a time (#47): whatever was picked before goes at once, without
+         * its leaving animation. That animation only starts on the next measure
+         * pass, and addSpan cancels a not-yet-started set without ending it -
+         * which would leave the old chip drawn for good.
+         */
+        public void replaceSpans(final GroupCreateSpan span) {
+            for (int a = allSpans.size() - 1; a >= 0; a--) {
+                final GroupCreateSpan old = allSpans.get(a);
+                selectedContacts.remove(old.getKey());
+                allSpans.remove(old);
+                old.setOnClickListener(null);
+                removeView(old);
+            }
+            addSpan(span);
         }
 
         public void removeSpan(final GroupCreateSpan span) {
@@ -501,16 +520,16 @@ public class InviteContactsActivity extends BaseFragment implements Notification
             if (selectedSpan != null) {
                 spansContainer.removeSpan(selectedSpan);
             } else {
+                // One invitation is one person vouched for (#47): picking a
+                // second contact replaces the first rather than adding to it.
+                currentDeletingSpan = null;
                 GroupCreateSpan span = new GroupCreateSpan(getContext(), null, contact, true, resourceProvider);
-                spansContainer.addSpan(span);
+                spansContainer.replaceSpans(span);
                 span.setOnClickListener(InviteContactsActivity.this);
             }
             updateHint();
-            if (searching || searchWas) {
-//                AndroidUtilities.showKeyboard(searchField.editText);
-            } else {
-                cell.setChecked(selectedSpan == null, true);
-            }
+            // The row that was picked before has to lose its tick too.
+            checkVisibleRows();
 //            if (searchField.editText.length() > 0) {
 //                searchField.editText.setText(null);
 //            }
@@ -547,26 +566,39 @@ public class InviteContactsActivity extends BaseFragment implements Notification
         floatingButton.setButtonVisible(false, false);
         floatingButton.setContentDescription(getString(R.string.Next));
         floatingButton.setOnClickListener(v -> {
-            try {
-                StringBuilder builder = new StringBuilder();
-                int num = 0;
-                for (int a = 0; a < allSpans.size(); a++) {
-                    ContactsController.Contact contact = allSpans.get(a).getContact();
-                    if (builder.length() != 0) {
-                        builder.append(';');
-                    }
-                    builder.append(contact.phones.get(0));
-                    if (a == 0 && allSpans.size() == 1) {
-                        num = contact.imported;
-                    }
-                }
-                Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + builder.toString()));
-                intent.putExtra("sms_body", ContactsController.getInstance(currentAccount).getInviteText(num));
-                getParentActivity().startActivityForResult(intent, 500);
-            } catch (Exception e) {
-                FileLog.e(e);
+            if (allSpans.isEmpty()) {
+                return;
             }
-            finishFragment();
+            final ContactsController.Contact contact = allSpans.get(0).getContact();
+            final String phone = contact.phones.get(0);
+            // The code is bound to this number on the server (#47): only the
+            // phone the carrier delivers the SMS to can sign in with it.
+            TLRPCInvite.TL_invite_mint ask = new TLRPCInvite.TL_invite_mint();
+            ask.phone = phone;
+            getConnectionsManager().sendRequest(ask, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                if (error != null || !(response instanceof TLRPCInvite.TL_invite_minted)) {
+                    // Said, not swallowed: an SMS without a code is useless.
+                    boolean here = error != null && error.text != null && error.text.contains("PHONE_ALREADY_HERE");
+                    FileLog.d("invite: no code for the contact - " + (error != null ? error.text : "wrong answer"));
+                    BulletinFactory.of(InviteContactsActivity.this)
+                            .createSimpleBulletin(R.raw.error, getString(here ? R.string.InviteAlreadyHere : R.string.InviteNoCode))
+                            .show();
+                    return;
+                }
+                String code = ((TLRPCInvite.TL_invite_minted) response).code;
+                String body = ContactsController.getInstance(currentAccount).getInviteText(1)
+                        + "\n" + LocaleController.formatString(R.string.InviteCodeLine, code);
+                // The walk reads this line: one number, and the code is in the body.
+                FileLog.d("invite: composing an SMS to one number with code " + code);
+                try {
+                    Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + phone));
+                    intent.putExtra("sms_body", body);
+                    getParentActivity().startActivityForResult(intent, 500);
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                finishFragment();
+            }));
         });
 
         actionBar.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundGray));

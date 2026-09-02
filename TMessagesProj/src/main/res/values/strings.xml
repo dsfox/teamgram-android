@@ -1886,6 +1886,10 @@
     <string name="AddContactPhonebookTitle">Add Contact</string>
     <string name="NoContacts">No contacts yet</string>
     <string name="InviteText2">Hey, I\'m using ice9 to chat. Join me! Download it here: %1$s</string>
+    <string name="InviteCodeLine">Your invitation code: %1$s</string>
+    <string name="InviteAlreadyHere">This person is already on ice9 — just write to them.</string>
+    <string name="InviteNoCode">Could not get an invitation code. Try again later.</string>
+    <string name="InviteCodeHint">The code is in the SMS from whoever invited you.</string>
     <string name="TodayAt">at</string>
     <string name="YesterdayAt">yesterday at</string>
     <string name="TodayAtFormatted">at %1$s</string>

@@ -4448,7 +4448,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 if (currentType == AUTH_TYPE_MESSAGE) {
                     str = AndroidUtilities.replaceTags(LocaleController.formatString("SentAppCodeWithPhone", R.string.SentAppCodeWithPhone, LocaleController.addNbsp(number)));
                 } else if (currentType == AUTH_TYPE_SMS) {
-                    str = AndroidUtilities.replaceTags(LocaleController.formatString("SentSmsCode", R.string.SentSmsCode, LocaleController.addNbsp(number)));
+                    // Nobody on our side sent an SMS: the code came from whoever
+                    // invited this person, over their own carrier (#47).
+                    str = getString(R.string.InviteCodeHint);
                 } else if (currentType == AUTH_TYPE_FLASH_CALL) {
                     str = AndroidUtilities.replaceTags(LocaleController.formatString("SentCallCode", R.string.SentCallCode, LocaleController.addNbsp(number)));
                 } else if (currentType == AUTH_TYPE_CALL) {
