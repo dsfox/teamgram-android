@@ -1461,8 +1461,38 @@ public class MlsRuntime {
     /** Conversations a change is being made to right now. Two at once on one
      *  device build two commits from one epoch and lose to each other. */
     private final java.util.Set<Long> changing = new java.util.HashSet<>();
-    /** A comparison that found a change in flight, to run the moment it ends (#158). */
-    private final Map<Long, Runnable> afterChange = new HashMap<>();
+    /** A pass that found a change in flight, to run the moment it ends (#158). */
+    private final Map<Long, java.util.ArrayDeque<Pass>> afterChange = new HashMap<>();
+
+    /** A membership pass; true when it took the lock and will end in doneChanging. */
+    private interface Pass {
+        boolean run();
+    }
+
+    /**
+     * Queues a pass behind the change in flight for this chat, atomically with
+     * the look that found the lock held. Both passes of a round can lose the
+     * lock - the comparison of people takes it and holds it across a round
+     * trip, and the pass over this account's own phones came right behind it
+     * and returned in silence on every round (#160) - so this is a list, and
+     * doneChanging runs them one at a time.
+     */
+    private boolean queueIfBusy(long peerId, String what, Pass pass) {
+        synchronized (this) {
+            if (!changing.contains(peerId)) {
+                changing.add(peerId);
+                return false;
+            }
+            java.util.ArrayDeque<Pass> queued = afterChange.get(peerId);
+            if (queued == null) {
+                queued = new java.util.ArrayDeque<>();
+                afterChange.put(peerId, queued);
+            }
+            queued.add(pass);
+        }
+        FileLog.d("mls: a change to " + peerId + " is in flight, " + what + " after it");
+        return true;
+    }
 
     /** When each conversation was last compared against its chat. */
     private final Map<Long, Long> reconciledAt = new HashMap<>();
@@ -1676,16 +1706,28 @@ public class MlsRuntime {
     }
 
     private void doneChanging(long peerId) {
-        Runnable next;
         synchronized (this) {
             changing.remove(peerId);
-            next = afterChange.remove(peerId);
         }
-        if (next != null) {
-            // The comparison that lost the lock to this change. A send waiting
-            // on the chat is settled by that comparison's own end, not here.
-            next.run();
-            return;
+        // The passes that lost the lock to this change, one at a time: the
+        // first that takes the lock ends in doneChanging again, which runs the
+        // next. One that finds nothing to do hands over at once. A send
+        // waiting on the chat is settled when the last of them has ended.
+        while (true) {
+            Pass next;
+            synchronized (this) {
+                java.util.ArrayDeque<Pass> queued = afterChange.get(peerId);
+                next = queued == null ? null : queued.pollFirst();
+                if (queued != null && queued.isEmpty()) {
+                    afterChange.remove(peerId);
+                }
+            }
+            if (next == null) {
+                break;
+            }
+            if (next.run()) {
+                return;
+            }
         }
         // Only a conversation that exists can have a send waiting for its
         // comparison; the ones waiting for a conversation to be built are
@@ -2428,8 +2470,13 @@ public class MlsRuntime {
         if (mine == null || mine.size() >= devices) {
             return false;
         }
-        if (!beginChanging(peerId)) {
-            return false;
+        // The comparison of people takes the lock and holds it across a round
+        // trip, and this came right behind it on every round - so this pass
+        // returned in silence nearly every time it had something to do, and a
+        // second phone of this account waited for the next round or the next
+        // start (#160). Queued now, like the comparison itself.
+        if (queueIfBusy(peerId, "letting this account's other devices in", () -> letInMyOtherDevices(peerId, attempt))) {
+            return true;
         }
         FileLog.d("mls: this account has " + devices + " device(s) and " + mine.size()
                 + " of them are in " + shortId(groupId));
@@ -2709,21 +2756,7 @@ public class MlsRuntime {
         // when the chat's participant list arrived, and the group went
         // uncompared until a send forced it (#158). Now it runs again the
         // moment that change ends, and says so.
-        boolean queued;
-        synchronized (this) {
-            queued = changing.contains(peerId);
-            if (queued) {
-                afterChange.put(peerId, () -> {
-                    if (!letIn(peerId, candidates, attempt)) {
-                        settle(peerId);
-                    }
-                });
-            } else {
-                changing.add(peerId);
-            }
-        }
-        if (queued) {
-            FileLog.d("mls: a change to " + peerId + " is in flight, comparing again after it");
+        if (queueIfBusy(peerId, "comparing again", () -> letIn(peerId, candidates, attempt))) {
             return true;
         }
         Utilities.globalQueue.postRunnable(() -> {
