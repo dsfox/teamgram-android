@@ -43,6 +43,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BotWebViewVibrationEffect;
 import org.telegram.messenger.ChatObject;
@@ -71,6 +72,7 @@ import org.telegram.ui.Cells.GraySectionCell;
 import org.telegram.ui.Cells.GroupCreateSectionCell;
 import org.telegram.ui.Cells.GroupCreateUserCell;
 import org.telegram.ui.Cells.TextCell;
+import org.telegram.ui.Components.InvitationComposer;
 import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.ColoredImageSpan;
@@ -525,6 +527,17 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
         listView.setOnItemClickListener((view, position) -> {
             if (position == adapter.createCallLinkRow) {
                 CallLogActivity.createCallLink(context, currentAccount, resourceProvider, this::finishFragment);
+            } else if (position == adapter.inviteByNumberRow && !adapter.searching) {
+                // The cursor into the search field, with a hint (#164).
+                searchField.editText.setHint(getString(R.string.InviteByPhoneHint));
+                searchField.editText.requestFocus();
+                AndroidUtilities.showKeyboard(searchField.editText);
+            } else if (adapter.searching && position < adapter.phoneCount()
+                    && adapter.searchAdapterHelper.getPhoneSearch().get(position) instanceof String
+                    && !"section".equals(adapter.searchAdapterHelper.getPhoneSearch().get(position))) {
+                // A number nobody on ice9 holds: the code leads into this group (#164).
+                String digits = (String) adapter.searchAdapterHelper.getPhoneSearch().get(position);
+                InvitationComposer.invite(GroupCreateActivity.this, "+" + digits, chatId, null);
             } else if (position == 0 && adapter.inviteViaLink != 0 && !adapter.searching) {
                 sharedLinkBottomSheet = new PermanentLinkBottomSheet(context, false, this, info, chatId, channelId != 0);
                 showDialog(sharedLinkBottomSheet);
@@ -1189,6 +1202,8 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
         private int miniAppsRow;
         private int usersStartRow;
         private int inviteViaLink;
+        /** The picker's "Invite by phone number" row, or -1 (#164). */
+        int inviteByNumberRow = -1;
         private int noContactsStubRow;
         private int currentItemsCount;
 
@@ -1318,7 +1333,7 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
             premiumRow = -1;
             miniAppsRow = -1;
             if (searching) {
-                count = searchResult.size();
+                count = phoneCount() + searchResult.size();
                 int localServerCount = searchAdapterHelper.getLocalServerSearch().size();
                 int globalCount = searchAdapterHelper.getGlobalSearch().size();
                 count += localServerCount;
@@ -1343,6 +1358,15 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 }
                 usersStartRow = count;
                 count += contacts.size();
+                inviteByNumberRow = -1;
+                if (addToGroup && chatId != 0) {
+                    // "Invite by phone number": the picker's first row, where the
+                    // link used to be (#163). It only puts the cursor in the
+                    // search field; the number typed there does the rest (#164).
+                    inviteByNumberRow = count;
+                    usersStartRow++;
+                    count++;
+                }
                 // The "invite via link" row: a member is added from contacts, and
                 // the link would admit anyone holding it. See Offered.
                 if (addToGroup && Offered.GROUP_INVITE_LINKS) {
@@ -1404,6 +1428,13 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
 
         @Override
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+            if (searching && position < phoneCount()) {
+                bindPhoneRow(holder, position);
+                return;
+            }
+            if (searching) {
+                position -= phoneCount();
+            }
             switch (holder.getItemViewType()) {
                 case 0: {
                     GraySectionCell cell = (GraySectionCell) holder.itemView;
@@ -1524,7 +1555,10 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 }
                 case 2: {
                     TextCell textCell = (TextCell) holder.itemView;
-                    if (position == createCallLinkRow) {
+                    if (position == inviteByNumberRow) {
+                        textCell.setTextAndIcon(getString(R.string.InviteByPhone), R.drawable.msg_contact_add, false);
+                        textCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
+                    } else if (position == createCallLinkRow) {
                         textCell.setTextAndIcon(getString(R.string.GroupCallCreateLink), R.drawable.menu_link_create2, false);
                         textCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
                     } else if (inviteViaLink == 2) {
@@ -1539,14 +1573,48 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
             }
         }
 
+        /** The phone rows a typed number produced: a "section" marker, then a
+         *  number nobody on ice9 holds - or the contacts whose number starts so (#164). */
+        int phoneCount() {
+            return searching ? searchAdapterHelper.getPhoneSearch().size() : 0;
+        }
+
+        private void bindPhoneRow(RecyclerView.ViewHolder holder, int position) {
+            Object item = searchAdapterHelper.getPhoneSearch().get(position);
+            if (item instanceof TLRPC.User) {
+                GroupCreateUserCell cell = (GroupCreateUserCell) holder.itemView;
+                TLRPC.User user = (TLRPC.User) item;
+                cell.setObject(user, null, null);
+                cell.setChecked(selectedContacts.indexOfKey(user.id) >= 0, false);
+                cell.setCheckBoxEnabled(true);
+            } else if ("section".equals(item)) {
+                ((GraySectionCell) holder.itemView).setText(getString(R.string.PhoneNumberSearch));
+            } else {
+                TextCell textCell = (TextCell) holder.itemView;
+                textCell.setTextAndIcon(LocaleController.formatString(R.string.InviteNumberBySms, PhoneFormat.getInstance().format("+" + item)), R.drawable.msg_contact_add, false);
+                textCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
+            }
+        }
+
         @Override
         public int getItemViewType(int position) {
             if (searching) {
+                if (position < phoneCount()) {
+                    Object phoneItem = searchAdapterHelper.getPhoneSearch().get(position);
+                    if (phoneItem instanceof String) {
+                        return "section".equals(phoneItem) ? 0 : 2;
+                    }
+                    return 1;
+                }
+                position -= phoneCount();
                 if (position == searchResult.size() + searchAdapterHelper.getLocalServerSearch().size()) {
                     return 0;
                 }
                 return 1;
             } else {
+                if (position == inviteByNumberRow) {
+                    return 2;
+                }
                 if (position == createCallLinkRow) {
                     return 2;
                 }
@@ -1606,12 +1674,12 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
             searchResult.clear();
             searchResultNames.clear();
             searchAdapterHelper.mergeResults(null);
-            searchAdapterHelper.queryServerSearch(null, true, isAlwaysShare || isNeverShare, false, false, false, 0, false, 0, 0);
+            searchAdapterHelper.queryServerSearch(null, true, isAlwaysShare || isNeverShare, false, false, false, 0, addToGroup, 0, 0);
             notifyDataSetChanged();
 
             if (!TextUtils.isEmpty(query)){
                 Utilities.searchQueue.postRunnable(searchRunnable = () -> AndroidUtilities.runOnUIThread(() -> {
-                    searchAdapterHelper.queryServerSearch(query, true, isAlwaysShare || isNeverShare, true, false, false, 0, false, 0, 0);
+                    searchAdapterHelper.queryServerSearch(query, true, isAlwaysShare || isNeverShare, true, false, false, 0, addToGroup, 0, 0);
                     Utilities.searchQueue.postRunnable(searchRunnable = () -> {
                         String search1 = query.trim().toLowerCase();
                         if (search1.isEmpty()) {
