@@ -247,7 +247,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 if (isAdmin) {
                     return row < 1;
                 } else if (needPhonebook) {
-                    return row < 2;
+                    return row < 3;
                 } else {
                     return row < (Offered.CHANNELS ? 3 : 1);
                 }
@@ -351,7 +351,9 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 if (isAdmin) {
                     return (includeSearch ? 1 : 0) + 3;
                 } else if (needPhonebook) {
-                    return (includeSearch ? 1 : 0) + 4;
+                    // Invite Friends, Recent Calls, Invite by phone number (#164),
+                    // then the shadow and the header.
+                    return (includeSearch ? 1 : 0) + 5;
                 } else {
                     return (includeSearch ? 1 : 0) + (Offered.CHANNELS ? 4 : 3);
                 }
@@ -570,6 +572,10 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                             textCell.setTextAndValueAndColorfulIcon(getString(R.string.InviteFriends), "", false, R.drawable.settings_invite, 0xFF1CA5ED, 0xFF1488E1, false);
                         } else if (position == 1) {
                             textCell.setTextAndValueAndColorfulIcon(getString(R.string.RecentCalls), "", false, R.drawable.settings_calls, 0xFF55CA47, 0xFF27B434, false);
+                        } else if (position == 2) {
+                            // The number goes into the search field; this row only
+                            // puts the cursor there. No address book (#164).
+                            textCell.setTextAndValueAndColorfulIcon(getString(R.string.InviteByPhone), "", false, R.drawable.msg_contact_add, 0xFF1CA5ED, 0xFF1488E1, false);
                         }
                     } else if (isAdmin) {
                         if (isChannel) {
@@ -657,13 +663,13 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                         return (sortType == SORT_TYPE_BY_NAME || sortType == SORT_TYPE_BY_TIME ? HEADER_CELL : GRAY_CELL);
                     }
                 } else if (needPhonebook) {
-                    if (position < 2) {
+                    if (position < 3) {
                         return TEXT_CELL;
                     }
-                    if (position == 2) {
+                    if (position == 3) {
                         return SHADOW_CELL;
                     }
-                    if (position == 3) {
+                    if (position == 4) {
                         return isEmpty ? SHADOW_CELL : (sortType == SORT_TYPE_BY_NAME || sortType == SORT_TYPE_BY_TIME ? HEADER_CELL : GRAY_CELL);
                     }
                 } else {

@@ -695,6 +695,11 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                             presentFragment(new InviteContactsActivity());
                         } else if (row == 1) {
                             presentFragment(new CallLogActivity());
+                        } else if (row == 2) {
+                            // The cursor into the search, with a hint: a number typed
+                            // there becomes a person or an invitation (#164).
+                            searchItem.openSearch(true);
+                            searchItem.getSearchField().setHint(getString(R.string.InviteByPhoneHint));
                         }
                     } else if (Offered.GROUP_INVITE_LINKS && inviteViaLink != 0) {
                         if (row == 0) {
