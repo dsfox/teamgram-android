@@ -423,10 +423,11 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
         int inviteViaLink;
         if (chatId != 0) {
             TLRPC.Chat chat = getMessagesController().getChat(chatId);
-            inviteViaLink = ChatObject.canUserDoAdminAction(chat, ChatObject.ACTION_INVITE) ? 1 : 0;
+            // See Offered: the link is not how anybody gets in.
+            inviteViaLink = Offered.GROUP_INVITE_LINKS && ChatObject.canUserDoAdminAction(chat, ChatObject.ACTION_INVITE) ? 1 : 0;
         } else if (channelId != 0) {
             TLRPC.Chat chat = getMessagesController().getChat(channelId);
-            inviteViaLink = ChatObject.canUserDoAdminAction(chat, ChatObject.ACTION_INVITE) && !ChatObject.isPublic(chat) ? 2 : 0;
+            inviteViaLink = Offered.GROUP_INVITE_LINKS && ChatObject.canUserDoAdminAction(chat, ChatObject.ACTION_INVITE) && !ChatObject.isPublic(chat) ? 2 : 0;
         } else {
             inviteViaLink = 0;
         }
@@ -684,7 +685,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                         } else if (row == 1) {
                             presentFragment(new CallLogActivity());
                         }
-                    } else if (inviteViaLink != 0) {
+                    } else if (Offered.GROUP_INVITE_LINKS && inviteViaLink != 0) {
                         if (row == 0) {
                             if (MessagesController.getInstance(currentAccount).isFrozen()) {
                                 AccountFrozenAlert.show(currentAccount);

@@ -32,6 +32,7 @@ import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserObject;
@@ -433,7 +434,8 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
         rowCount = 0;
         emptyRow = rowCount++;
         if (dialogsDelegate == null) {
-            if (hasLink()) {
+            // See Offered: the link is not how anybody gets in.
+            if (Offered.GROUP_INVITE_LINKS && hasLink()) {
                 copyLinkRow = rowCount++;
             }
             if (contacts.size() != 0) {

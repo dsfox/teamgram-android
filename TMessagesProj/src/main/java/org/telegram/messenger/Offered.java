@@ -169,6 +169,20 @@ public final class Offered {
      */
     public static final boolean REACTIONS = false;
 
+    /**
+     * A group's invite link: the row in the add-member picker, the "Invite
+     * links" cell in the group's settings, the copy-link row of the invite
+     * sheet, and the QR behind them.
+     *
+     * Not missing on the server - the link is minted and resolves - but it is
+     * not how anybody gets in here. An invitation is an SMS with a code bound
+     * to a number (#47), so the link is useless to somebody not on ice9; and
+     * the app drops it without a word for somebody signed out. Whoever is
+     * signed in did not need it: any member adds them from contacts. What it
+     * would do is admit anyone holding the hash. Issue #163.
+     */
+    public static final boolean GROUP_INVITE_LINKS = false;
+
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which
     // an encrypted upload cannot take. It is offered again since #80 - the

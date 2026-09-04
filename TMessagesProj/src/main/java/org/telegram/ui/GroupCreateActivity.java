@@ -51,6 +51,7 @@ import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -1342,7 +1343,9 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 }
                 usersStartRow = count;
                 count += contacts.size();
-                if (addToGroup) {
+                // The "invite via link" row: a member is added from contacts, and
+                // the link would admit anyone holding it. See Offered.
+                if (addToGroup && Offered.GROUP_INVITE_LINKS) {
                     if (chatId != 0) {
                         TLRPC.Chat chat = getMessagesController().getChat(chatId);
                         inviteViaLink = ChatObject.canUserDoAdminAction(chat, ChatObject.ACTION_INVITE) ? 1 : 0;
