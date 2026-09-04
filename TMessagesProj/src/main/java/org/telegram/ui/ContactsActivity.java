@@ -96,6 +96,7 @@ import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.InvitationComposer;
+import org.telegram.ui.Components.NumberLookup;
 import org.telegram.ui.Components.ContactsEmptyView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.EditTextBoldCursor;
@@ -623,9 +624,19 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                             AccountFrozenAlert.show(currentAccount);
                             return;
                         }
-                        NewContactBottomSheet activity = new NewContactBottomSheet(ContactsActivity.this, getContext());
-                        activity.setInitialPhoneNumber(str, true);
-                        activity.show();
+                        // A typed number: somebody on ice9 opens, anybody else
+                        // is invited by SMS with a code. No address book (#164).
+                        NumberLookup.resolve(currentAccount, str, user -> {
+                            if (user != null) {
+                                Bundle args = new Bundle();
+                                args.putLong("user_id", user.id);
+                                if (getMessagesController().checkCanOpenChat(args, ContactsActivity.this)) {
+                                    presentFragment(new ChatActivity(args), needFinishFragment);
+                                }
+                            } else {
+                                InvitationComposer.invite(ContactsActivity.this, "+" + str, null);
+                            }
+                        });
                     }
                 } else if (object instanceof ContactsController.Contact) {
                     ContactsController.Contact contact = (ContactsController.Contact) object;

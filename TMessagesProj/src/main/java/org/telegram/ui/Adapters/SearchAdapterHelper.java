@@ -275,7 +275,7 @@ public class SearchAdapterHelper {
                 hasChanged = false;
             }
         }
-        if (!canAddGroupsOnly && phoneNumbers && query.startsWith("+") && query.length() > 3) {
+        if (!canAddGroupsOnly && phoneNumbers && looksLikeANumber(query)) {
             phonesSearch.clear();
             phoneSearchMap.clear();
             String phone = PhoneFormat.stripExceptNumbers(query);
@@ -342,6 +342,23 @@ public class SearchAdapterHelper {
         if (hasChanged) {
             delegate.onDataSetChanged(searchId);
         }
+    }
+
+    /**
+     * A query that is a phone number: "+" and at least four digits, or seven
+     * or more digits with only spaces, dashes or brackets between them (#164).
+     * Read as an international number either way - there is no country to
+     * guess from a search field.
+     */
+    public static boolean looksLikeANumber(String query) {
+        if (query == null) {
+            return false;
+        }
+        String digits = PhoneFormat.stripExceptNumbers(query);
+        if (query.startsWith("+")) {
+            return digits.length() > 3;
+        }
+        return digits.length() >= 7 && query.replaceAll("[0-9 ()\\-]", "").isEmpty();
     }
 
     private void removeGroupSearchFromGlobal() {

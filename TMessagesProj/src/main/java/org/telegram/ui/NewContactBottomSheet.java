@@ -81,6 +81,7 @@ import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Cells.CheckBoxCell;
 import org.telegram.ui.Components.InvitationComposer;
+import org.telegram.ui.Components.NumberLookup;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.AnimatedPhoneNumberEditText;
 import org.telegram.ui.Components.BulletinFactory;
@@ -973,35 +974,8 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
             updateBottomTranslation(false);
         };
 
-        final TLRPC.TL_contact contact = ContactsController.getInstance(currentAccount).contactsByPhone.get(PhoneFormat.stripExceptNumbers(phone));
-        if (contact != null) {
-            final TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(contact.user_id);
-            if (user != null) {
-                onUser.run(user);
-            } else {
-                MessagesStorage.getInstance(currentAccount).getStorageQueue().postRunnable(() -> {
-                    final TLRPC.User user2 = MessagesStorage.getInstance(currentAccount).getUser(contact.user_id);
-                    AndroidUtilities.runOnUIThread(() -> onUser.run(user2));
-                });
-            }
-        } else {
-            final TLRPC.TL_contacts_resolvePhone req = new TLRPC.TL_contacts_resolvePhone();
-            req.phone = PhoneFormat.stripExceptNumbers(phone);
-            requestingPhoneId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
-                TLRPC.User user = null;
-                if (res instanceof TLRPC.TL_contacts_resolvedPeer) {
-                    final TLRPC.TL_contacts_resolvedPeer r = (TLRPC.TL_contacts_resolvedPeer) res;
-                    MessagesController.getInstance(currentAccount).putUsers(r.users, false);
-                    MessagesController.getInstance(currentAccount).putChats(r.chats, false);
-
-                    long did = DialogObject.getPeerDialogId(r.peer);
-                    if (did >= 0) {
-                        user = MessagesController.getInstance(currentAccount).getUser(did);
-                    }
-                }
-                onUser.run(user);
-            }));
-        }
+        // One lookup for every screen that asks about a typed number (#164).
+        NumberLookup.resolve(currentAccount, PhoneFormat.stripExceptNumbers(phone), onUser::run);
     }
 
     private void doOnDone() {
