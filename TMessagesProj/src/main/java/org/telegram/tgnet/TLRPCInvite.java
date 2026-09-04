@@ -24,6 +24,24 @@ public class TLRPCInvite {
         }
     }
 
+    /** invite.mintForChat chat_id:long phone:string = invite.Minted; */
+    public static class TL_invite_mintForChat extends TLObject {
+        public static final int constructor = -1620708375;
+
+        public long chat_id;
+        public String phone;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_invite_minted.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(chat_id);
+            stream.writeString(phone);
+        }
+    }
+
     /** invite.minted code:string expires:int = invite.Minted; */
     public static class TL_invite_minted extends TLObject {
         public static final int constructor = 730805919;
