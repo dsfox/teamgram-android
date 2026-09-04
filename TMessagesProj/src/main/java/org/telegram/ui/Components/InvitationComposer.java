@@ -11,6 +11,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPCInvite;
 import org.telegram.ui.ActionBar.BaseFragment;
 
@@ -37,23 +38,42 @@ public final class InvitationComposer {
      * screen that asked is where the refusal is shown.
      */
     public static void invite(BaseFragment fragment, String phone, Runnable afterComposing) {
+        invite(fragment, phone, 0, afterComposing);
+    }
+
+    /**
+     * The same, for a number typed in a group's add-members picker: the code
+     * leads into that group, and the server puts the person into it when
+     * they sign up (#164). chatId zero is an invitation into ice9 alone.
+     */
+    public static void invite(BaseFragment fragment, String phone, long chatId, Runnable afterComposing) {
         final int account = fragment.getCurrentAccount();
-        TLRPCInvite.TL_invite_mint ask = new TLRPCInvite.TL_invite_mint();
-        ask.phone = phone;
+        final TLObject ask;
+        if (chatId != 0) {
+            TLRPCInvite.TL_invite_mintForChat forChat = new TLRPCInvite.TL_invite_mintForChat();
+            forChat.chat_id = chatId;
+            forChat.phone = phone;
+            ask = forChat;
+        } else {
+            TLRPCInvite.TL_invite_mint plain = new TLRPCInvite.TL_invite_mint();
+            plain.phone = phone;
+            ask = plain;
+        }
         ConnectionsManager.getInstance(account).sendRequest(ask, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
             if (error != null || !(response instanceof TLRPCInvite.TL_invite_minted)) {
-                boolean here = error != null && error.text != null && error.text.contains("PHONE_ALREADY_HERE");
-                FileLog.d("invite: no code for the contact - " + (error != null ? error.text : "wrong answer"));
-                BulletinFactory.of(fragment)
-                        .createSimpleBulletin(R.raw.error, getString(here ? R.string.InviteAlreadyHere : R.string.InviteNoCode))
-                        .show();
+                String text = error != null && error.text != null ? error.text : "";
+                int said = text.contains("PHONE_ALREADY_HERE") ? (chatId != 0 ? R.string.InviteAlreadyHereAdd : R.string.InviteAlreadyHere)
+                        : text.contains("USER_NOT_PARTICIPANT") ? R.string.InviteNotInGroup
+                        : R.string.InviteNoCode;
+                FileLog.d("invite: no code for the number - " + (error != null ? error.text : "wrong answer"));
+                BulletinFactory.of(fragment).createSimpleBulletin(R.raw.error, getString(said)).show();
                 return;
             }
             String code = ((TLRPCInvite.TL_invite_minted) response).code;
             String body = ContactsController.getInstance(account).getInviteText(1)
                     + "\n" + LocaleController.formatString(R.string.InviteCodeLine, code);
-            // The walk reads this line: one number, and the code is in the body.
-            FileLog.d("invite: composing an SMS to one number with code " + code);
+            // The walks read this line: one number, the code in the body, and the group if any.
+            FileLog.d("invite: composing an SMS to one number with code " + code + (chatId != 0 ? " for chat " + chatId : ""));
             if (fragment.getParentActivity() == null) {
                 FileLog.d("invite: the screen that asked is gone, nothing to compose in");
                 return;

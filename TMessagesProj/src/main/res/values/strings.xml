@@ -1889,6 +1889,11 @@
     <string name="InviteCodeLine">Your invitation code: %1$s</string>
     <string name="InviteAlreadyHere">This person is already on ice9 — just write to them.</string>
     <string name="InviteNoCode">Could not get an invitation code. Try again later.</string>
+    <string name="InviteByPhone">Invite by phone number</string>
+    <string name="InviteNumberBySms">Invite %1$s by SMS</string>
+    <string name="InviteAlreadyHereAdd">This person is already on ice9 — just add them.</string>
+    <string name="InviteNotInGroup">You are not in this group.</string>
+    <string name="InviteByPhoneHint">+7 …</string>
     <string name="InviteCodeHint">The code is in the SMS from whoever invited you.</string>
     <string name="TodayAt">at</string>
     <string name="YesterdayAt">yesterday at</string>
