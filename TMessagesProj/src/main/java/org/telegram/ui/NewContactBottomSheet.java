@@ -80,6 +80,7 @@ import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Cells.CheckBoxCell;
+import org.telegram.ui.Components.InvitationComposer;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.AnimatedPhoneNumberEditText;
 import org.telegram.ui.Components.BulletinFactory;
@@ -948,10 +949,9 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
                 // that advertised another one (#87). The line above it named
                 // Telegram too, in English, whatever language the phone was in.
                 underPhoneTextView.setText(AndroidUtilities.replaceArrows(AndroidUtilities.replaceSingleTag("This phone number is not on ice9. **Invite >**", () -> {
-                    final Intent intent = new Intent(Intent.ACTION_VIEW);
-                    intent.setData(Uri.parse("sms:+" + phone));
-                    intent.putExtra("sms_body", LocaleController.formatString(R.string.InviteText2, "https://ice9.app"));
-                    getContext().startActivity(intent);
+                    // The one composer: a code bound to the number, in the
+                    // body the phone's SMS app sends (#47, #164).
+                    InvitationComposer.invite(parentFragment, "+" + phone, null);
                 }), true, dp(8f / 3f), dp(1)));
             } else {
                 Drawable drawable = getContext().getResources().getDrawable(R.drawable.msg_text_check).mutate();
