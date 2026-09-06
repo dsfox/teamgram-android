@@ -49,6 +49,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.MlsKeyPackages;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -771,7 +772,8 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
         ttlRow = -1;
         ttlDivideRow = -1;
 
-        if (currentType == 0 && getMessagesController().qrLoginCamera) {
+        // No desktop to link: see Offered.
+        if (currentType == 0 && getMessagesController().qrLoginCamera && Offered.DESKTOP) {
             qrCodeRow = rowCount++;
             qrCodeDividerRow = rowCount++;
         }

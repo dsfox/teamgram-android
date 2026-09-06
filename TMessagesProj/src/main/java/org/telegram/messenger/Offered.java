@@ -183,6 +183,14 @@ public final class Offered {
      */
     public static final boolean GROUP_INVITE_LINKS = false;
 
+    /**
+     * Linking a desktop or web client by QR: the row in Devices and the
+     * settings-search entry for it. The server half works, but there is no
+     * ice9 Desktop and no ice9 Web to sign in, so the door opens on nothing.
+     * Issue #107.
+     */
+    public static final boolean DESKTOP = false;
+
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which
     // an encrypted upload cannot take. It is offered again since #80 - the

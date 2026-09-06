@@ -2378,7 +2378,7 @@
     <string name="InAppPopupInfo">Show pop-up notifications while in app.</string>
     <string name="Reset">Reset</string>
     <string name="ResetAllNotifications">Reset All Notifications</string>
-    <string name="UndoAllCustom">Undo all custom notification settings for all your contacts, groups and channels.</string>
+    <string name="UndoAllCustom">Undo all custom notification settings for all your contacts and groups.</string>
     <string name="NotificationsAndSounds">Notifications and Sounds</string>
     <string name="CustomNotifications">Custom Notifications</string>
     <string name="ProfilePopupNotification">Popup notifications</string>
@@ -3703,7 +3703,7 @@
     <string name="EmpryUsersPlaceholder">Add Users</string>
     <string name="PrivacyFloodControlError">Sorry, too many requests. Unable to change privacy settings now, please wait.</string>
     <string name="PrivacyInvites">Invites</string>
-    <string name="PrivacyInvitesInfo">You can restrict which users are allowed to add you to groups and channels.</string>
+    <string name="PrivacyInvitesInfo">You can restrict which users are allowed to add you to groups.</string>
     <string name="WhoCanAddMe">Who can add me to group chats?</string>
     <string name="WhoCanAddMeInfo">You can restrict who can add you to groups and channels with granular precision.</string>
     <string name="AlwaysAllow">Always Allow</string>
