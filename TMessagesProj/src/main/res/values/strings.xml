@@ -1885,7 +1885,7 @@
     <string name="ShareContactTitle">Share Contact</string>
     <string name="AddContactPhonebookTitle">Add Contact</string>
     <string name="NoContacts">No contacts yet</string>
-    <string name="InviteText2">Hey, I\'m using ice9 to chat. Join me! Download it here: %1$s</string>
+    <string name="InviteText2">Hi! Get ice9: %1$s\nI left you a message there.</string>
     <string name="InviteCodeLine">Your invitation code: %1$s</string>
     <string name="InviteAlreadyHere">This person is already on ice9 — just write to them.</string>
     <string name="InviteNoCode">Could not get an invitation code. Try again later.</string>

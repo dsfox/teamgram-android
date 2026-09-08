@@ -70,7 +70,14 @@ public final class InvitationComposer {
                 return;
             }
             String code = ((TLRPCInvite.TL_invite_minted) response).code;
-            String body = ContactsController.getInstance(account).getInviteText(1)
+            // A +7 number is usually on a Russian network that cannot reach
+            // ice9.app (Cloudflare); ice9.ru is served from our own machine and
+            // opens there (#178). Everyone else keeps the server link.
+            String cleaned = phone == null ? "" : phone.replaceAll("[^+0-9]", "");
+            String sentence = cleaned.startsWith("+7")
+                    ? LocaleController.formatString(R.string.InviteText2, "https://ice9.ru")
+                    : ContactsController.getInstance(account).getInviteText(1);
+            String body = sentence
                     + "\n" + LocaleController.formatString(R.string.InviteCodeLine, code);
             // The walks read this line: one number, the code in the body, and the group if any.
             FileLog.d("invite: composing an SMS to one number with code " + code + (chatId != 0 ? " for chat " + chatId : ""));
