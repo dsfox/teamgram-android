@@ -114,19 +114,16 @@ public final class Offered {
     public static final boolean GIFTS = false;
 
     /**
-     * Voice and video calls between people.
+     * Voice and video calls between people (#14).
      *
-     * Nothing places or receives one. Issue #14.
-     *
-     * Three screens took their call rows out before this switch existed and
-     * pin them to -1 with a note: the ringtone section in
-     * NotificationsSettingsActivity, "who may call you" in
-     * PrivacySettingsActivity, and the data section in DataSettingsActivity.
-     * They are left as they are - identical behaviour, and rewriting a
-     * working removal risks the screen for nothing - but this is the switch to
-     * follow when the calls come back.
+     * The server matches the two phones and hands out STUN; the media goes
+     * device to device. This switch shows the rows around calls - the
+     * ringtone section in NotificationsSettingsActivity, "who may call you"
+     * in PrivacySettingsActivity, the data section in DataSettingsActivity,
+     * the settings search entries. The call button itself follows the
+     * server's phone_calls_available.
      */
-    public static final boolean CALLS = false;
+    public static final boolean CALLS = true;
 
     /**
      * An address to receive login codes at.

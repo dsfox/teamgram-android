@@ -796,9 +796,9 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         lastSeenRow = rowCount++;
         profilePhotoRow = rowCount++;
         forwardsRow = rowCount++;
-        // Who may call you is not a choice worth offering while nobody can call
-        // anybody (#14). -1 because an unassigned int is 0, a real position.
-        callsRow = -1;
+        // Who may call you comes and goes with calls (#14). -1 rather than
+        // unassigned: an int field starts at 0, a real position.
+        callsRow = Offered.CALLS ? rowCount++ : -1;
         groupsDetailRow = -1;
         if (!getMessagesController().premiumFeaturesBlocked() || getUserConfig().isPremium()) {
             voicesRow = rowCount++;

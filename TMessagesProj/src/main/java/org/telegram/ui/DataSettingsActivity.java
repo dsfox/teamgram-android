@@ -193,12 +193,12 @@ public class DataSettingsActivity extends BaseFragment {
         enableAllStreamInfoRow = rowCount++;
 
         enableCacheStreamRow = -1;//rowCount++;
-        // Nothing here to spend data on: calls are not implemented (#14). The
-        // rows are pinned to -1 because an unassigned int is 0, a real position.
-        callsSectionRow = -1;
-        useLessDataForCallsRow = -1;
+        // The call data rows come and go with calls (#14). -1 rather than
+        // unassigned: an int field starts at 0, a real position.
+        callsSectionRow = Offered.CALLS ? rowCount++ : -1;
+        useLessDataForCallsRow = Offered.CALLS ? rowCount++ : -1;
 //        quickRepliesRow = rowCount++;
-        callsSection2Row = -1;
+        callsSection2Row = Offered.CALLS ? rowCount++ : -1;
         proxySectionRow = rowCount++;
         proxyRow = rowCount++;
         proxySection2Row = rowCount++;

@@ -190,13 +190,13 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         reactionsRow = Offered.REACTIONS ? rowCount++ : -1;
         notificationsSection2Row = rowCount++;
 
-        // No ringtone for calls this fork cannot place or receive (#14). Left at
-        // -1 rather than merely unassigned: an int field starts at 0, which is a
-        // real position, and every "position == callsSectionRow" would then be
-        // true for the first row on the screen.
-        callsSectionRow = -1;
-        callsVibrateRow = -1;
-        callsRingtoneRow = -1;
+        // The ringtone section comes and goes with calls (#14). -1 rather than
+        // merely unassigned: an int field starts at 0, which is a real
+        // position, and every "position == callsSectionRow" would then be true
+        // for the first row on the screen.
+        callsSectionRow = Offered.CALLS ? rowCount++ : -1;
+        callsVibrateRow = Offered.CALLS ? rowCount++ : -1;
+        callsRingtoneRow = Offered.CALLS ? rowCount++ : -1;
         eventsSection2Row = rowCount++;
 
         badgeNumberSection = rowCount++;
