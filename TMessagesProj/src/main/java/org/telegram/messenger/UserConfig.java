@@ -161,6 +161,7 @@ public class UserConfig extends BaseController {
                     editor.putInt("loginTime", loginTime);
                     editor.putBoolean("syncContacts", syncContacts);
                     editor.putBoolean("showCallsTab", showCallsTab);
+                    editor.putBoolean("callsTabOffered", true);
                     editor.putBoolean("suggestContacts", suggestContacts);
                     editor.putBoolean("hasSecureData", hasSecureData);
                     editor.putBoolean("notificationsSettingsLoaded4", notificationsSettingsLoaded);
@@ -312,7 +313,15 @@ public class UserConfig extends BaseController {
             webappRatingLoadTime = preferences.getInt("webappRatingLoadTime", 0);
             loginTime = preferences.getInt("loginTime", currentAccount);
             syncContacts = preferences.getBoolean("syncContacts", true);
-            showCallsTab = preferences.getBoolean("showCallsTab", false);
+            // Shown until the person hides it, as on iOS (#14): the calls tab is
+            // where a call is placed from, and the long-press that reveals it
+            // is not something anybody finds.
+            showCallsTab = preferences.getBoolean("showCallsTab", true);
+            // An install from before calls existed saved false without anybody
+            // choosing it. Shown once; hidden again only by the person.
+            if (!preferences.getBoolean("callsTabOffered", false)) {
+                showCallsTab = true;
+            }
             suggestContacts = preferences.getBoolean("suggestContacts", true);
             hasSecureData = preferences.getBoolean("hasSecureData", false);
             notificationsSettingsLoaded = preferences.getBoolean("notificationsSettingsLoaded4", false);
@@ -484,7 +493,7 @@ public class UserConfig extends BaseController {
         draftsLoaded = false;
         contactsReimported = true;
         syncContacts = true;
-        showCallsTab = false;
+        showCallsTab = true;
         suggestContacts = true;
         unreadDialogsLoaded = true;
         hasValidDialogLoadIds = true;
