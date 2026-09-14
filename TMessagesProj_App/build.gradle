@@ -1,21 +1,25 @@
 apply plugin: 'com.android.application'
 
-// What signs a release, read from the repository's .env rather than from
-// gradle.properties, which is in git. The keystore beside this file is
-// upstream's and its passwords are committed next to it - fine for a debug
-// build, which is what it was for, and not something to sign a release with:
-// anyone can produce an update to an app signed by a key everyone has.
+// What signs a release, read from the repository's secrets file
+// (.secrets/env, see docs/secrets.md; the older .env at the root is still
+// read for a checkout that has one) rather than from gradle.properties,
+// which is in git. The keystore beside this file is upstream's and its
+// passwords are committed next to it - fine for a debug build, which is what
+// it was for, and not something to sign a release with: anyone can produce
+// an update to an app signed by a key everyone has.
 //
-// Empty when the file is not there, and then a release build stops with a
+// Empty when neither file is there, and then a release build stops with a
 // signing error rather than quietly going out under the public key.
 ext.fromEnv = { String name ->
-    def file = rootProject.file('../../.env')
-    if (!file.exists()) {
-        return null
-    }
-    for (String line : file.readLines()) {
-        if (line.startsWith(name + '=')) {
-            return line.substring(name.length() + 1).trim()
+    for (String path : ['../../.secrets/env', '../../.env']) {
+        def file = rootProject.file(path)
+        if (!file.exists()) {
+            continue
+        }
+        for (String line : file.readLines()) {
+            if (line.startsWith(name + '=')) {
+                return line.substring(name.length() + 1).trim()
+            }
         }
     }
     return null
