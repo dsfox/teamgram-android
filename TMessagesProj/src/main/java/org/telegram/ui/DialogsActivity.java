@@ -7075,16 +7075,25 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         askingForPermissions = true;
                         if (hasNotNotificationsPermission && NotificationPermissionDialog.shouldAsk(activity)) {
                             PermissionRequest.requestPermission(Manifest.permission.POST_NOTIFICATIONS, granted -> {
-                                if (!granted) {
-                                    showDialog(new NotificationPermissionDialog(activity, !PermissionRequest.canAskPermission(Manifest.permission.POST_NOTIFICATIONS), granted2 -> {
-                                        if (!granted2) return;
-                                        if (!PermissionRequest.canAskPermission(Manifest.permission.POST_NOTIFICATIONS)) {
-                                            PermissionRequest.showPermissionSettings(Manifest.permission.POST_NOTIFICATIONS);
-                                        } else {
-                                            activity.requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, 1);
-                                        }
-                                    }));
+                                if (granted) return;
+                                // A dialog dismissed with Back or a tap outside it comes back as
+                                // the same "denied" as the button, and the system records no
+                                // decision. Only a real refusal turns the rationale flag on, so
+                                // a denial without it, before any refusal, is a dismissal: no
+                                // sheet, no postponing, the next cold start asks again.
+                                final boolean canAsk = PermissionRequest.canAskPermission(Manifest.permission.POST_NOTIFICATIONS);
+                                if (!canAsk && !NotificationPermissionDialog.wasRefused()) {
+                                    FileLog.d("notification permission: dialog dismissed, will ask on the next start");
+                                    return;
                                 }
+                                showDialog(new NotificationPermissionDialog(activity, !canAsk, granted2 -> {
+                                    if (!granted2) return;
+                                    if (!PermissionRequest.canAskPermission(Manifest.permission.POST_NOTIFICATIONS)) {
+                                        PermissionRequest.showPermissionSettings(Manifest.permission.POST_NOTIFICATIONS);
+                                    } else {
+                                        activity.requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, 1);
+                                    }
+                                }));
                             });
                         } else if (hasNotContactsPermission && askAboutContacts && getUserConfig().syncContacts && activity.shouldShowRequestPermissionRationale(Manifest.permission.READ_CONTACTS)) {
                             AlertDialog.Builder builder = AlertsCreator.createContactsPermissionDialog(activity, param -> {

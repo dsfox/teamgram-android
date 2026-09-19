@@ -290,6 +290,11 @@ public class NotificationPermissionDialog extends BottomSheet implements Notific
         return askAfter != -2 && (askAfter < 0 || System.currentTimeMillis() >= askAfter);
     }
 
+    /** Whether a refusal has ever postponed the question on this phone. */
+    public static boolean wasRefused() {
+        return MessagesController.getGlobalMainSettings().contains("askNotificationsAfter");
+    }
+
     public static void askLater() {
         long askAfter;
         final long day = 1000L * 60L * 60L * 24L;
