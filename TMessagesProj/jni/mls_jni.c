@@ -84,39 +84,6 @@ Java_org_telegram_messenger_MlsCore_groupFree(JNIEnv *env, jclass class, jlong g
     mls_group_free((Group *) from_handle(group));
 }
 
-// Adding produces two things that both have to be delivered: the commit for
-// everybody already here and the welcome for the newcomer. They come back as a
-// two-element array so neither can be dropped by forgetting an out-parameter.
-JNIEXPORT jobjectArray JNICALL
-Java_org_telegram_messenger_MlsCore_addMember(JNIEnv *env, jclass class, jlong group, jlong identity, jbyteArray keyPackage) {
-    jsize len = (*env)->GetArrayLength(env, keyPackage);
-    jbyte *bytes = (*env)->GetByteArrayElements(env, keyPackage, NULL);
-
-    struct MlsBuffer commit = {NULL, 0};
-    struct MlsBuffer welcome = mls_group_add_member((Group *) from_handle(group),
-                                                    (const Identity *) from_handle(identity),
-                                                    (const unsigned char *) bytes,
-                                                    (size_t) len,
-                                                    &commit);
-    (*env)->ReleaseByteArrayElements(env, keyPackage, bytes, JNI_ABORT);
-
-    if (welcome.ptr == NULL) {
-        mls_buffer_free(commit);
-        return NULL;
-    }
-
-    jclass byteArrayClass = (*env)->FindClass(env, "[B");
-    jobjectArray pair = (*env)->NewObjectArray(env, 2, byteArrayClass, NULL);
-    if (pair == NULL) {
-        mls_buffer_free(welcome);
-        mls_buffer_free(commit);
-        return NULL;
-    }
-    (*env)->SetObjectArrayElement(env, pair, 0, take(env, commit));
-    (*env)->SetObjectArrayElement(env, pair, 1, take(env, welcome));
-    return pair;
-}
-
 JNIEXPORT jbyteArray JNICALL
 Java_org_telegram_messenger_MlsCore_encrypt(JNIEnv *env, jclass class, jlong group, jlong identity, jbyteArray plaintext) {
     jsize len = (*env)->GetArrayLength(env, plaintext);
@@ -306,6 +273,10 @@ Java_org_telegram_messenger_MlsCore_abandonCommit(JNIEnv *env, jclass class, jlo
            ? JNI_TRUE : JNI_FALSE;
 }
 
+// Adding produces two things that both have to be delivered: the commit for
+// everybody already here and the welcome for the newcomers. They come back as a
+// two-element array so neither can be dropped by forgetting an out-parameter.
+//
 // The packages arrive already packed - each preceded by its length as four
 // bytes, most significant first - because that is one thing to keep alive
 // across the boundary instead of two.
@@ -334,8 +305,7 @@ Java_org_telegram_messenger_MlsCore_addMembers(JNIEnv *env, jclass class, jlong 
         mls_buffer_free(welcome);
         return NULL;
     }
-    // Commit first, then welcome - the order addMember already uses, so the
-    // caller reads both the same way whichever it called.
+    // Commit first, then welcome, which is the order Invitation reads them in.
     (*env)->SetObjectArrayElement(env, result, 0, take(env, commit));
     (*env)->SetObjectArrayElement(env, result, 1, take(env, welcome));
     return result;

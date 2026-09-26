@@ -39,8 +39,6 @@ public final class MlsCore {
 
     private static native void groupFree(long group);
 
-    private static native byte[][] addMember(long group, long identity, byte[] keyPackage);
-
     private static native byte[][] addMembers(long group, long identity, byte[] packed);
 
     private static native byte[] removeMembers(long group, long identity, byte[] packed);
@@ -295,19 +293,6 @@ public final class MlsCore {
         }
 
         /**
-         * Adds a device. Both halves have to be delivered - the commit to
-         * everybody already here, the welcome to the newcomer - or the
-         * conversation splits in two.
-         */
-        public Invitation addMember(Identity identity, byte[] keyPackage) throws MlsException {
-            byte[][] pair = MlsCore.addMember(this.handle, identity.handle, keyPackage);
-            if (pair == null || pair.length != 2) {
-                throw failure("the member was not added");
-            }
-            return new Invitation(pair[0], pair[1]);
-        }
-
-        /**
          * Adds every device of theirs at once.
          *
          * One welcome comes back and it lets all of them in. Added one at a
@@ -520,59 +505,5 @@ public final class MlsCore {
             this.commit = commit;
             this.welcome = welcome;
         }
-    }
-
-    /**
-     * Proves on the device that the whole path works: two identities, a group, a
-     * message that survives the trip, and a ciphertext that does not contain the
-     * plaintext. For a smoke test, not for the app.
-     */
-    public static String selfCheck() {
-        try (Identity alice = new Identity("alice/phone".getBytes());
-             Identity bob = new Identity("bob/phone".getBytes())) {
-
-            try (Group group = Group.create(alice);
-                 Group bobGroup = joinAs(bob, group, alice)) {
-
-                byte[] secret = "the server is not supposed to read this".getBytes();
-                byte[] ciphertext = group.encrypt(alice, secret);
-                if (contains(ciphertext, "server".getBytes())) {
-                    return "FAIL: the plaintext is visible in the ciphertext";
-                }
-
-                byte[] read = bobGroup.decrypt(bob, ciphertext);
-                if (read == null) {
-                    return "FAIL: that was read as a handshake, not a message";
-                }
-                if (!java.util.Arrays.equals(read, secret)) {
-                    return "FAIL: the message did not survive";
-                }
-                if (bobGroup.memberCount() != 2) {
-                    return "FAIL: the group holds " + bobGroup.memberCount() + " devices, expected 2";
-                }
-                return "ok: two devices, epoch " + group.epoch() + ", "
-                        + ciphertext.length + " bytes of ciphertext";
-            }
-        } catch (MlsException e) {
-            return "FAIL: " + e.getMessage();
-        }
-    }
-
-    private static Group joinAs(Identity newcomer, Group group, Identity owner) throws MlsException {
-        Invitation invitation = group.addMember(owner, newcomer.keyPackage());
-        return Group.join(newcomer, invitation.welcome);
-    }
-
-    private static boolean contains(byte[] haystack, byte[] needle) {
-        outer:
-        for (int i = 0; i + needle.length <= haystack.length; i++) {
-            for (int j = 0; j < needle.length; j++) {
-                if (haystack[i + j] != needle[j]) {
-                    continue outer;
-                }
-            }
-            return true;
-        }
-        return false;
     }
 }
