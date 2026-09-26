@@ -101,11 +101,7 @@ dependencies {
 android {
     compileSdkVersion 35
     buildToolsVersion '35.0.0'
-    // Upstream is on 27.2; 27.1 is what is installed here and what the pixman
-    // assembly of issue #30 was proven against. 21.4, which upstream used to
-    // pin, is from 2020 and its prebuilt archiver aborts on this machine before
-    // it links anything.
-    ndkVersion "27.1.12297006"
+    ndkVersion "27.2.12479018"
 
     sourceSets.main.jniLibs.srcDirs = ['./jni/']
 
