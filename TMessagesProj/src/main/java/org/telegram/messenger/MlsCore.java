@@ -64,6 +64,13 @@ public final class MlsCore {
 
     private static native byte[] recoveryAuthSecret(byte[] phrase);
 
+    /**
+     * Which derivation recoveryAuthSecret makes. The core's number rather than
+     * one of ours, so a new derivation cannot ship under an old number or the
+     * other way round (#69).
+     */
+    public static native int recoveryDerivation();
+
     private static native byte[] encrypt(long group, long identity, byte[] plaintext);
 
     private static native byte[] decrypt(long group, long identity, byte[] ciphertext);

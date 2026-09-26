@@ -360,3 +360,8 @@ Java_org_telegram_messenger_MlsCore_recoveryAuthSecret(JNIEnv *env, jclass class
     (*env)->ReleaseByteArrayElements(env, phrase, bytes, JNI_ABORT);
     return take(env, out);
 }
+
+JNIEXPORT jint JNICALL
+Java_org_telegram_messenger_MlsCore_recoveryDerivation(JNIEnv *env, jclass class) {
+    return (jint) mls_recovery_derivation();
+}

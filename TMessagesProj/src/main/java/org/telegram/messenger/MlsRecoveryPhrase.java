@@ -26,16 +26,6 @@ import org.telegram.tgnet.TLRPCMls;
  */
 public class MlsRecoveryPhrase {
 
-    /**
-     * Which derivation the stored secret was made with.
-     *
-     * Bumped when the derivation changes, so a device that registered under the
-     * old one registers again from the words it still has rather than leaving
-     * the owner with a phrase the server no longer recognises. It changed once
-     * already, when the strings the keys are derived from stopped saying 2bytes.
-     */
-    private static final int CURRENT_DERIVATION = 2;
-
     private static final MlsRecoveryPhrase[] instances =
             new MlsRecoveryPhrase[UserConfig.MAX_ACCOUNT_COUNT];
 
@@ -84,7 +74,13 @@ public class MlsRecoveryPhrase {
             try {
                 String existing = phrase();
                 if (existing != null) {
-                    if (storage().getInt("recovery_derivation", 0) != CURRENT_DERIVATION) {
+                    // Which derivation the stored secret was made with, against
+                    // the one the linked core makes. When they differ, the device
+                    // registers again from the words it still has rather than
+                    // leaving the owner with a phrase the server no longer
+                    // recognises. The core says its own number, beside the
+                    // derivation, so the two cannot drift apart (#69).
+                    if (storage().getInt("recovery_derivation", 0) != MlsCore.recoveryDerivation()) {
                         // The words are still the owner's; only what the server
                         // was told has gone stale.
                         register(existing, false);
@@ -122,9 +118,10 @@ public class MlsRecoveryPhrase {
             }
             storage().edit()
                     .putString("recovery_phrase", phrase)
-                    .putInt("recovery_derivation", CURRENT_DERIVATION)
+                    .putInt("recovery_derivation", MlsCore.recoveryDerivation())
                     .apply();
-            FileLog.d("mls: a recovery phrase is registered for this account");
+            FileLog.d("mls: a recovery phrase is registered for this account, derivation "
+                    + MlsCore.recoveryDerivation());
             if (isNew) {
                 show(phrase);
             }
