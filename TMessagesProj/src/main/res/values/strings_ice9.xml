@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings of ice9's own, used by code in this library. They live in a file
+     upstream does not have, so a carry never touches them; the branding of
+     upstream's strings is in TMessagesProj_App (tools/android_brand.py). -->
+<resources>
+
+    <!-- Inviting somebody by number, with a code that lets them in (ice9 #47, #164). -->
+    <string name="InviteCodeLine">Your invitation code: %1$s</string>
+    <string name="InviteAlreadyHere">This person is already on ice9 — just write to them.</string>
+    <string name="InviteNoCode">Could not get an invitation code. Try again later.</string>
+    <string name="InviteByPhone">Invite by phone number</string>
+    <string name="InviteNumberBySms">Invite %1$s by SMS</string>
+    <string name="InviteAlreadyHereAdd">This person is already on ice9 — just add them.</string>
+    <string name="InviteNotInGroup">You are not in this group.</string>
+    <string name="InviteByPhoneHint">+7 …</string>
+    <string name="InviteCodeHint">The code is in the SMS from whoever invited you.</string>
+
+    <!-- Deleting the account at once, from Privacy and Security. -->
+    <string name="DeleteAccountNow">Delete Account Now</string>
+    <string name="DeleteAccountConfirm">Delete your account right now? Your messages, files, contacts and settings are erased from the server, every device is signed out, and your phone number is released. This cannot be undone.</string>
+    <string name="DeleteAccountFailed">The account could not be deleted. Nothing was removed — try again, or write to support@ice9.app.</string>
+
+    <!-- Which server this app talks to (ice9 #65). The first screen after
+         installation, and a row in Settings afterwards. -->
+    <string name="Ice9Server">Server</string>
+    <string name="Ice9ServerTitle">Choose your server</string>
+    <string name="Ice9ServerInfo">Your messages live on the server you name here. Ours is filled in — keep it, or put in your own: an IP address or a name.</string>
+    <string name="Ice9ServerAddress">Address or name:port</string>
+    <string name="Ice9ServerSetDefault">Use default</string>
+    <string name="Ice9ServerOwn">Important: your own server goes up in 5-10 minutes, and here is how. It is easy — try it.</string>
+    <string name="Ice9ServerInstructions">https://ice9.app/server</string>
+    <string name="Ice9ServerMalformed">That is not an address. A name or an IP, and a port after a colon if it is not the usual one.</string>
+    <string name="Ice9ServerNoAnswer">No answer from that address. Check it and try again.</string>
+    <string name="Ice9ServerChangeTitle">Change server?</string>
+    <string name="Ice9ServerChangeInfo">You will be signed out and everything on this device will be erased: messages, chats and keys belong to the server that issued them and mean nothing on another. Your account on the old server stays where it is.</string>
+    <string name="Ice9ServerChange">Change and sign out</string>
+
+    <!-- What stands in for a message this device cannot open. -->
+    <string name="Ice9MessageFromAnotherDevice">🔒 Message from another device</string>
+</resources>

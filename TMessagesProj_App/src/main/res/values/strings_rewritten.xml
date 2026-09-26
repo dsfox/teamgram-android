@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Upstream strings whose ice9 text is ours rather than a replacement of theirs.
+     Written by hand; tools/android_brand.py leaves these names alone. -->
+<resources>
+
+    <!-- The invitation SMS, in our words (#178). -->
+    <string name="InviteText2">Hi! Get ice9: %1$s\nI left you a message there.</string>
+
+    <!-- The welcome screen says what ice9 is, not what Telegram claims to be. -->
+    <string name="Page1Message">Lightweight, simple and secure opensource messenger for teams and businesses.</string>
+
+    <!-- Two footers that named channels, which ice9 does not have (#107). -->
+    <string name="UndoAllCustom">Undo all custom notification settings for all your contacts and groups.</string>
+    <string name="PrivacyInvitesInfo">You can restrict which users are allowed to add you to groups.</string>
+
+    <!-- Settings rows that described doors this client has closed (#91). -->
+    <string name="StickersNameInfo2">Manage stickers and emoji</string>
+    <string name="SettingsPrivacySecurityInfo">Last Seen, Devices, Blocked Users</string>
+    <string name="SettingsNotificationsInfo">Sounds, Badges, Exceptions</string>
+</resources>

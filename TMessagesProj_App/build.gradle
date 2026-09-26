@@ -66,6 +66,12 @@ android {
         coreLibraryDesugaringEnabled true
     }
 
+    // ice9: #193 - two languages, and upstream's other translations stay in the
+    // tree unshipped rather than deleted from it.
+    androidResources {
+        localeFilters += ["en", "ru"]
+    }
+
     signingConfigs {
         debug {
             storeFile file("../TMessagesProj/config/release.keystore")

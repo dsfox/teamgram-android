@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The tint Android puts behind the notification stencil: our green.
+         The library manifest names it for Firebase's default notification. -->
+    <color name="notification_accent">#177C45</color>
+</resources>
