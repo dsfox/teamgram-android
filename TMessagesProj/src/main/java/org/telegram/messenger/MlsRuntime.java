@@ -734,12 +734,14 @@ public class MlsRuntime {
      * of somebody's new phone is about to cost that phone the message for
      * good: on 2 September the send went 109 ms ahead of the add that let a
      * reinstalled phone in, and that phone holds the message as ciphertext
-     * for ever (#158). A comparison is one round trip and at most one commit,
-     * so half the handshake's ten seconds; past it the message goes as it
-     * would have, because a message that never leaves is worse than one
-     * somebody cannot open.
+     * for ever (#158). The handshake's ten seconds, not half of them: a
+     * comparison that claims packages and commits took 4.9 s on 26 September,
+     * five ran out with the commit still in flight, the core refused to encrypt
+     * over a commit it had staged, and the message went in the clear (#212).
+     * Past it the message goes as it would have, because a message that never
+     * leaves is worse than one somebody cannot open.
      */
-    private static final long COMPARISON_WAIT = 5_000L;
+    private static final long COMPARISON_WAIT = 10_000L;
 
     /**
      * One held-back send. Fires once and once only: it has both a deadline of
@@ -1630,6 +1632,8 @@ public class MlsRuntime {
     private final class Dropping extends Change {
         private final List<byte[]> leaves;
         private final String what;
+        /** What the comparison still has to do once these leaves are out. */
+        private final Pass afterwards;
 
         Dropping(long peerId, List<byte[]> leaves) {
             this(peerId, leaves, "device(s) of this account");
@@ -1639,9 +1643,33 @@ public class MlsRuntime {
          *      out a phone of this account and a leaf that belongs to nobody
          *      (#122), and the two read as opposite things. */
         Dropping(long peerId, List<byte[]> leaves, String what) {
+            this(peerId, leaves, what, null);
+        }
+
+        /** @param afterwards run before this change ends, so a send waiting on
+         *      the chat waits for it too. Without it the dead leaves went out,
+         *      the change ended, the send went - and the person whose live
+         *      phone had not been let in yet could not read it (#212). */
+        Dropping(long peerId, List<byte[]> leaves, String what, Pass afterwards) {
             super(peerId);
             this.leaves = leaves;
             this.what = what;
+            this.afterwards = afterwards;
+        }
+
+        @Override
+        void taken(byte[] groupId, Runnable then) {
+            if (afterwards != null) {
+                synchronized (MlsRuntime.this) {
+                    java.util.ArrayDeque<Pass> queued = afterChange.get(peerId);
+                    if (queued == null) {
+                        queued = new java.util.ArrayDeque<>();
+                        afterChange.put(peerId, queued);
+                    }
+                    queued.addFirst(afterwards);
+                }
+            }
+            fire(then);
         }
 
         @Override
@@ -2816,7 +2844,8 @@ public class MlsRuntime {
                     if (!dead.isEmpty()) {
                         FileLog.d("mls: " + dead.size() + " leaf/leaves in " + shortId(groupId)
                                 + " belong to devices that are gone");
-                        commitChange(new Dropping(peerId, dead, "leaf(es) whose device is gone"),
+                        commitChange(new Dropping(peerId, dead, "leaf(es) whose device is gone",
+                                        () -> letIn(peerId, candidates, attempt + 1)),
                                 () -> letIn(peerId, candidates, attempt + 1));
                         return;
                     }
