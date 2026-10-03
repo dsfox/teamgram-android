@@ -3704,7 +3704,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
             @Override
             protected boolean isStoriesView() {
-                return myProfile;
+                // One's own posts and their archive are stories, which are not
+                // offered (#224). See Offered.
+                return myProfile && Offered.STORIES;
             }
 
             @Override
@@ -6059,7 +6061,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         } else {
             buttonsTranslationY = dp(72);
         }
-        animatorBottomButtonVisibility.setValue(buttonsTranslationY <= 0, true);
+        // The buttons are "Add a post" and the archive's: stories (#224). See Offered.
+        animatorBottomButtonVisibility.setValue(Offered.STORIES && buttonsTranslationY <= 0, true);
 
         final float factor = animatorBottomButtonVisibility.getFloatValue();
         bottomButtonsContainer.setTranslationY(lerp(dp(60), 0, factor));
@@ -10835,7 +10838,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     reportDividerRow = rowCount++;
                 }
 
-                if (hasMedia || (user != null && user.bot && user.bot_can_edit && user.bot_has_main_app) || userInfo != null && userInfo.common_chats_count != 0 || myProfile) {
+                // One's own profile always had the row for its posts, which are
+                // stories (#224); without them it is the media, like anybody's.
+                if (hasMedia || (user != null && user.bot && user.bot_can_edit && user.bot_has_main_app) || userInfo != null && userInfo.common_chats_count != 0 || (myProfile && Offered.STORIES)) {
                     sharedMediaRow = rowCount++;
                 } else if (lastSectionRow == -1 && needSendMessage) {
                     sendMessageRow = rowCount++;

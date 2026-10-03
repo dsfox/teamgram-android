@@ -73,6 +73,12 @@ public final class Offered {
     public static final boolean CHAT_WALLPAPERS = false;
 
     /**
+     * Icons behind a name or profile colour. They are custom emoji from packs,
+     * and there are none (#20), so the picker opens empty. Issue #222.
+     */
+    public static final boolean COLOUR_ICONS = false;
+
+    /**
      * Video chats.
      *
      * No implementation anywhere yet. Issue #28.

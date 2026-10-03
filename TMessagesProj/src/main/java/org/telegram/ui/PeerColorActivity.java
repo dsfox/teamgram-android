@@ -370,6 +370,8 @@ public class PeerColorActivity extends BaseFragment implements NotificationCente
                         case VIEW_TYPE_COLOR_PICKER:
                             PeerColorGrid colorPicker = peerColorPicker = new PeerColorGrid(getContext(), type, currentAccount, resourceProvider);
                             colorPicker.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundWhite));
+                            // The divider parts the colours from the icon row, gone with it (#222).
+                            colorPicker.setDivider(Offered.COLOUR_ICONS);
                             colorPicker.setSelected(selectedColor, false);
                             colorPicker.setOnColorClick(colorId -> {
                                 selectedColor = colorId;
@@ -1146,7 +1148,8 @@ public class PeerColorActivity extends BaseFragment implements NotificationCente
 //                previewRow = rowCount++;
 //            }
             colorPickerRow = rowCount++;
-            iconRow = rowCount++;
+            // The icon picker opens empty while colour icons are off (#222). See Offered.
+            iconRow = Offered.COLOUR_ICONS ? rowCount++ : -1;
             infoRow = rowCount++;
             if ((type == PAGE_PROFILE) && (selectedColor >= 0 || selectedEmojiCollectible != null || selectedPeerCollectible != null)) {
                 clearRow = rowCount++;
@@ -3612,7 +3615,10 @@ public class PeerColorActivity extends BaseFragment implements NotificationCente
 
     public static boolean eq(TLRPC.EmojiStatus emoji_status, TLRPC.TL_emojiStatusCollectible b) {
         if ((b != null) != (emoji_status instanceof TLRPC.TL_emojiStatusCollectible)) return false;
-        if (b == null || !(emoji_status instanceof TLRPC.TL_emojiStatusCollectible)) return false;
+        // ice9: no collectible on either side is the same, not a change: the
+        // unsaved-changes question came up on every way out of an untouched
+        // screen once colours were offered without Premium (#24).
+        if (b == null) return true;
         final TLRPC.TL_emojiStatusCollectible a = (TLRPC.TL_emojiStatusCollectible) emoji_status;
         return a.collectible_id == b.collectible_id;
     }

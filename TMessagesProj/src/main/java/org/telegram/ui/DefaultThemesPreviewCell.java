@@ -301,19 +301,6 @@ public class DefaultThemesPreviewCell extends LinearLayout {
             }
         }
 
-        if (!MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes.isEmpty()) {
-            ArrayList<ChatThemeBottomSheet.ChatThemeItem> themes = new ArrayList<>(MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes);
-            if (currentType == ThemeActivity.THEME_TYPE_BASIC) {
-
-                EmojiThemes chatTheme = EmojiThemes.createPreviewCustom(parentFragment.getCurrentAccount());
-                chatTheme.loadPreviewColors(parentFragment.getCurrentAccount());
-                ChatThemeBottomSheet.ChatThemeItem item = new ChatThemeBottomSheet.ChatThemeItem(chatTheme);
-                item.themeIndex = !Theme.isCurrentThemeDay() ? 2 : 0;
-                themes.add(item);
-            }
-
-            adapter.setItems(themes);
-        }
         updateDayNightMode();
         updateSelectedPosition();
         updateColors();
@@ -356,7 +343,30 @@ public class DefaultThemesPreviewCell extends LinearLayout {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 
+    // ice9: the themes arrive from account.getThemes, and on a first run that is
+    // after this cell was built; the screen redraws it on emojiPreviewThemesChanged,
+    // which lands here, so an empty row is filled here (#223).
+    private void setThemesIfLoaded() {
+        if (adapter.items != null && !adapter.items.isEmpty()) {
+            return;
+        }
+        if (!MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes.isEmpty()) {
+            ArrayList<ChatThemeBottomSheet.ChatThemeItem> themes = new ArrayList<>(MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes);
+            if (currentType == ThemeActivity.THEME_TYPE_BASIC) {
+
+                EmojiThemes chatTheme = EmojiThemes.createPreviewCustom(parentFragment.getCurrentAccount());
+                chatTheme.loadPreviewColors(parentFragment.getCurrentAccount());
+                ChatThemeBottomSheet.ChatThemeItem item = new ChatThemeBottomSheet.ChatThemeItem(chatTheme);
+                item.themeIndex = !Theme.isCurrentThemeDay() ? 2 : 0;
+                themes.add(item);
+            }
+
+            adapter.setItems(themes);
+        }
+    }
+
     public void updateDayNightMode() {
+        setThemesIfLoaded();
         if (currentType == ThemeActivity.THEME_TYPE_BASIC || currentType == TYPE_CUSTOM_LIST) {
             themeIndex = !Theme.isCurrentThemeDay() ? 2 : 0;
         } else {
