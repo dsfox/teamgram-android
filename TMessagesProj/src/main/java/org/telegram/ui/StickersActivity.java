@@ -390,10 +390,9 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
         }
 
         if (currentType == TYPE_IMAGE) {
-            // The reaction a double tap sends, in a client whose reactions are
-            // switched off - the server keeps none. And the line under it points
-            // at a @stickers bot that does not exist here, over a list of packs
-            // that is always empty (#20). See Offered.
+            // The reaction a double tap sends follows Offered.REACTIONS (#18).
+            // The line under it points at a @stickers bot that does not exist
+            // here, over a list of packs that is always empty (#20).
             if (Offered.REACTIONS) {
                 reactionsDoubleTapRow = items.size();
                 items.add(UItem.asSettingsCell(ID_QUICK_REACTION, R.drawable.msg2_reactions2, getString(R.string.DoubleTapSetting)).onBind(this::setQuickReactionImage));

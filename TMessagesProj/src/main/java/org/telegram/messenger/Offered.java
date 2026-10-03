@@ -159,12 +159,18 @@ public final class Offered {
     public static final boolean EMOJI_AVATAR = false;
 
     /**
-     * Reactions to a message.
-     *
-     * The server keeps none, so a tapped reaction appears for a moment on the
-     * phone that tapped it and is gone by the next sync.
+     * Reactions to a message: the owner's nine emoji, one per person per
+     * message, kept by the server and told to everybody in the conversation
+     * (#18).
      */
-    public static final boolean REACTIONS = false;
+    public static final boolean REACTIONS = true;
+
+    /**
+     * Notifications for reactions. The server tells a phone of a reaction only
+     * while it is connected, and nothing wakes one for it, so a switch here
+     * would promise a notification that never comes.
+     */
+    public static final boolean REACTION_NOTIFICATIONS = false;
 
     /**
      * A group's invite link: the row in the add-member picker, the "Invite

@@ -1111,8 +1111,7 @@ public class ReactionsContainerLayout extends FrameLayout implements Notificatio
 
     public void setMessage(MessageObject message, TLRPC.ChatFull chatFull, boolean animated) {
         this.messageObject = message;
-        // Not offered. The server keeps no reactions, so one appears for a
-        // moment on the phone that tapped it and is gone by the next sync.
+        // The strip of reactions follows Offered.REACTIONS (#18).
         //
         // Hidden here rather than by not building the strip at all: the menu
         // that holds reply, forward, copy and delete uses this object sixteen

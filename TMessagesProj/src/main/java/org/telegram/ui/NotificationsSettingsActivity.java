@@ -180,14 +180,15 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         notificationsSectionRow = rowCount++;
         privateRow = rowCount++;
         groupRow = rowCount++;
-        // Three kinds of notification for three things that do not exist here:
-        // no channels (#16), no stories, and a server that keeps no reactions.
+        // Three kinds of notification for things that do not exist here or are
+        // never sent: no channels (#16), no stories, and nothing that wakes a
+        // phone for a reaction (#18).
         // -1 rather than merely unassigned, because an int field starts at 0 -
         // a real position - and every "position == channelsRow" would then be
         // true for the first row on the screen. See Offered.
         channelsRow = Offered.CHANNELS ? rowCount++ : -1;
         storiesRow = Offered.STORIES ? rowCount++ : -1;
-        reactionsRow = Offered.REACTIONS ? rowCount++ : -1;
+        reactionsRow = Offered.REACTION_NOTIFICATIONS ? rowCount++ : -1;
         notificationsSection2Row = rowCount++;
 
         // The ringtone section comes and goes with calls (#14). -1 rather than
