@@ -174,7 +174,7 @@ public class DefaultThemesPreviewCell extends LinearLayout {
             // answered with an empty list (#23). Built either way, because the
             // colours are reapplied to it from several places and a null there
             // is a crash rather than a missing row. See Offered.
-            if (Offered.CHAT_THEMES) {
+            if (Offered.CLOUD_THEMES) {
                 addView(browseThemesCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
             }
 

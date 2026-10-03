@@ -43,6 +43,7 @@ import androidx.recyclerview.widget.LinearSmoothScroller;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ChatThemeController;
 import org.telegram.messenger.FileLoader;
@@ -440,7 +441,8 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
             } else {
                 backButtonDrawable.setRotation(1f, animated);
                 applyButton.setEnabled(false);
-                AndroidUtilities.updateViewVisibilityAnimated(chooseBackgroundTextView, true, 0.9f, false, animated);
+                // A wallpaper of one's own is not offered (#23). See Offered.
+                AndroidUtilities.updateViewVisibilityAnimated(chooseBackgroundTextView, Offered.CHAT_WALLPAPERS, 0.9f, false, animated);
                 AndroidUtilities.updateViewVisibilityAnimated(cancelOrResetTextView, true, 0.9f, false, animated);
                 AndroidUtilities.updateViewVisibilityAnimated(applyButton, false, 1f, false, animated);
                 AndroidUtilities.updateViewVisibilityAnimated(applyTextView, false, 0.9f, false, animated);

@@ -55,13 +55,22 @@ public final class Offered {
     public static final boolean FOLDERS = false;
 
     /**
-     * Chat themes and name colours.
-     *
-     * Both pickers would open empty - the server has no list to give them.
-     * Issues #23 and #24.
+     * Chat themes - colours only, the server's list - and name and profile
+     * colours, which save without Premium. Issues #23 and #24.
      */
-    public static final boolean CHAT_THEMES = false;
-    public static final boolean NAME_COLOURS = false;
+    public static final boolean CHAT_THEMES = true;
+    public static final boolean NAME_COLOURS = true;
+
+    /**
+     * Cloud themes: whole app themes shared and made as files. The server keeps
+     * no such file. Issue #23.
+     */
+    public static final boolean CLOUD_THEMES = false;
+
+    /**
+     * A photo of one's own behind a chat. The server keeps no wallpaper. #23.
+     */
+    public static final boolean CHAT_WALLPAPERS = false;
 
     /**
      * Video chats.

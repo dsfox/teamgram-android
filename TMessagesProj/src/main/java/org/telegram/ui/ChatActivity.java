@@ -4437,8 +4437,7 @@ public class ChatActivity extends BaseFragment implements
             if (currentChat != null && !isTopic) {
                 viewAsTopics = headerItem.lazilyAddSubItem(view_as_topics, R.drawable.msg_topics, LocaleController.getString(R.string.TopicViewAsTopics));
             }
-            // Chat themes are not offered: the sheet asks the server for its
-            // list of themes and draws grey squares for ever. See Offered.
+            // Chat themes follow their switch (#23). See Offered.
             if (org.telegram.messenger.Offered.CHAT_THEMES && themeDelegate.isThemeChangeAvailable(true)) {
                 headerItem.lazilyAddSubItem(change_colors, R.drawable.msg_background, LocaleController.getString(R.string.SetWallpapers));
             }
@@ -43277,8 +43276,8 @@ public class ChatActivity extends BaseFragment implements
 
     private void showChatThemeBottomSheet() {
         // Held here as well as at the menu: a theme service message or a
-        // wallpaper action can still lead in, and the sheet has nothing to
-        // show whichever door was used.
+        // wallpaper action can still lead in. Chat themes follow their
+        // switch (#23). See Offered.
         if (!org.telegram.messenger.Offered.CHAT_THEMES) {
             return;
         }

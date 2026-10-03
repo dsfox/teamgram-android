@@ -658,8 +658,7 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
             textSizeHeaderRow = rowCount++;
             textSizeRow = rowCount++;
             backgroundRow = rowCount++;
-            // Name colours are not offered: the picker would open empty, the
-            // server has no palette to give it. See Offered.
+            // Name colours follow their switch (#24). See Offered.
             if (Offered.NAME_COLOURS) {
                 changeUserColor = rowCount++;
             }
