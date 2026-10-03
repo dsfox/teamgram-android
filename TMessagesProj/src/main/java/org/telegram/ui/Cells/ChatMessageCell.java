@@ -27248,7 +27248,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                         sb.append("\n");
                         sb.append(formatPluralString("AccDescrNumberOfReplies", getRepliesCount()));
                     }
-                    if (currentMessageObject.messageOwner.reactions != null && currentMessageObject.messageOwner.reactions.results != null) {
+                    // ice9: an empty list is how the server says the last reaction went
+                    // (#18), and every message on screen gets one; read aloud, it was
+                    // "Reactions:" followed by nothing on all of them.
+                    if (currentMessageObject.messageOwner.reactions != null && currentMessageObject.messageOwner.reactions.results != null && !currentMessageObject.messageOwner.reactions.results.isEmpty()) {
                         if (currentMessageObject.messageOwner.reactions.results.size() == 1) {
                             TLRPC.ReactionCount reaction = currentMessageObject.messageOwner.reactions.results.get(0);
                             String emoticon = reaction.reaction instanceof TLRPC.TL_reactionEmoji ? ((TLRPC.TL_reactionEmoji) reaction.reaction).emoticon : "";
