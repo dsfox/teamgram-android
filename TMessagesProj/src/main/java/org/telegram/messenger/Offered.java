@@ -87,6 +87,14 @@ public final class Offered {
     public static final boolean SECRET_CHATS = false;
 
     /**
+     * The AI editor: a button in the message field and in captions that
+     * rewrites, translates or corrects the text. Nothing on this server answers
+     * it; iOS hides the same button by the server's ios_disable_ai_chat, and
+     * App Review counts a way into nothing as a hidden feature. Issue #227.
+     */
+    public static final boolean AI_EDITOR = false;
+
+    /**
      * Icons behind a name or profile colour. They are custom emoji from packs,
      * and there are none (#20), so the picker opens empty. Issue #222.
      */

@@ -66,6 +66,7 @@ import com.google.common.collect.Lists;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AppLogs;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AuthTokensHelper;
 import org.telegram.messenger.BirthdayController;
@@ -474,18 +475,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         versionView.setPadding(dp(21), dp(10), dp(21), dp(10));
         versionView.setGravity(Gravity.CENTER);
         versionView.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL));
-        versionView.setOnClickListener(v -> {
-            versionViewPressCount++;
-            if (versionViewPressCount < 2 && !BuildVars.DEBUG_PRIVATE_VERSION) {
-                try {
-                    Toast.makeText(getParentActivity(), getString(R.string.DebugMenuLongPress), Toast.LENGTH_SHORT).show();
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
-                return;
-            }
-            openDebugMenu();
-        });
+        // ice9: no taps here open Telegram's developer menu, in any build - a
+        // hidden way in, the kind App Review rejected iOS for (#181, #227).
+        // The log is sent from the "Send app logs" row, in the open.
 
         navigationBar = new View(context);
 //        fragmentView.addView(navigationBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM | Gravity.FILL_HORIZONTAL));
@@ -705,6 +697,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         // than one screen in: a promise about whose machine your messages are
         // on is worth nothing if checking it takes a search. See ice9 #65.
         items.add(SettingCell.Factory.of(60, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9Server), ServerAddress.describe()));
+        // The one way to the app's log, in the open, for whoever helps with a
+        // problem (#227): Telegram's own ways to it were hidden gestures.
+        items.add(SettingCell.Factory.of(61, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9SendLogs), getString(R.string.Ice9SendLogsInfo)));
 
         items.add(UItem.asShadow(null));
 
@@ -753,13 +748,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         // gone until there is a page of ours worth opening from inside the app.
         // The stores are given the address directly and do not need this row.
 
-        if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
-            items.add(UItem.asShadow(null));
-            items.add(UItem.asHeader(getString(R.string.SettingsDebug)));
-            items.add(SettingCell.Factory.of(20, 0xFF55CA47, 0xFF27B434, 0, getString(R.string.DebugSendLogs)));
-            items.add(SettingCell.Factory.of(21, 0xFF55CA47, 0xFF27B434, 0, getString(R.string.DebugSendLastLogs)));
-            items.add(SettingCell.Factory.of(22, 0xFFF45255, 0xFFDF3955, 0, getString(R.string.DebugClearLogs)));
-        }
+        // ice9: Telegram's "Debug" rows are gone from every build (#227); the
+        // log is sent from the "Send app logs" row under Server.
 
         items.add(UItem.asCustomShadow(versionView));
     }
@@ -887,6 +877,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 60:
                 askAboutChangingServer();
+                break;
+
+            case 61:
+                AppLogs.send(getParentActivity());
                 break;
 
             case 11:

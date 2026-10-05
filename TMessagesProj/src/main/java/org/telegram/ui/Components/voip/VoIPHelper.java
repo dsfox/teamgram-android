@@ -603,9 +603,10 @@ public class VoIPHelper {
 
 		checkbox.setVisibility(View.GONE);
 		logsText.setVisibility(View.GONE);
-		if (!log.exists()) {
-			includeLogs[0] = false;
-		}
+		// ice9: the call's log went as a message to Telegram's support account,
+		// which this server does not have - a way into nothing (#227). The app's
+		// log is sent from Settings > Send app logs.
+		includeLogs[0] = false;
 
 		final AlertDialog alert = new AlertDialog.Builder(context)
 				.setTitle(LocaleController.getString(R.string.CallMessageReportProblem))
@@ -619,14 +620,6 @@ public class VoIPHelper {
 						onDismiss.run();
 				})
 				.create();
-		if (BuildVars.LOGS_ENABLED && log.exists()) {
-			alert.setNeutralButton("Send log", (dialog, which) -> {
-				Intent intent = new Intent(context, LaunchActivity.class);
-				intent.setAction(Intent.ACTION_SEND);
-				intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(log));
-				context.startActivity(intent);
-			});
-		}
 		alert.show();
 		alert.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
 
@@ -686,10 +679,6 @@ public class VoIPHelper {
 				text.setVisibility(View.GONE);
 				alert.setTitle(LocaleController.getString(R.string.CallReportHint));
 				commentBox.setVisibility(View.VISIBLE);
-				if (log.exists()) {
-					checkbox.setVisibility(View.VISIBLE);
-					logsText.setVisibility(View.VISIBLE);
-				}
 				problemsWrap.setVisibility(View.VISIBLE);
 				((TextView) btn).setText(LocaleController.getString(R.string.Send).toUpperCase());
 			}

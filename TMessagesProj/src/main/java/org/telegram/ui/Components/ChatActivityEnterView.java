@@ -137,6 +137,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.RichMessageLayout;
 import org.telegram.messenger.MessageSuggestionParams;
 import org.telegram.messenger.MessagesController;
@@ -6043,7 +6044,8 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     private boolean shownAiButton;
     private void showAiButton(boolean show_) {
-        final boolean show = (show_ || richDraftActive) && parentFragment != null && !parentFragment.isSecretChat();
+        // ice9: nothing here answers the AI editor (#227). See Offered.
+        final boolean show = Offered.AI_EDITOR && (show_ || richDraftActive) && parentFragment != null && !parentFragment.isSecretChat();
 
         if (shownAiButton == show) return;
         if (show) {

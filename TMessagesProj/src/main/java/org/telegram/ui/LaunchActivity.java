@@ -126,6 +126,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
+import org.telegram.messenger.OfferedLinks;
 import org.telegram.messenger.OpenAttachedMenuBotReceiver;
 import org.telegram.messenger.PushListenerController;
 import org.telegram.messenger.R;
@@ -1508,6 +1509,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @SuppressLint("Range")
     private boolean handleIntent(Intent intent, boolean isNew, boolean restore, boolean fromPassword, Browser.Progress progress, boolean rebuildFragments, boolean openedTelegram) {
+        // ice9: a link into what nothing on screen offers opens nothing (#227).
+        // Every reader of links starts here, so the one check does. See OfferedLinks.
+        if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) && OfferedLinks.leadsToWhatIsOff(intent.getData())) {
+            if (progress != null) {
+                progress.end();
+            }
+            return true;
+        }
         if (GiftInfoBottomSheet.handleIntent(intent, progress)) {
             return true;
         }

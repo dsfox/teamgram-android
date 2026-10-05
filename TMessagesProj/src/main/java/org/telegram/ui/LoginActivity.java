@@ -2058,27 +2058,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             titleView.setGravity(Gravity.CENTER);
             titleView.setLineSpacing(dp(2), 1.0f);
             addView(titleView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 0, 32, 0));
-            titleView.setOnClickListener(v -> {
-                if (lastTitleToast != null) {
-                    lastTitleToast.cancel();
-                    lastTitleToast = null;
-                }
-                final long now = System.currentTimeMillis();
-                if (titleClickCount > 0 && now - lastTitleClick > 1500) {
-                    titleClickCount = 0;
-                }
-                titleClickCount++;
-                lastTitleClick = now;
-
-                if (titleClickCount >= 5) {
-                    titleClickCount = 0;
-                    lastTitleClick = 0;
-                    showDebugMenu();
-                } else if (titleClickCount > 1) {
-                    lastTitleToast = Toast.makeText(context, LocaleController.formatPluralString("DebugMenuLoginToast", 5 - titleClickCount), Toast.LENGTH_SHORT);
-                    lastTitleToast.show();
-                }
-            });
+            // ice9: five taps on the title opened Telegram's developer menu, with
+            // its log, before anybody signed in - gone from every build (#227).
 
             subtitleView = new LinkSpanDrawable.LinksTextView(context);
             subtitleView.setText(getString(activityMode == MODE_CHANGE_PHONE_NUMBER ? R.string.ChangePhoneHelp : R.string.StartText));

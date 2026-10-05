@@ -35,6 +35,10 @@
     <string name="Ice9ServerChangeInfo">You will be signed out and everything on this device will be erased: messages, chats and keys belong to the server that issued them and mean nothing on another. Your account on the old server stays where it is.</string>
     <string name="Ice9ServerChange">Change and sign out</string>
 
+    <!-- The app's own log, sent in the open, under Server (ice9 #227). -->
+    <string name="Ice9SendLogs">Send app logs</string>
+    <string name="Ice9SendLogsInfo">For whoever is helping you with a problem</string>
+
     <!-- What stands in for a message this device cannot open. -->
     <string name="Ice9MessageFromAnotherDevice">🔒 Message from another device</string>
 </resources>

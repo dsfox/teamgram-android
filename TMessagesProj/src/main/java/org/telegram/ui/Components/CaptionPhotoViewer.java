@@ -27,6 +27,7 @@ import android.widget.ImageView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -531,7 +532,8 @@ public class CaptionPhotoViewer extends CaptionContainerView {
 
     private boolean shownAiButton;
     private void showAiButton(boolean show_) {
-        final boolean show = show_;
+        // ice9: nothing here answers the AI editor (#227). See Offered.
+        final boolean show = Offered.AI_EDITOR && show_;
 
         if (shownAiButton == show) return;
         if (show) {

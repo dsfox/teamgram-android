@@ -24025,6 +24025,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean richEditorAvailable() {
+        // ice9: every way into the article editor asks here - the attachment
+        // menu, the message field's button, a paste (#181, #227). See Offered.
+        if (!Offered.ARTICLES) return false;
         if (BuildVars.DEBUG_VERSION) return true;
         return !TextUtils.equals("disabled", config.richMessagePosting.get());
     }
