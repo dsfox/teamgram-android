@@ -73,6 +73,20 @@ public final class Offered {
     public static final boolean CHAT_WALLPAPERS = false;
 
     /**
+     * "Article" in the attachment menu: Telegram's rich-text composer. The
+     * server blocks messages.getRichMessage, so an article goes nowhere; App
+     * Review counts a way into nothing as a hidden feature. Issue #181.
+     */
+    public static final boolean ARTICLES = false;
+
+    /**
+     * Telegram's own secret chats ("Start Secret Chat" on a profile). The server
+     * has no messages.requestEncryption; every chat here is already end-to-end
+     * encrypted with MLS. Issue #181.
+     */
+    public static final boolean SECRET_CHATS = false;
+
+    /**
      * Icons behind a name or profile colour. They are custom emoji from packs,
      * and there are none (#20), so the picker opens empty. Issue #222.
      */

@@ -106,6 +106,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessageSuggestionParams;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
@@ -6738,7 +6739,8 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                 if (plainTextEnabled) {
                     locationButton = buttonsCount++;
                 }
-                if (plainTextEnabled && MessagesController.getInstance(currentAccount).richEditorAvailable()) {
+                // ice9: an article goes nowhere - the server blocks it (#181). See Offered.
+                if (Offered.ARTICLES && plainTextEnabled && MessagesController.getInstance(currentAccount).richEditorAvailable()) {
                     richButton = buttonsCount++;
                 }
 
