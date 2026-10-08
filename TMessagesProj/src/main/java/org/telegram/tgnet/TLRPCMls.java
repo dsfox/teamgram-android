@@ -967,6 +967,14 @@ public class TLRPCMls {
         public void readParams(InputSerializedData stream, boolean exception) {
             super.readParams(stream, exception);
             document = TLRPC.Document.TLdeserialize(stream, stream.readInt32(exception), exception);
+            // The full size is written as a plain one; read back, it knows its
+            // document again.
+            for (int i = 0; document != null && i < sizes.size(); i++) {
+                TLRPC.PhotoSize size = sizes.get(i);
+                if (size != null && size.getClass() == TLRPC.TL_photoSize.class) {
+                    sizes.set(i, TL_mls_photoSizeEncrypted.of(size, document));
+                }
+            }
         }
 
         /**
@@ -986,6 +994,32 @@ public class TLRPCMls {
             }
             stream.writeInt32(dc_id);
             document.serializeToStream(stream);
+        }
+    }
+
+    /**
+     * The full size of an encrypted picture, knowing the document it is.
+     *
+     * A photograph's size is named for the cache by its own location, and this
+     * picture never comes down as a photograph: it is fetched as its document,
+     * under the document's name. The photo viewer, its progress and saving to
+     * the gallery asked for the size's name and waited for a file that never
+     * came - a spinner over the picture for good (#231). FileLoader names it
+     * by its document instead (MlsMedia.fileOf). Written as the plain size it
+     * is; the photograph links it again when it is read back.
+     */
+    public static class TL_mls_photoSizeEncrypted extends TLRPC.TL_photoSize {
+        public TLRPC.Document document;
+
+        public static TL_mls_photoSizeEncrypted of(TLRPC.PhotoSize size, TLRPC.Document document) {
+            TL_mls_photoSizeEncrypted linked = new TL_mls_photoSizeEncrypted();
+            linked.type = size.type;
+            linked.location = size.location;
+            linked.w = size.w;
+            linked.h = size.h;
+            linked.size = size.size;
+            linked.document = document;
+            return linked;
         }
     }
 

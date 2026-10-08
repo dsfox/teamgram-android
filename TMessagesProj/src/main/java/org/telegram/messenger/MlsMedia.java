@@ -1,5 +1,6 @@
 package org.telegram.messenger;
 
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.TLRPCMls;
 
@@ -500,7 +501,8 @@ public final class MlsMedia {
         if (blurred != null) {
             photo.sizes.add(blurred);
         }
-        TLRPC.TL_photoSize full = new TLRPC.TL_photoSize();
+        TLRPCMls.TL_mls_photoSizeEncrypted full = new TLRPCMls.TL_mls_photoSizeEncrypted();
+        full.document = document;
         full.type = "x";
         full.w = descriptor.width;
         full.h = descriptor.height;
@@ -515,6 +517,22 @@ public final class MlsMedia {
         full.location = where;
         photo.sizes.add(full);
         return photo;
+    }
+
+    /**
+     * What a file is named and kept by. The full size of an encrypted picture
+     * is its document: it is fetched as the document, and nothing ever comes
+     * down under the size's own name (#231). Every way FileLoader names a file
+     * or finds it on disk goes through here.
+     */
+    public static TLObject fileOf(TLObject attach) {
+        if (attach instanceof TLRPCMls.TL_mls_photoSizeEncrypted) {
+            TLRPC.Document document = ((TLRPCMls.TL_mls_photoSizeEncrypted) attach).document;
+            if (document != null) {
+                return document;
+            }
+        }
+        return attach;
     }
 
     private static void addImageSize(TLRPC.Document document, TLRPCMls.TL_mls_media descriptor) {

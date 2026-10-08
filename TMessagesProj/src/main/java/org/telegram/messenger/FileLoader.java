@@ -1337,6 +1337,7 @@ public class FileLoader extends BaseController {
      * Return real file name. Used before file.exist()
      */
     public File getPathToAttach(TLObject attach, String size, String ext, boolean forceCache, boolean useFileDatabaseQueue) {
+        attach = MlsMedia.fileOf(attach); // ice9: an encrypted picture is kept as its document (#231)
         File dir = null;
         long documentId = 0;
         int dcId = 0;
@@ -1642,6 +1643,7 @@ public class FileLoader extends BaseController {
      * file hash. contains docId, dcId, ext.
      */
     public static String getAttachFileName(TLObject attach, String size, String ext) {
+        attach = MlsMedia.fileOf(attach); // ice9: an encrypted picture is named as its document (#231)
         if (attach instanceof TLRPC.Document) {
             TLRPC.Document document = (TLRPC.Document) attach;
             String docExt;
