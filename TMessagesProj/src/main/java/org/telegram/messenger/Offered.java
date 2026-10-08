@@ -95,6 +95,14 @@ public final class Offered {
     public static final boolean AI_EDITOR = false;
 
     /**
+     * Importing a chat exported from another messenger (a WhatsApp or KakaoTalk
+     * archive shared into the app). The server imports no history -
+     * messages.initHistoryImport is refused - so the file is shared as the file
+     * it is. The twin of iOS's Offered.chatImport. Issue #230.
+     */
+    public static final boolean CHAT_IMPORT = false;
+
+    /**
      * Icons behind a name or profile colour. They are custom emoji from packs,
      * and there are none (#20), so the picker opens empty. Issue #222.
      */

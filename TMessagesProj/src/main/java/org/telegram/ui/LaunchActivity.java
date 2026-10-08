@@ -126,6 +126,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.OfferedLinks;
 import org.telegram.messenger.OpenAttachedMenuBotReceiver;
 import org.telegram.messenger.PushListenerController;
@@ -1701,7 +1702,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     photoPathsArray.add(info);
                                 } else {
                                     String originalPath = uri.toString();
-                                    if (dialogId == 0 && originalPath != null) {
+                                    // ice9: a chat export is shared as the file it is - the
+                                    // server imports no history (#230). See Offered.
+                                    if (Offered.CHAT_IMPORT && dialogId == 0 && originalPath != null) {
                                         if (BuildVars.LOGS_ENABLED) {
                                             FileLog.d("export path = " + originalPath);
                                         }
@@ -1841,7 +1844,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     if (BuildVars.LOGS_ENABLED) {
                                         FileLog.d("export path = " + originalPath);
                                     }
-                                    if (dialogId == 0 && originalPath != null && exportingChatUri == null) {
+                                    if (Offered.CHAT_IMPORT && dialogId == 0 && originalPath != null && exportingChatUri == null) {
                                         boolean ok = false;
                                         String fileName = FileLoader.fixFileName(MediaController.getFileName(uri));
                                         for (String u : exportUris) {
