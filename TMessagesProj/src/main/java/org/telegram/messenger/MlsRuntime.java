@@ -56,6 +56,7 @@ public class MlsRuntime {
 
     private boolean loaded;
     private boolean collectingWelcomes;
+    private final ArrayList<Utilities.Callback<Boolean>> welcomeWaiters = new ArrayList<>();
 
     /** What this device wrote, by the random id it wrote it under.
      *
@@ -3038,6 +3039,7 @@ public class MlsRuntime {
     // ----------------------------------------------------------------------
 
     private boolean collectingCommits;
+    private final ArrayList<Utilities.Callback<Boolean>> commitWaiters = new ArrayList<>();
 
     public void collectCommits() {
         collectCommits((Utilities.Callback<Boolean>) null);
@@ -3140,6 +3142,29 @@ public class MlsRuntime {
     private static final long CATCH_UP_NOT_BEFORE = 15_000L;
 
     /**
+     * Joins what is waiting, applies the commits waiting, and then runs this on
+     * the stage queue - or after five seconds, whichever is first.
+     *
+     * For a difference that would not open: a phone back from offline learns
+     * its messages from getDifference, which never carries #156's wake-up, so a
+     * message of a new epoch can be here before the commit that opens it. The
+     * difference waits for this, opens what would not open once more, and only
+     * then is stored - instead of a lock that a catch-up reads back later
+     * (#157). Bounded, because the difference holds the state of the whole
+     * account until it is stored.
+     */
+    public void catchUpThen(Runnable done) {
+        java.util.concurrent.atomic.AtomicBoolean once = new java.util.concurrent.atomic.AtomicBoolean();
+        Runnable finish = () -> {
+            if (once.compareAndSet(false, true)) {
+                Utilities.stageQueue.postRunnable(done);
+            }
+        };
+        Utilities.stageQueue.postRunnable(finish, 5000);
+        collectWelcomes(joined -> collectCommits(applied -> finish.run()));
+    }
+
+    /**
      * Collects the membership changes waiting on the server and applies each.
      *
      * Confirmed only after the new state has been saved. A commit confirmed and
@@ -3155,11 +3180,29 @@ public class MlsRuntime {
     public void collectCommits(Utilities.Callback<Boolean> then) {
         synchronized (this) {
             if (collectingCommits) {
-                answer(then, false);
+                // Waits for the fetch already going rather than being told at
+                // once that nothing happened: a difference that cannot open a
+                // message until this lands has to know when it has (#157).
+                if (then != null) {
+                    commitWaiters.add(then);
+                }
                 return;
             }
             collectingCommits = true;
         }
+        final Utilities.Callback<Boolean> everyone = anything -> {
+            ArrayList<Utilities.Callback<Boolean>> waiting;
+            synchronized (MlsRuntime.this) {
+                waiting = new ArrayList<>(commitWaiters);
+                commitWaiters.clear();
+            }
+            if (then != null) {
+                then.run(anything);
+            }
+            for (Utilities.Callback<Boolean> waiter : waiting) {
+                waiter.run(anything);
+            }
+        };
         TLRPCMls.TL_mls_getCommits request = new TLRPCMls.TL_mls_getCommits();
         ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
             synchronized (MlsRuntime.this) {
@@ -3167,19 +3210,19 @@ public class MlsRuntime {
             }
             if (error != null) {
                 FileLog.e("mls: cannot ask for commits: " + error.text);
-                answer(then, false);
+                answer(everyone, false);
                 return;
             }
             if (!(response instanceof TLRPCMls.TL_mls_commits)) {
-                answer(then, false);
+                answer(everyone, false);
                 return;
             }
             TLRPCMls.TL_mls_commits commits = (TLRPCMls.TL_mls_commits) response;
             if (commits.commits.isEmpty()) {
-                answer(then, false);
+                answer(everyone, false);
                 return;
             }
-            Utilities.globalQueue.postRunnable(() -> applyCommits(commits, then));
+            Utilities.globalQueue.postRunnable(() -> applyCommits(commits, everyone));
         });
     }
 
@@ -3284,11 +3327,29 @@ public class MlsRuntime {
     public void collectWelcomes(Utilities.Callback<Boolean> then) {
         synchronized (this) {
             if (collectingWelcomes) {
-                answer(then, false);
+                // Waits for the fetch already going rather than being told at
+                // once that nothing happened: a difference that cannot open a
+                // message until this lands has to know when it has (#157).
+                if (then != null) {
+                    welcomeWaiters.add(then);
+                }
                 return;
             }
             collectingWelcomes = true;
         }
+        final Utilities.Callback<Boolean> everyone = anything -> {
+            ArrayList<Utilities.Callback<Boolean>> waiting;
+            synchronized (MlsRuntime.this) {
+                waiting = new ArrayList<>(welcomeWaiters);
+                welcomeWaiters.clear();
+            }
+            if (then != null) {
+                then.run(anything);
+            }
+            for (Utilities.Callback<Boolean> waiter : waiting) {
+                waiter.run(anything);
+            }
+        };
 
         TLRPCMls.TL_mls_getWelcomes request = new TLRPCMls.TL_mls_getWelcomes();
         ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
@@ -3297,19 +3358,19 @@ public class MlsRuntime {
             }
             if (error != null) {
                 FileLog.e("mls: cannot ask for welcomes: " + error.text);
-                answer(then, false);
+                answer(everyone, false);
                 return;
             }
             if (!(response instanceof TLRPCMls.TL_mls_welcomes)) {
-                answer(then, false);
+                answer(everyone, false);
                 return;
             }
             TLRPCMls.TL_mls_welcomes welcomes = (TLRPCMls.TL_mls_welcomes) response;
             if (welcomes.welcomes.isEmpty()) {
-                answer(then, false);
+                answer(everyone, false);
                 return;
             }
-            Utilities.globalQueue.postRunnable(() -> join(welcomes, then));
+            Utilities.globalQueue.postRunnable(() -> join(welcomes, everyone));
         });
     }
 

@@ -17221,143 +17221,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
 
                         Utilities.stageQueue.postRunnable(() -> {
-                            if (!res.new_messages.isEmpty() || !res.new_encrypted_messages.isEmpty()) {
-                                LongSparseArray<ArrayList<MessageObject>> messages = new LongSparseArray<>();
-                                for (int b = 0; b < res.new_encrypted_messages.size(); b++) {
-                                    TLRPC.EncryptedMessage encryptedMessage = res.new_encrypted_messages.get(b);
-                                    ArrayList<TLRPC.Message> decryptedMessages = getSecretChatHelper().decryptMessage(encryptedMessage);
-                                    if (decryptedMessages != null && !decryptedMessages.isEmpty()) {
-                                        res.new_messages.addAll(decryptedMessages);
-                                    }
-                                }
-
-                                // Everything that arrives while the app was not
-                                // running comes through here, as a list of
-                                // messages rather than as updates - so the hook
-                                // on updateNewMessage never saw any of it, and
-                                // every message received while the phone was
-                                // closed stayed a ciphertext.
-                                MlsRuntime mlsFromDifference = MlsRuntime.getInstance(currentAccount);
-                                boolean lockedInDifference = false;
-                                for (int a = 0; a < res.new_messages.size(); a++) {
-                                    TLRPC.Message message = res.new_messages.get(a);
-                                    if (MlsRuntime.isCiphertext(message.message)
-                                            && !mlsFromDifference.open(message)) {
-                                        lockedInDifference = true;
-                                    }
-                                }
-                                if (lockedInDifference) {
-                                    mlsFromDifference.collectWelcomes();
-                                    mlsFromDifference.collectCommits();
-                                }
-
-                                ImageLoader.saveMessagesThumbs(res.new_messages);
-
-                                ArrayList<MessageObject> pushMessages = new ArrayList<>();
-                                long clientUserId = getUserConfig().getClientUserId();
-                                for (int a = 0; a < res.new_messages.size(); a++) {
-                                    TLRPC.Message message = res.new_messages.get(a);
-                                    if (message instanceof TLRPC.TL_messageEmpty) {
-                                        continue;
-                                    }
-                                    MessageObject.getDialogId(message);
-
-                                    if (!DialogObject.isEncryptedDialog(message.dialog_id)) {
-                                        if (message.action instanceof TLRPC.TL_messageActionChatDeleteUser) {
-                                            TLRPC.User user = usersDict.get(message.action.user_id);
-                                            if (user != null && user.bot) {
-                                                message.reply_markup = new TLRPC.TL_replyKeyboardHide();
-                                                message.flags |= 64;
-                                            }
-                                        }
-                                        if (message.action instanceof TLRPC.TL_messageActionChatMigrateTo || message.action instanceof TLRPC.TL_messageActionChannelCreate) {
-                                            message.unread = false;
-                                            message.media_unread = false;
-                                        } else {
-                                            ConcurrentHashMap<Long, Integer> read_max = message.out ? dialogs_read_outbox_max : dialogs_read_inbox_max;
-                                            Integer value = read_max.get(message.dialog_id);
-                                            if (value == null) {
-                                                value = getMessagesStorage().getDialogReadMax(message.out, message.dialog_id);
-                                                read_max.put(message.dialog_id, value);
-                                            }
-                                            message.unread = value < message.id;
-                                        }
-                                    }
-                                    if (message.dialog_id == clientUserId) {
-                                        message.unread = false;
-                                        message.media_unread = false;
-                                        message.out = true;
-                                    }
-
-                                    boolean isDialogCreated = createdDialogIds.contains(message.dialog_id);
-                                    MessageObject obj = new MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated);
-
-                                    if ((!obj.isOut() || obj.messageOwner.from_scheduled) && obj.isUnread()) {
-                                        pushMessages.add(obj);
-                                    }
-
-                                    ArrayList<MessageObject> arr = messages.get(message.dialog_id);
-                                    if (arr == null) {
-                                        arr = new ArrayList<>();
-                                        messages.put(message.dialog_id, arr);
-                                    }
-                                    arr.add(obj);
-                                }
-
-                                getMessagesStorage().getStorageQueue().postRunnable(() -> {
-                                    if (!pushMessages.isEmpty()) {
-                                        AndroidUtilities.runOnUIThread(() -> getNotificationsController().processNewMessages(pushMessages, !(res instanceof TLRPC.TL_updates_differenceSlice), false, null));
-                                    }
-                                    getMessagesStorage().putMessages(res.new_messages, true, false, false, getDownloadController().getAutodownloadMask(), 0, 0);
-
-                                    for (int a = 0; a < messages.size(); a++) {
-                                        long dialogId = messages.keyAt(a);
-                                        ArrayList<MessageObject> arr = messages.valueAt(a);
-                                        getMediaDataController().loadReplyMessagesForMessages(arr, dialogId, 0, 0, () -> {
-                                            AndroidUtilities.runOnUIThread(() -> {
-                                                updateInterfaceWithMessages(dialogId, arr, 0);
-                                                getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
-                                            });
-                                        }, 0, null);
-                                    }
-                                });
-
-                                getSecretChatHelper().processPendingEncMessages();
-                            }
-
-                            if (!res.other_updates.isEmpty()) {
-                                processUpdateArray(res.other_updates, res.users, res.chats, true, 0);
-                            }
-
-                            if (res instanceof TLRPC.TL_updates_difference) {
-                                gettingDifference = false;
-                                getMessagesStorage().setLastSeqValue(res.state.seq);
-                                getMessagesStorage().setLastDateValue(res.state.date);
-                                getMessagesStorage().setLastPtsValue(res.state.pts);
-                                getMessagesStorage().setLastQtsValue(res.state.qts);
-                                FileLog.d("received difference: isUpdating = false");
-                                getConnectionsManager().setIsUpdating(false);
-                                for (int a = 0; a < 3; a++) {
-                                    processUpdatesQueue(a, 1);
-                                }
-                            } else if (res instanceof TLRPC.TL_updates_differenceSlice) {
-                                getMessagesStorage().setLastDateValue(res.intermediate_state.date);
-                                getMessagesStorage().setLastPtsValue(res.intermediate_state.pts);
-                                getMessagesStorage().setLastQtsValue(res.intermediate_state.qts);
-                            } else if (res instanceof TLRPC.TL_updates_differenceEmpty) {
-                                gettingDifference = false;
-                                getMessagesStorage().setLastSeqValue(res.seq);
-                                getMessagesStorage().setLastDateValue(res.date);
-                                getConnectionsManager().setIsUpdating(false);
-                                FileLog.d("received differenceEmpty: isUpdating = false");
-                                for (int a = 0; a < 3; a++) {
-                                    processUpdatesQueue(a, 1);
-                                }
-                            }
-                            getMessagesStorage().saveDiffParams(getMessagesStorage().getLastSeqValue(), getMessagesStorage().getLastPtsValue(), getMessagesStorage().getLastDateValue(), getMessagesStorage().getLastQtsValue());
-                            if (BuildVars.LOGS_ENABLED) {
-                                FileLog.d("received difference with date = " + getMessagesStorage().getLastDateValue() + " pts = " + getMessagesStorage().getLastPtsValue() + " seq = " + getMessagesStorage().getLastSeqValue() + " messages = " + res.new_messages.size() + " users = " + res.users.size() + " chats = " + res.chats.size() + " other updates = " + res.other_updates.size());
-                            }
+                            applyDifferenceInOrder(res, usersDict, chatsDict);
                         });
                     });
                 }
@@ -17367,6 +17231,191 @@ public class MessagesController extends BaseController implements NotificationCe
                 FileLog.d("received: isUpdating = false");
             }
         });
+    }
+
+    // ice9 #157: a difference holding a message that will not open waits for the
+    // commits waiting in the box; any difference after it waits its turn, so the
+    // state each one sets is never written out of order.
+    private boolean differenceWaitsForCommits;
+    private final ArrayList<Runnable> differencesWaiting = new ArrayList<>();
+
+    /** On the stage queue, in the order the differences came in. */
+    private void applyDifferenceInOrder(TLRPC.updates_Difference res, LongSparseArray<TLRPC.User> usersDict, LongSparseArray<TLRPC.Chat> chatsDict) {
+        Runnable apply = () -> applyDifference(res, usersDict, chatsDict);
+        if (differenceWaitsForCommits) {
+            differencesWaiting.add(apply);
+            return;
+        }
+        apply.run();
+    }
+
+    private void applyDifference(TLRPC.updates_Difference res, LongSparseArray<TLRPC.User> usersDict, LongSparseArray<TLRPC.Chat> chatsDict) {
+        boolean anyMessages = !res.new_messages.isEmpty() || !res.new_encrypted_messages.isEmpty();
+        ArrayList<TLRPC.Message> locked = new ArrayList<>();
+        if (anyMessages) {
+            for (int b = 0; b < res.new_encrypted_messages.size(); b++) {
+                TLRPC.EncryptedMessage encryptedMessage = res.new_encrypted_messages.get(b);
+                ArrayList<TLRPC.Message> decryptedMessages = getSecretChatHelper().decryptMessage(encryptedMessage);
+                if (decryptedMessages != null && !decryptedMessages.isEmpty()) {
+                    res.new_messages.addAll(decryptedMessages);
+                }
+            }
+
+            // Everything that arrives while the app was not
+            // running comes through here, as a list of
+            // messages rather than as updates - so the hook
+            // on updateNewMessage never saw any of it, and
+            // every message received while the phone was
+            // closed stayed a ciphertext.
+            MlsRuntime mlsFromDifference = MlsRuntime.getInstance(currentAccount);
+            for (int a = 0; a < res.new_messages.size(); a++) {
+                TLRPC.Message message = res.new_messages.get(a);
+                if (MlsRuntime.isCiphertext(message.message)
+                        && !mlsFromDifference.open(message)) {
+                    locked.add(message);
+                }
+            }
+        }
+        if (locked.isEmpty()) {
+            finishDifference(res, usersDict, chatsDict, anyMessages);
+            return;
+        }
+        // A phone back from offline learns its messages from here, and this
+        // never carries #156's wake-up: a message of a new epoch can be here
+        // before the commit that opens it, waiting in the box. Stored as it
+        // was, it stood as a lock until a catch-up read it back. So whatever
+        // opened is kept as it is - applying the commits first would lose the
+        // older epochs' messages, since the core keeps only two - and only
+        // what would not open waits for the commits and is opened once more.
+        differenceWaitsForCommits = true;
+        FileLog.d("mls: " + locked.size() + " message(s) of a difference would not open; catching up on commits before storing it");
+        MlsRuntime mls = MlsRuntime.getInstance(currentAccount);
+        mls.catchUpThen(() -> {
+            int still = 0;
+            for (TLRPC.Message message : locked) {
+                if (!mls.open(message)) {
+                    still++;
+                }
+            }
+            FileLog.d("mls: caught up; " + still + " of " + locked.size() + " still locked");
+            finishDifference(res, usersDict, chatsDict, anyMessages);
+            differenceWaitsForCommits = false;
+            while (!differenceWaitsForCommits && !differencesWaiting.isEmpty()) {
+                differencesWaiting.remove(0).run();
+            }
+        });
+    }
+
+    private void finishDifference(TLRPC.updates_Difference res, LongSparseArray<TLRPC.User> usersDict, LongSparseArray<TLRPC.Chat> chatsDict, boolean anyMessages) {
+        if (anyMessages) {
+            LongSparseArray<ArrayList<MessageObject>> messages = new LongSparseArray<>();
+                ImageLoader.saveMessagesThumbs(res.new_messages);
+
+                ArrayList<MessageObject> pushMessages = new ArrayList<>();
+                long clientUserId = getUserConfig().getClientUserId();
+                for (int a = 0; a < res.new_messages.size(); a++) {
+                    TLRPC.Message message = res.new_messages.get(a);
+                    if (message instanceof TLRPC.TL_messageEmpty) {
+                        continue;
+                    }
+                    MessageObject.getDialogId(message);
+
+                    if (!DialogObject.isEncryptedDialog(message.dialog_id)) {
+                        if (message.action instanceof TLRPC.TL_messageActionChatDeleteUser) {
+                            TLRPC.User user = usersDict.get(message.action.user_id);
+                            if (user != null && user.bot) {
+                                message.reply_markup = new TLRPC.TL_replyKeyboardHide();
+                                message.flags |= 64;
+                            }
+                        }
+                        if (message.action instanceof TLRPC.TL_messageActionChatMigrateTo || message.action instanceof TLRPC.TL_messageActionChannelCreate) {
+                            message.unread = false;
+                            message.media_unread = false;
+                        } else {
+                            ConcurrentHashMap<Long, Integer> read_max = message.out ? dialogs_read_outbox_max : dialogs_read_inbox_max;
+                            Integer value = read_max.get(message.dialog_id);
+                            if (value == null) {
+                                value = getMessagesStorage().getDialogReadMax(message.out, message.dialog_id);
+                                read_max.put(message.dialog_id, value);
+                            }
+                            message.unread = value < message.id;
+                        }
+                    }
+                    if (message.dialog_id == clientUserId) {
+                        message.unread = false;
+                        message.media_unread = false;
+                        message.out = true;
+                    }
+
+                    boolean isDialogCreated = createdDialogIds.contains(message.dialog_id);
+                    MessageObject obj = new MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated);
+
+                    if ((!obj.isOut() || obj.messageOwner.from_scheduled) && obj.isUnread()) {
+                        pushMessages.add(obj);
+                    }
+
+                    ArrayList<MessageObject> arr = messages.get(message.dialog_id);
+                    if (arr == null) {
+                        arr = new ArrayList<>();
+                        messages.put(message.dialog_id, arr);
+                    }
+                    arr.add(obj);
+                }
+
+                getMessagesStorage().getStorageQueue().postRunnable(() -> {
+                    if (!pushMessages.isEmpty()) {
+                        AndroidUtilities.runOnUIThread(() -> getNotificationsController().processNewMessages(pushMessages, !(res instanceof TLRPC.TL_updates_differenceSlice), false, null));
+                    }
+                    getMessagesStorage().putMessages(res.new_messages, true, false, false, getDownloadController().getAutodownloadMask(), 0, 0);
+
+                    for (int a = 0; a < messages.size(); a++) {
+                        long dialogId = messages.keyAt(a);
+                        ArrayList<MessageObject> arr = messages.valueAt(a);
+                        getMediaDataController().loadReplyMessagesForMessages(arr, dialogId, 0, 0, () -> {
+                            AndroidUtilities.runOnUIThread(() -> {
+                                updateInterfaceWithMessages(dialogId, arr, 0);
+                                getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+                            });
+                        }, 0, null);
+                    }
+                });
+
+                getSecretChatHelper().processPendingEncMessages();
+        }
+
+        if (!res.other_updates.isEmpty()) {
+            processUpdateArray(res.other_updates, res.users, res.chats, true, 0);
+        }
+
+        if (res instanceof TLRPC.TL_updates_difference) {
+            gettingDifference = false;
+            getMessagesStorage().setLastSeqValue(res.state.seq);
+            getMessagesStorage().setLastDateValue(res.state.date);
+            getMessagesStorage().setLastPtsValue(res.state.pts);
+            getMessagesStorage().setLastQtsValue(res.state.qts);
+            FileLog.d("received difference: isUpdating = false");
+            getConnectionsManager().setIsUpdating(false);
+            for (int a = 0; a < 3; a++) {
+                processUpdatesQueue(a, 1);
+            }
+        } else if (res instanceof TLRPC.TL_updates_differenceSlice) {
+            getMessagesStorage().setLastDateValue(res.intermediate_state.date);
+            getMessagesStorage().setLastPtsValue(res.intermediate_state.pts);
+            getMessagesStorage().setLastQtsValue(res.intermediate_state.qts);
+        } else if (res instanceof TLRPC.TL_updates_differenceEmpty) {
+            gettingDifference = false;
+            getMessagesStorage().setLastSeqValue(res.seq);
+            getMessagesStorage().setLastDateValue(res.date);
+            getConnectionsManager().setIsUpdating(false);
+            FileLog.d("received differenceEmpty: isUpdating = false");
+            for (int a = 0; a < 3; a++) {
+                processUpdatesQueue(a, 1);
+            }
+        }
+        getMessagesStorage().saveDiffParams(getMessagesStorage().getLastSeqValue(), getMessagesStorage().getLastPtsValue(), getMessagesStorage().getLastDateValue(), getMessagesStorage().getLastQtsValue());
+        if (BuildVars.LOGS_ENABLED) {
+            FileLog.d("received difference with date = " + getMessagesStorage().getLastDateValue() + " pts = " + getMessagesStorage().getLastPtsValue() + " seq = " + getMessagesStorage().getLastSeqValue() + " messages = " + res.new_messages.size() + " users = " + res.users.size() + " chats = " + res.chats.size() + " other updates = " + res.other_updates.size());
+        }
     }
 
     public void markDialogAsUnread(long dialogId, TLRPC.InputPeer peer, long taskId) {
