@@ -9177,6 +9177,12 @@ public class MessagesController extends BaseController implements NotificationCe
             uploadingWallpaperInfo = null;
         }
         if (path != null) {
+            // ice9: the server keeps no wallpaper (#23). A photo of one's own
+            // stays the background on this phone, applied by the caller; sending
+            // it up only asked for account.uploadWallPaper, which is refused (#236).
+            if (!Offered.CHAT_WALLPAPERS) {
+                return;
+            }
             uploadingWallpaper = path.getAbsolutePath();
             uploadingWallpaperInfo = info;
             getFileLoader().uploadFile(uploadingWallpaper, false, true, ConnectionsManager.FileTypePhoto);
