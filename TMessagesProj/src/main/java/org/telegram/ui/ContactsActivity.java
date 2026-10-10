@@ -624,19 +624,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                             AccountFrozenAlert.show(currentAccount);
                             return;
                         }
-                        // A typed number: somebody on ice9 opens, anybody else
-                        // is invited by SMS with a code. No address book (#164).
-                        NumberLookup.resolve(currentAccount, str, user -> {
-                            if (user != null) {
-                                Bundle args = new Bundle();
-                                args.putLong("user_id", user.id);
-                                if (getMessagesController().checkCanOpenChat(args, ContactsActivity.this)) {
-                                    presentFragment(new ChatActivity(args), needFinishFragment);
-                                }
-                            } else {
-                                InvitationComposer.invite(ContactsActivity.this, "+" + str, null);
-                            }
-                        });
+                        openOrInvite(str);
                     }
                 } else if (object instanceof ContactsController.Contact) {
                     ContactsController.Contact contact = (ContactsController.Contact) object;
@@ -696,10 +684,9 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                         } else if (row == 1) {
                             presentFragment(new CallLogActivity());
                         } else if (row == 2) {
-                            // The cursor into the search, with a hint: a number typed
-                            // there becomes a person or an invitation (#164).
-                            searchItem.openSearch(true);
-                            searchItem.getSearchField().setHint(getString(R.string.InviteByPhoneHint));
+                            // A window that asks for the number, rather than a search
+                            // to guess it goes into (#164).
+                            InvitationComposer.askForNumber(ContactsActivity.this, ContactsActivity.this::openOrInvite);
                         }
                     } else if (Offered.GROUP_INVITE_LINKS && inviteViaLink != 0) {
                         if (row == 0) {
@@ -1038,6 +1025,24 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
             }
         }
         return false;
+    }
+
+    /**
+     * A typed number: somebody on ice9 opens, anybody else is invited by SMS
+     * with a code. No address book (#164).
+     */
+    private void openOrInvite(String digits) {
+        NumberLookup.resolve(currentAccount, digits, user -> {
+            if (user != null) {
+                Bundle args = new Bundle();
+                args.putLong("user_id", user.id);
+                if (getMessagesController().checkCanOpenChat(args, ContactsActivity.this)) {
+                    presentFragment(new ChatActivity(args), needFinishFragment);
+                }
+            } else {
+                InvitationComposer.invite(ContactsActivity.this, "+" + digits, null);
+            }
+        });
     }
 
     private void showOrUpdateActionMode(Object cell) {

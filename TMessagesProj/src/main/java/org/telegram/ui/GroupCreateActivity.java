@@ -528,10 +528,8 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
             if (position == adapter.createCallLinkRow) {
                 CallLogActivity.createCallLink(context, currentAccount, resourceProvider, this::finishFragment);
             } else if (position == adapter.inviteByNumberRow && !adapter.searching) {
-                // The cursor into the search field, with a hint (#164).
-                searchField.editText.setHint(getString(R.string.InviteByPhoneHint));
-                searchField.editText.requestFocus();
-                AndroidUtilities.showKeyboard(searchField.editText);
+                // A window that asks for the number; the code leads into this group (#164).
+                InvitationComposer.askForNumber(this, digits -> InvitationComposer.invite(GroupCreateActivity.this, "+" + digits, chatId, null));
             } else if (adapter.searching && position < adapter.phoneCount()
                     && adapter.searchAdapterHelper.getPhoneSearch().get(position) instanceof String
                     && !"section".equals(adapter.searchAdapterHelper.getPhoneSearch().get(position))) {
@@ -1361,9 +1359,11 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 inviteByNumberRow = -1;
                 if (addToGroup && chatId != 0) {
                     // "Invite by phone number": the picker's first row, where the
-                    // link used to be (#163). It only puts the cursor in the
-                    // search field; the number typed there does the rest (#164).
-                    inviteByNumberRow = count;
+                    // link used to be (#163), and it asks for the number (#164).
+                    // The row is where the first contact was: the contacts move
+                    // down one. It stood after them once, and with a single
+                    // contact the list read contacts.get(-1) and stopped the app.
+                    inviteByNumberRow = usersStartRow;
                     usersStartRow++;
                     count++;
                 }

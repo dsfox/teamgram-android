@@ -4,12 +4,14 @@ import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.text.InputType;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPCInvite;
@@ -96,5 +98,22 @@ public final class InvitationComposer {
                 afterComposing.run();
             }
         }));
+    }
+
+    /**
+     * Asks for the number to invite in a window with one field for it, and
+     * hands over its digits. "Invite by phone number" opened the contacts
+     * search before, and a person was left to guess that a number goes there.
+     */
+    public static void askForNumber(BaseFragment fragment, Utilities.Callback<String> then) {
+        AlertsCreator.createSimpleTextInputAlert(fragment.getContext(), fragment,
+                getString(R.string.InviteByPhone), null, getString(R.string.InviteByPhoneHint), null, 24,
+                getString(R.string.InviteToTelegramShort), InputType.TYPE_CLASS_PHONE,
+                fragment.getResourceProvider(), typed -> {
+                    String digits = typed.replaceAll("[^0-9]", "");
+                    if (!digits.isEmpty()) {
+                        then.run(digits);
+                    }
+                });
     }
 }

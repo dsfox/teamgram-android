@@ -861,6 +861,11 @@ public class AlertsCreator {
     }
 
     public static void createSimpleTextInputAlert(Context context, BaseFragment fragment, final String title, final String info, final String hint, final String name, int maxLength, String positiveButton, Theme.ResourcesProvider resourcesProvider, MessagesStorage.StringCallback whenDone) {
+        createSimpleTextInputAlert(context, fragment, title, info, hint, name, maxLength, positiveButton, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, resourcesProvider, whenDone);
+    }
+
+    // ice9: the same window with another kind of field - a phone number, for an invitation.
+    public static void createSimpleTextInputAlert(Context context, BaseFragment fragment, final String title, final String info, final String hint, final String name, int maxLength, String positiveButton, int inputType, Theme.ResourcesProvider resourcesProvider, MessagesStorage.StringCallback whenDone) {
         final Activity activity = AndroidUtilities.findActivity(context);
         final View currentFocus = activity != null ? activity.getCurrentFocus() : null;
 
@@ -876,7 +881,7 @@ public class AlertsCreator {
         editText.setHintTextColor(Theme.getColor(Theme.key_groupcreate_hintText, resourcesProvider));
         editText.setHint(hint);
         editText.setFocusable(true);
-        editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        editText.setInputType(inputType);
         editText.setImeOptions(EditorInfo.IME_ACTION_DONE);
         editText.setMaxLines(10);
         editText.setPadding(dp(16), dp(11), dp(16), dp(11));
