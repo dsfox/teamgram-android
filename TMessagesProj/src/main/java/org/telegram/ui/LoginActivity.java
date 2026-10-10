@@ -8877,7 +8877,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private final TextView errorTextView;
         private final TextView defaultButton;
         private final TextView cancelButton;
-        private final TextView ownServerView;
 
         private int checkingRequest = 0;
         private Runnable giveUp;
@@ -8981,19 +8980,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             cancelButton.setOnClickListener(v -> giveUpChecking());
             addView(cancelButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 8, 16, 0));
 
-            // Said here, where it can be acted on, rather than on a page somebody
-            // would have to go looking for. Most people will keep ours and
-            // should - but a messenger that offers a server of your own and
-            // never says how is offering it the way a form offers a tick box.
-            ownServerView = new TextView(context);
-            ownServerView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-            ownServerView.setGravity(Gravity.CENTER_HORIZONTAL);
-            ownServerView.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
-            ownServerView.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(10), AndroidUtilities.dp(12), AndroidUtilities.dp(10));
-            ownServerView.setText(getString(R.string.Ice9ServerOwn));
-            ownServerView.setOnClickListener(v -> Browser.openUrl(getParentActivity(), getString(R.string.Ice9ServerInstructions)));
-            addView(ownServerView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 12, 16, 0));
-
             updateColors();
             updateDefaultButton();
         }
@@ -9061,7 +9047,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             errorTextView.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
             defaultButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
             cancelButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
-            ownServerView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
             outlineField.updateColor();
         }
 

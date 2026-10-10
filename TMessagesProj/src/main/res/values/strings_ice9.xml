@@ -27,8 +27,6 @@
     <string name="Ice9ServerInfo">Your messages live on the server you name here. Ours is filled in — keep it, or put in your own: an IP address or a name.</string>
     <string name="Ice9ServerAddress">Address or name:port</string>
     <string name="Ice9ServerSetDefault">Use default</string>
-    <string name="Ice9ServerOwn">Important: your own server goes up in 5-10 minutes, and here is how. It is easy — try it.</string>
-    <string name="Ice9ServerInstructions">https://ice9.app/server</string>
     <string name="Ice9ServerMalformed">That is not an address. A name or an IP, and a port after a colon if it is not the usual one.</string>
     <string name="Ice9ServerNoAnswer">No answer from that address. Check it and try again.</string>
     <string name="Ice9ServerChangeTitle">Change server?</string>
