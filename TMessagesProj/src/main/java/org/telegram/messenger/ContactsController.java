@@ -379,12 +379,23 @@ public class ContactsController extends BaseController {
         return LocaleController.formatString(R.string.InviteText2, link);
     }
 
+    /**
+     * ice9: the system account's type, the same string auth.xml and
+     * sync_contacts.xml declare (#205). Release keeps the type its
+     * installations already hold; other builds take their own application id,
+     * so debug and release can both sync contacts on one phone. Read straight
+     * from the resources: a language pack must never be able to change it.
+     */
+    private static String systemAccountType() {
+        return ApplicationLoader.applicationContext.getString(R.string.ice9_account_type);
+    }
+
     public void checkAppAccount() {
         systemAccount = null;
         Utilities.globalQueue.postRunnable(() -> {
             AccountManager am = AccountManager.get(ApplicationLoader.applicationContext);
             try {
-                Account[] accounts = am.getAccountsByType("org.chatengine.messenger");
+                Account[] accounts = am.getAccountsByType(systemAccountType());
                 for (int a = 0; a < accounts.length; a++) {
                     Account acc = accounts[a];
                     boolean found = false;
@@ -416,7 +427,7 @@ public class ContactsController extends BaseController {
                 readContacts();
                 if (systemAccount == null) {
                     try {
-                        systemAccount = new Account("" + getUserConfig().getClientUserId(), "org.chatengine.messenger");
+                        systemAccount = new Account("" + getUserConfig().getClientUserId(), systemAccountType());
                         am.addAccountExplicitly(systemAccount, "", null);
                     } catch (Exception ignore) {
 
@@ -430,7 +441,7 @@ public class ContactsController extends BaseController {
         try {
             systemAccount = null;
             AccountManager am = AccountManager.get(ApplicationLoader.applicationContext);
-            Account[] accounts = am.getAccountsByType("org.chatengine.messenger");
+            Account[] accounts = am.getAccountsByType(systemAccountType());
             for (int a = 0; a < accounts.length; a++) {
                 Account acc = accounts[a];
                 boolean found = false;
@@ -506,7 +517,7 @@ public class ContactsController extends BaseController {
                 AndroidUtilities.runOnUIThread(() -> {
                     AccountManager am = AccountManager.get(ApplicationLoader.applicationContext);
                     try {
-                        Account[] accounts = am.getAccountsByType("org.chatengine.messenger");
+                        Account[] accounts = am.getAccountsByType(systemAccountType());
                         systemAccount = null;
                         for (int a = 0; a < accounts.length; a++) {
                             Account acc = accounts[a];
@@ -524,7 +535,7 @@ public class ContactsController extends BaseController {
 
                     }
                     try {
-                        systemAccount = new Account("" + getUserConfig().getClientUserId(), "org.chatengine.messenger");
+                        systemAccount = new Account("" + getUserConfig().getClientUserId(), systemAccountType());
                         am.addAccountExplicitly(systemAccount, "", null);
                     } catch (Exception ignore) {
 

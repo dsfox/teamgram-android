@@ -2,4 +2,4 @@
      Edit the rules there and run it again, not this file. -->
 <sync-adapter xmlns:android="http://schemas.android.com/apk/res/android"
     android:contentAuthority="com.android.contacts"
-    android:accountType="org.chatengine.messenger"/>
+    android:accountType="@string/ice9_account_type"/>

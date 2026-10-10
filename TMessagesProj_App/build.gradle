@@ -198,6 +198,14 @@ android {
     defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
 
     applicationVariants.all { variant ->
+        // ice9: the system account's settings open this very build, and every
+        // build but release - which keeps the type in strings_ice9.xml - has
+        // an account type of its own, so debug and release can both sync
+        // contacts on one phone (#205).
+        variant.resValue "string", "ice9_application_id", variant.applicationId
+        if (variant.buildType.name != "release") {
+            variant.resValue "string", "ice9_account_type", variant.applicationId
+        }
         variant.outputs.all { output ->
             outputFileName = "app.apk"
             output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode

@@ -39,6 +39,12 @@
     <string name="Ice9SendLogs">Send app logs</string>
     <string name="Ice9SendLogsInfo">For whoever is helping you with a problem</string>
 
+    <!-- The system account's type (ice9 #205). Release keeps the one its
+         installations already hold; every other build is given its own
+         application id by TMessagesProj_App/build.gradle, so two builds on one
+         phone never claim one type. -->
+    <string name="ice9_account_type" translatable="false">org.chatengine.messenger</string>
+
     <!-- What stands in for a message this device cannot open. -->
     <string name="Ice9MessageFromAnotherDevice">🔒 Message from another device</string>
 </resources>
