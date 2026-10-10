@@ -2,6 +2,8 @@ package org.telegram.tgnet;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.SystemClock;
+import android.util.Base64;
 
 import org.telegram.messenger.ApplicationLoader;
 
@@ -44,6 +46,13 @@ public class ServerAddress {
     private static final String PORT = "port";
     private static final String CHOSEN = "chosen";
     private static final String DIALABLE = "dialable";
+    // The DER of a server's own key (#244), as base64. Absent for the key built
+    // into the app: ours and the stand.
+    private static final String KEY = "key";
+    private static final long PENDING_LIFETIME = 10 * 60 * 1000;
+
+    private static ServerCode.Link pending;
+    private static long pendingSince;
 
     private ServerAddress() {
     }
@@ -72,9 +81,39 @@ public class ServerAddress {
         }
     }
 
-    /** True when this phone is talking to somebody else's server. */
+    /** True when this phone is talking to ours, with the key built into the app. */
     public static boolean isOurs() {
-        return DEFAULT_HOST.equals(host()) && DEFAULT_PORT == port();
+        return DEFAULT_HOST.equals(host()) && DEFAULT_PORT == port() && keyDer() == null;
+    }
+
+    /**
+     * The key of a server of one's own, whose code was checked when its address
+     * was given; null for the key built into the app. A stored value that is
+     * not a key the app takes reads as null, the same as having none.
+     */
+    public static byte[] keyDer() {
+        try {
+            String stored = preferences().getString(KEY, null);
+            if (stored == null || stored.isEmpty()) {
+                return null;
+            }
+            byte[] der = Base64.decode(stored, Base64.NO_WRAP);
+            return ServerCode.isAcceptable(der) ? der : null;
+        } catch (Throwable ignore) {
+            return null;
+        }
+    }
+
+    /** What the handshake is given: that key and no other, or null for the built-in one. */
+    public static String publicKeyPem() {
+        byte[] der = keyDer();
+        return der == null ? null : ServerCode.pem(der);
+    }
+
+    /** The server code of the kept key, "" when there is none. */
+    public static String code() {
+        byte[] der = keyDer();
+        return der == null ? "" : ServerCode.code(der);
     }
 
     /** "name" when the port is the usual one, "name:port" when it is not. */
@@ -166,13 +205,62 @@ public class ServerAddress {
      * dialable is what the network layer is given and host is what the person
      * sees. They differ whenever a name was typed, and keeping both means the
      * name survives on the screen while the socket gets what it can open.
+     *
+     * key is the DER of the server's own key, null for the built-in one.
      */
-    public static void set(String host, int port, String dialable) {
-        preferences().edit()
+    public static void set(String host, int port, String dialable, byte[] key) {
+        SharedPreferences.Editor editor = preferences().edit()
                 .putString(HOST, host == null || host.isEmpty() ? DEFAULT_HOST : host)
                 .putInt(PORT, port > 0 && port <= 65535 ? port : DEFAULT_PORT)
-                .putString(DIALABLE, dialable == null || dialable.isEmpty() ? host : dialable)
-                .apply();
+                .putString(DIALABLE, dialable == null || dialable.isEmpty() ? host : dialable);
+        if (key == null) {
+            editor.remove(KEY);
+        } else {
+            editor.putString(KEY, Base64.encodeToString(key, Base64.NO_WRAP));
+        }
+        editor.apply();
+    }
+
+    /** What is kept now, so that a check that fails can put it back as it was. */
+    public static final class Kept {
+        private final String host;
+        private final int port;
+        private final String dialable;
+        private final byte[] key;
+
+        private Kept(String host, int port, String dialable, byte[] key) {
+            this.host = host;
+            this.port = port;
+            this.dialable = dialable;
+            this.key = key;
+        }
+
+        public void restore() {
+            set(host, port, dialable, key);
+        }
+    }
+
+    public static Kept kept() {
+        return new Kept(host(), port(), dialable(), keyDer());
+    }
+
+    /**
+     * A server link opened while the first screen was not there to take it
+     * (#244): kept in memory for ten minutes, never stored, and taken once.
+     */
+    public static synchronized void putPending(ServerCode.Link link) {
+        pending = link;
+        pendingSince = SystemClock.elapsedRealtime();
+    }
+
+    public static synchronized boolean hasPending() {
+        return pending != null && SystemClock.elapsedRealtime() - pendingSince < PENDING_LIFETIME;
+    }
+
+    public static synchronized ServerCode.Link takePending() {
+        ServerCode.Link link = pending;
+        pending = null;
+        return link != null && SystemClock.elapsedRealtime() - pendingSince < PENDING_LIFETIME ? link : null;
     }
 
     /**

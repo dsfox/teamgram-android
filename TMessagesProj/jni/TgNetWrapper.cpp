@@ -264,12 +264,17 @@ void switchBackend(JNIEnv *env, jclass c, jint instanceNum, jboolean restart) {
 }
 
 // The server this phone was told to talk to (ice9 #65).
-void setSeedAddress(JNIEnv *env, jclass c, jint instanceNum, jstring address, jint port) {
-    const char *addressStr = env->GetStringUTFChars(address, nullptr);
+void setSeedAddress(JNIEnv *env, jclass c, jint instanceNum, jstring address, jint port, jstring publicKey) {
+    const char *addressStr = address == nullptr ? nullptr : env->GetStringUTFChars(address, nullptr);
+    const char *publicKeyStr = publicKey == nullptr ? nullptr : env->GetStringUTFChars(publicKey, nullptr);
     ConnectionsManager::getInstance(instanceNum).setSeedAddress(
-            addressStr == nullptr ? "" : std::string(addressStr), (uint32_t) port);
+            addressStr == nullptr ? "" : std::string(addressStr), (uint32_t) port,
+            publicKeyStr == nullptr ? "" : std::string(publicKeyStr));
     if (addressStr != nullptr) {
         env->ReleaseStringUTFChars(address, addressStr);
+    }
+    if (publicKeyStr != nullptr) {
+        env->ReleaseStringUTFChars(publicKey, publicKeyStr);
     }
 }
 
@@ -565,7 +570,7 @@ static JNINativeMethod ConnectionsManagerMethods[] = {
         {"native_setRegId", "(ILjava/lang/String;)V", (void *) setRegId},
         {"native_setSystemLangCode", "(ILjava/lang/String;)V", (void *) setSystemLangCode},
         {"native_switchBackend", "(IZ)V", (void *) switchBackend},
-        {"native_setSeedAddress", "(ILjava/lang/String;I)V", (void *) setSeedAddress},
+        {"native_setSeedAddress", "(ILjava/lang/String;ILjava/lang/String;)V", (void *) setSeedAddress},
         {"native_reseedFromAddress", "(IZ)V", (void *) reseedFromAddress},
         {"native_pauseNetwork", "(I)V", (void *) pauseNetwork},
         {"native_resumeNetwork", "(IZ)V", (void *) resumeNetwork},

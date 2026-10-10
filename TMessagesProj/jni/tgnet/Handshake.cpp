@@ -338,6 +338,35 @@ void Handshake::processHandshakeResponse(TLObject *message, int64_t messageId) {
     }
 }
 
+// The fingerprint MTProto gives a key: the low 64 bits of SHA-1 over n and e
+// as TL strings. 0 when the PEM does not parse.
+static uint64_t pinnedKeyFingerprint(const std::string &pem) {
+    BIO *keyBio = BIO_new_mem_buf(pem.c_str(), (int) pem.length());
+    RSA *rsaKey = PEM_read_bio_RSAPublicKey(keyBio, nullptr, nullptr, nullptr);
+    BIO_free(keyBio);
+    if (rsaKey == nullptr) {
+        return 0;
+    }
+    const BIGNUM *n = nullptr;
+    const BIGNUM *e = nullptr;
+    RSA_get0_key(rsaKey, &n, &e, nullptr);
+    std::string nStr(BN_num_bytes(n), 0), eStr(BN_num_bytes(e), 0);
+    BN_bn2bin(n, (uint8_t *) &nStr[0]);
+    BN_bn2bin(e, (uint8_t *) &eStr[0]);
+    RSA_free(rsaKey);
+    NativeByteBuffer *buffer = BuffersStorage::getInstance().getFreeBuffer(1024);
+    buffer->writeString(nStr);
+    buffer->writeString(eStr);
+    uint8_t sha1Buffer[20];
+    SHA1(buffer->bytes(), buffer->position(), sha1Buffer);
+    buffer->reuse();
+    uint64_t fingerprint = 0;
+    for (int a = 19; a >= 12; a--) {
+        fingerprint = fingerprint << 8 | sha1Buffer[a];
+    }
+    return fingerprint;
+}
+
 void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messageId) {
     if (handshakeState != 1) {
         sendAckRequest(messageId);
@@ -351,6 +380,7 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
         int64_t keyFingerprint = 0;
 
         size_t count1 = result->server_public_key_fingerprints.size();
+        std::string pinnedKey = currentDatacenter->isCdnDatacenter ? "" : ConnectionsManager::getInstance(currentDatacenter->instanceNum).getSeedPublicKey();
         if (currentDatacenter->isCdnDatacenter) {
             auto iter = cdnPublicKeysFingerprints.find(currentDatacenter->datacenterId);
             if (iter != cdnPublicKeysFingerprints.end()) {
@@ -360,6 +390,22 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
                         key = cdnPublicKeys[currentDatacenter->datacenterId];
                     }
                 }
+            }
+        } else if (!pinnedKey.empty()) {
+            // A server of one's own (#244): the key whose code was checked
+            // when its address was typed, and never the built-in one beside it.
+            uint64_t pinnedFingerprint = pinnedKeyFingerprint(pinnedKey);
+            for (uint32_t a = 0; a < count1; a++) {
+                if (pinnedFingerprint != 0 && (uint64_t) result->server_public_key_fingerprints[a] == pinnedFingerprint) {
+                    keyFingerprint = result->server_public_key_fingerprints[a];
+                    key = pinnedKey;
+                    break;
+                }
+            }
+            if (keyFingerprint == 0) {
+                if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: the server does not offer the key this phone holds for it (%" PRIu64 ")", currentDatacenter->instanceNum, currentDatacenter->datacenterId, pinnedFingerprint);
+            } else {
+                if (LOGS_ENABLED) DEBUG_D("account%u dc%u handshake: using the server's own key %" PRIu64, currentDatacenter->instanceNum, currentDatacenter->datacenterId, pinnedFingerprint);
             }
         } else {
             if (serverPublicKeys.empty()) {

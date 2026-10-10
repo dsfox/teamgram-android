@@ -149,6 +149,8 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.ServerAddress;
+import org.telegram.tgnet.ServerCode;
+import org.telegram.tgnet.ServerKey;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
@@ -713,7 +715,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         // server that may be about to change is not state worth keeping. See
         // ice9 #65.
         if (savedInstanceState != null && activityMode == MODE_LOGIN && !newAccount
-                && !ServerAddress.wasChosen()) {
+                && (!ServerAddress.wasChosen() || ServerAddress.hasPending())) {
             savedInstanceState = null;
             clearCurrentState();
         }
@@ -817,8 +819,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         // sign-in, not when a second account is added and not when a phone
         // number changes - those all happen against the server already chosen,
         // and Settings is where it is changed afterwards. See ice9 #65.
+        // A server link opened before this screen existed asks it again (#244).
         if (savedInstanceState == null && activityMode == MODE_LOGIN && !newAccount
-                && !ServerAddress.wasChosen()) {
+                && (!ServerAddress.wasChosen() || ServerAddress.hasPending())) {
             currentViewNum = VIEW_SERVER;
         }
         if (savedInstanceState != null) {
@@ -1128,7 +1131,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             return false;
         }
 
-        if (currentViewNum == VIEW_PHONE_INPUT || activityMode == MODE_CHANGE_LOGIN_EMAIL && currentViewNum == VIEW_ADD_EMAIL) {
+        // The server question unanswered has nothing behind it: back from it
+        // must not walk past it onto the phone number.
+        if (currentViewNum == VIEW_PHONE_INPUT || currentViewNum == VIEW_SERVER && !ServerAddress.wasChosen()
+                || activityMode == MODE_CHANGE_LOGIN_EMAIL && currentViewNum == VIEW_ADD_EMAIL) {
             if (invoked) {
                 for (int a = 0; a < views.length; a++) {
                     if (views[a] != null) {
@@ -1530,6 +1536,24 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
 
         showEditDoneProgress(false, animated);
+    }
+
+    /**
+     * A server link (#244) kept by LaunchActivity: the server screen takes it
+     * and fills its fields. Before the views exist, createView sees it waiting.
+     */
+    public void openServerLink() {
+        if (views[VIEW_SERVER] == null || activityMode != MODE_LOGIN || newAccount) {
+            return;
+        }
+        if (currentViewNum == VIEW_SERVER) {
+            ServerCode.Link link = ServerAddress.takePending();
+            if (link != null) {
+                ((LoginActivityServerView) views[VIEW_SERVER]).fill(link);
+            }
+        } else {
+            setPage(VIEW_SERVER, true, null, false);
+        }
     }
 
     public void setPage(@ViewNumber int page, boolean animated, Bundle params, boolean back) {
@@ -8877,13 +8901,21 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private final TextView errorTextView;
         private final TextView defaultButton;
         private final TextView cancelButton;
+        private final OutlineTextContainerView codeOutlineField;
+        private final EditTextBoldCursor codeField;
+        private final TextView ownServerView;
 
         private int checkingRequest = 0;
         private Runnable giveUp;
         private boolean nextPressed;
+        private boolean formattingCode;
+        /// Set when the address, given without a code, turned out to have a
+        /// key of its own: silence is then explained by the missing code.
+        private boolean ownKeySeen;
+        private int attempt;
         /// What the checking is interrupting, kept while it runs so that giving
         /// up can put it back.
-        private String[] checkingFrom;
+        private ServerAddress.Kept checkingFrom;
 
         public LoginActivityServerView(Context context) {
             super(context);
@@ -8950,6 +8982,64 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             outlineField.addView(addressField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP));
             addView(outlineField, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 16, 0, 16, 0));
 
+            // The server code (#244): only a server of one's own has one,
+            // printed by its installer beside the address, and the app keeps
+            // the server's key only if this is its code.
+            codeOutlineField = new OutlineTextContainerView(context);
+            codeOutlineField.setText(getString(R.string.Ice9ServerCode));
+            codeField = new EditTextBoldCursor(context);
+            codeField.setSingleLine();
+            codeField.setLines(1);
+            codeField.setMaxLines(1);
+            codeField.setBackground(null);
+            codeField.setCursorSize(AndroidUtilities.dp(20));
+            codeField.setCursorWidth(1.5f);
+            codeField.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
+            codeField.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(16), AndroidUtilities.dp(16), AndroidUtilities.dp(16));
+            codeField.setInputType(InputType.TYPE_CLASS_PHONE);
+            codeField.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+            codeField.setOnFocusChangeListener((v, hasFocus) -> codeOutlineField.animateSelection(hasFocus ? 1f : 0f));
+            codeField.setOnEditorActionListener((textView, i, keyEvent) -> {
+                if (i == EditorInfo.IME_ACTION_NEXT) {
+                    onNextPressed(null);
+                    return true;
+                }
+                return false;
+            });
+            codeField.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+                @Override
+                public void afterTextChanged(Editable s) {
+                    if (formattingCode) {
+                        return;
+                    }
+                    StringBuilder digits = new StringBuilder();
+                    for (int i = 0; i < s.length() && digits.length() < 24; i++) {
+                        char c = s.charAt(i);
+                        if (c >= '0' && c <= '9') {
+                            digits.append(c);
+                        }
+                    }
+                    String grouped = ServerCode.grouped(digits.toString());
+                    if (!grouped.contentEquals(s)) {
+                        formattingCode = true;
+                        codeField.setText(grouped);
+                        codeField.setSelection(codeField.length());
+                        formattingCode = false;
+                    }
+                    showError(null);
+                    updateDefaultButton();
+                }
+            });
+            codeOutlineField.attachEditText(codeField);
+            codeOutlineField.addView(codeField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP));
+            addView(codeOutlineField, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 16, 12, 16, 0));
+
             errorTextView = new TextView(context);
             errorTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
             errorTextView.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -8964,6 +9054,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             defaultButton.setOnClickListener(v -> {
                 addressField.setText(ServerAddress.DEFAULT_HOST);
                 addressField.setSelection(addressField.length());
+                codeField.setText("");
                 showError(null);
             });
             addView(defaultButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 8, 16, 0));
@@ -8980,8 +9071,34 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             cancelButton.setOnClickListener(v -> giveUpChecking());
             addView(cancelButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 8, 16, 0));
 
+            // Said here, where it can be acted on, rather than on a page somebody
+            // would have to go looking for. Most people will keep ours and
+            // should - but a messenger that offers a server of your own and
+            // never says how is offering it the way a form offers a tick box.
+            ownServerView = new TextView(context);
+            ownServerView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            ownServerView.setGravity(Gravity.CENTER_HORIZONTAL);
+            ownServerView.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
+            ownServerView.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(10), AndroidUtilities.dp(12), AndroidUtilities.dp(10));
+            ownServerView.setText(getString(R.string.Ice9ServerOwn));
+            ownServerView.setOnClickListener(v -> Browser.openUrl(getParentActivity(), getString(R.string.Ice9ServerInstructions)));
+            addView(ownServerView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 12, 16, 0));
+
             updateColors();
             updateDefaultButton();
+        }
+
+        /// A server link fills the fields and waits for Next: nothing is kept
+        /// until the same check passes (#244).
+        void fill(ServerCode.Link link) {
+            giveUpChecking();
+            if (link.malformed) {
+                showError(getString(R.string.Ice9ServerLinkMalformed));
+                return;
+            }
+            addressField.setText(link.port == ServerAddress.DEFAULT_PORT ? link.host : link.host + ":" + link.port);
+            addressField.setSelection(addressField.length());
+            codeField.setText(ServerCode.grouped(link.code));
         }
 
         private void updateDefaultButton() {
@@ -8993,7 +9110,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             }
             cancelButton.setVisibility(GONE);
             // Nothing to put back when what is typed is already ours.
-            boolean ours = ServerAddress.DEFAULT_HOST.contentEquals(addressField.getText().toString().trim());
+            boolean ours = ServerAddress.DEFAULT_HOST.contentEquals(addressField.getText().toString().trim())
+                    && codeField.length() == 0;
             defaultButton.setVisibility(ours ? INVISIBLE : VISIBLE);
         }
 
@@ -9015,7 +9133,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             }
             needHideProgress(false);
             if (checkingFrom != null) {
-                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]), checkingFrom[2]);
+                checkingFrom.restore();
                 ConnectionsManager.reseedFromAddress(false);
                 checkingFrom = null;
             }
@@ -9047,7 +9165,12 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             errorTextView.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
             defaultButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
             cancelButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+            codeField.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            codeField.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
+            codeField.setCursorColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            ownServerView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
             outlineField.updateColor();
+            codeOutlineField.updateColor();
         }
 
         @Override
@@ -9057,8 +9180,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         @Override
         public boolean needBackButton() {
-            // The first screen. There is nowhere behind it.
-            return false;
+            // The first screen, with nowhere behind it - unless a server link
+            // brought it back, and the phone number is behind it.
+            return ServerAddress.wasChosen();
+        }
+
+        @Override
+        public boolean onBackPressed(boolean force) {
+            giveUpChecking();
+            return true;
         }
 
         @Override
@@ -9066,6 +9196,11 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             super.onShow();
             addressField.setText(ServerAddress.describe());
             addressField.setSelection(addressField.length());
+            codeField.setText(ServerCode.grouped(ServerAddress.code()));
+            ServerCode.Link link = ServerAddress.takePending();
+            if (link != null) {
+                fill(link);
+            }
             updateDefaultButton();
         }
 
@@ -9079,8 +9214,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 showError(getString(R.string.Ice9ServerMalformed));
                 return;
             }
+            final String serverCode = ServerCode.digits(codeField.getText().toString());
+            if (serverCode == null) {
+                showError(getString(R.string.Ice9ServerCodeMalformed));
+                return;
+            }
 
             nextPressed = true;
+            ownKeySeen = false;
+            attempt++;
             AndroidUtilities.hideKeyboard(addressField);
             updateDefaultButton();
 
@@ -9096,6 +9238,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             final int port = Integer.parseInt(parsed[1]);
             Utilities.globalQueue.postRunnable(() -> {
                 final String dialable = ServerAddress.resolve(host);
+                // With a code, the server's own key is fetched and kept only if
+                // the code is the key's, before anything is pointed at it.
+                final ServerKey.Answer key = dialable != null && !serverCode.isEmpty() ? ServerKey.fetch(dialable, host, port) : null;
                 AndroidUtilities.runOnUIThread(() -> {
                     if (!nextPressed) {
                         // Given up on while the name was being looked up.
@@ -9108,7 +9253,20 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         answered(false, null);
                         return;
                     }
-                    beginChecking(host, port, dialable);
+                    if (key == null) {
+                        // The key built into the app: ours, the stand. Anywhere
+                        // else, ask the server for its key alongside the check.
+                        boolean ours = ServerAddress.DEFAULT_HOST.equals(host) && port == ServerAddress.DEFAULT_PORT;
+                        beginChecking(host, port, dialable, null, !ours);
+                    } else if (key.kind == ServerKey.Kind.UNREACHABLE) {
+                        answered(false, null);
+                    } else if (key.kind == ServerKey.Kind.NO_KEY) {
+                        answered(false, getString(R.string.Ice9ServerNoKey));
+                    } else if (!serverCode.equals(ServerCode.code(key.der))) {
+                        answered(false, getString(R.string.Ice9ServerCodeMismatch));
+                    } else {
+                        beginChecking(host, port, dialable, key.der, false);
+                    }
                 });
             });
         }
@@ -9124,15 +9282,24 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
          * agreed with this very server and make somebody wait through a second
          * handshake to be told what the client already knew.
          */
-        private void beginChecking(String host, int port, String dialable) {
-            boolean moved = !host.equals(ServerAddress.host()) || port != ServerAddress.port();
-            checkingFrom = moved
-                    ? new String[]{ServerAddress.host(), String.valueOf(ServerAddress.port()),
-                            ServerAddress.dialable()}
-                    : null;
+        private void beginChecking(String host, int port, String dialable, byte[] key, boolean probing) {
+            boolean moved = !host.equals(ServerAddress.host()) || port != ServerAddress.port()
+                    || !java.util.Arrays.equals(key, ServerAddress.keyDer());
+            checkingFrom = moved ? ServerAddress.kept() : null;
             if (moved) {
-                ServerAddress.set(host, port, dialable);
+                ServerAddress.set(host, port, dialable, key);
                 ConnectionsManager.reseedFromAddress(false);
+            }
+            if (probing) {
+                // Only explains silence: the stand serves a key of its own and
+                // still offers the built-in one, so the check decides.
+                final int probed = attempt;
+                Utilities.globalQueue.postRunnable(() -> {
+                    ServerKey.Answer answer = ServerKey.fetch(dialable, host, port);
+                    if (answer.kind == ServerKey.Kind.KEY && !ServerCode.BUILT_IN_KEY_CODE.equals(ServerCode.code(answer.der))) {
+                        AndroidUtilities.runOnUIThread(() -> ownKeySeen |= probed == attempt);
+                    }
+                });
             }
 
             checkingRequest = getConnectionsManager().sendRequest(new TLRPC.TL_help_getConfig(),
@@ -9183,13 +9350,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             // it, and answering the wrong one by moving them to ours would be a
             // change they did not ask for.
             if (checkingFrom != null) {
-                ServerAddress.set(checkingFrom[0], Integer.parseInt(checkingFrom[1]), checkingFrom[2]);
+                checkingFrom.restore();
                 ConnectionsManager.reseedFromAddress(false);
                 checkingFrom = null;
             }
             showError(errorText != null && errorText.length() > 0
                     ? errorText
-                    : getString(R.string.Ice9ServerNoAnswer));
+                    : getString(ownKeySeen ? R.string.Ice9ServerOwnKeyNeedsCode : R.string.Ice9ServerNoAnswer));
             updateDefaultButton();
         }
 

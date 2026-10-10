@@ -153,6 +153,8 @@ import org.telegram.messenger.voip.VoIPPendingCall;
 import org.telegram.messenger.voip.VoIPPreNotificationService;
 import org.telegram.messenger.voip.VoIPService;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.ServerAddress;
+import org.telegram.tgnet.ServerCode;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLParseException;
 import org.telegram.tgnet.TLRPC;
@@ -1508,8 +1510,63 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         return handleIntent(intent, isNew, restore, fromPassword, null, true, false);
     }
 
+    /**
+     * A link to a server of one's own (#244), from the installer's QR code or a
+     * message: it fills the server screen when signed out, and asks about
+     * changing servers when signed in - a sign-out here, as from Settings.
+     * Nothing is kept until the server screen's check passes.
+     */
+    private void openServerLink(ServerCode.Link link) {
+        if (!UserConfig.getInstance(currentAccount).isClientActivated()) {
+            ServerAddress.putPending(link);
+            for (BaseFragment fragment : actionBarLayout.getFragmentStack()) {
+                if (fragment instanceof LoginActivity) {
+                    ((LoginActivity) fragment).openServerLink();
+                    return;
+                }
+            }
+            presentFragment(new LoginActivity(), true, false);
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        if (link.malformed) {
+            // Nothing to change to, so no reason to sign out.
+            builder.setMessage(getString(R.string.Ice9ServerLinkMalformed));
+            builder.setPositiveButton(getString(R.string.OK), null);
+        } else if (link.host.equals(ServerAddress.host()) && link.port == ServerAddress.port() && link.code.equals(ServerAddress.code())) {
+            builder.setMessage(getString(R.string.Ice9ServerSameServer));
+            builder.setPositiveButton(getString(R.string.OK), null);
+        } else {
+            builder.setTitle(getString(R.string.Ice9ServerChangeTitle));
+            builder.setMessage(getString(R.string.Ice9ServerChangeInfo));
+            builder.setPositiveButton(getString(R.string.Ice9ServerChange), (dialog, which) -> {
+                ServerAddress.askAgain();
+                ServerAddress.putPending(link);
+                MessagesController.getInstance(currentAccount).performLogout(1);
+            });
+            builder.setNegativeButton(getString(R.string.Cancel), null);
+        }
+        AlertDialog dialog = builder.create();
+        BaseFragment last = getLastFragment();
+        if (last != null) {
+            last.showDialog(dialog);
+        } else {
+            dialog.show();
+        }
+    }
+
     @SuppressLint("Range")
     private boolean handleIntent(Intent intent, boolean isNew, boolean restore, boolean fromPassword, Browser.Progress progress, boolean rebuildFragments, boolean openedTelegram) {
+        if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
+            ServerCode.Link serverLink = ServerCode.Link.parse(intent.getData().toString());
+            if (serverLink != null) {
+                openServerLink(serverLink);
+                if (progress != null) {
+                    progress.end();
+                }
+                return true;
+            }
+        }
         // ice9: a link into what nothing on screen offers opens nothing (#227).
         // Every reader of links starts here, so the one check does. See OfferedLinks.
         if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) && OfferedLinks.leadsToWhatIsOff(intent.getData())) {

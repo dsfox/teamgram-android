@@ -671,7 +671,7 @@ public class ConnectionsManager extends BaseController {
         // seeded with, and the seeding happens inside it. Said even when nobody
         // has chosen anything, so that the value and the default live in one
         // place rather than two that can disagree.
-        native_setSeedAddress(currentAccount, ServerAddress.dialable(), ServerAddress.port());
+        native_setSeedAddress(currentAccount, ServerAddress.dialable(), ServerAddress.port(), ServerAddress.publicKeyPem());
 
         // And look the name up again behind all this, so that a server moved to
         // another machine is followed. It cannot happen before the seeding -
@@ -697,7 +697,7 @@ public class ConnectionsManager extends BaseController {
     // thing to do with them is not to have them.
     public static void reseedFromAddress(boolean restart) {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            native_setSeedAddress(a, ServerAddress.dialable(), ServerAddress.port());
+            native_setSeedAddress(a, ServerAddress.dialable(), ServerAddress.port(), ServerAddress.publicKeyPem());
         }
         native_reseedFromAddress(0, restart);
     }
@@ -999,7 +999,7 @@ public class ConnectionsManager extends BaseController {
 
     public static native void native_switchBackend(int currentAccount, boolean restart);
 
-    public static native void native_setSeedAddress(int currentAccount, String address, int port);
+    public static native void native_setSeedAddress(int currentAccount, String address, int port, String publicKey);
 
     public static native void native_reseedFromAddress(int currentAccount, boolean restart);
     public static native int native_isTestBackend(int currentAccount);

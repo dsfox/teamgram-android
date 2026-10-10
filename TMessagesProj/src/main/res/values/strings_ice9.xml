@@ -32,6 +32,20 @@
     <string name="Ice9ServerChangeTitle">Change server?</string>
     <string name="Ice9ServerChangeInfo">You will be signed out and everything on this device will be erased: messages, chats and keys belong to the server that issued them and mean nothing on another. Your account on the old server stays where it is.</string>
     <string name="Ice9ServerChange">Change and sign out</string>
+    <string name="Ice9ServerOwn">Important: your own server goes up in 5-10 minutes, and here is how. It is easy — try it.</string>
+    <string name="Ice9ServerInstructions">https://ice9.app/server</string>
+
+    <!-- A server of one's own has a key of its own, and its installer prints
+         the server code beside the address (ice9 #244). Always "server code",
+         never just "code": the installer prints a sign-in code too. -->
+    <string name="Ice9ServerCode">Server code, if you have one</string>
+    <string name="Ice9ServerCodeMalformed">A server code is 24 digits. The installer printed it beside the address.</string>
+    <string name="Ice9ServerCodeMismatch">The server at that address has a different code. Check the code and the address.</string>
+    <string name="Ice9ServerNoKey">Something answered at that address, but it gave no server key, so the code cannot be checked.</string>
+    <string name="Ice9ServerOwnKeyNeedsCode">This server has a key of its own. If it is a server of your own, enter its code - the installer printed it beside the address.</string>
+    <string name="Ice9ServerOwnKey">own key</string>
+    <string name="Ice9ServerLinkMalformed">This server link is damaged. Ask for it again.</string>
+    <string name="Ice9ServerSameServer">This device already talks to this server.</string>
 
     <!-- The app's own log, sent in the open, under Server (ice9 #227). -->
     <string name="Ice9SendLogs">Send app logs</string>

@@ -15,6 +15,7 @@
 #include <sys/epoll.h>
 #include <map>
 #include <atomic>
+#include <mutex>
 #include <unordered_set>
 #include "Defines.h"
 
@@ -92,8 +93,12 @@ public:
     // init(), because it decides what the very first datacenter is seeded
     // with; said again, with reseed, when somebody corrects a typo and there
     // is no other way back to a client that cannot connect.
-    void setSeedAddress(std::string address, uint32_t port);
+    //
+    // publicKey is the PEM of a server of one's own (#244), empty for the key
+    // built into the app; the handshake then uses that key and no other.
+    void setSeedAddress(std::string address, uint32_t port, std::string publicKey);
     void reseedFromAddress(bool restart);
+    std::string getSeedPublicKey();
 
 private:
     static void *ThreadProc(void *data);
@@ -158,6 +163,9 @@ private:
     // from this instead of the address compiled in.
     std::string seedAddress = "";
     uint32_t seedPort = 0;
+    std::string seedPublicKey = "";
+    // Set from the app's thread, read on the network thread.
+    std::mutex seedMutex;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
     std::atomic<uint32_t> lastRequestToken{50000000};

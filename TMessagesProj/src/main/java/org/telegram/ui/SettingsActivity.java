@@ -696,7 +696,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         // Which server this phone talks to, with the address on the row rather
         // than one screen in: a promise about whose machine your messages are
         // on is worth nothing if checking it takes a search. See ice9 #65.
-        items.add(SettingCell.Factory.of(60, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9Server), ServerAddress.describe()));
+        items.add(SettingCell.Factory.of(60, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9Server), ServerAddress.describe() + (ServerAddress.keyDer() != null ? " \u00b7 " + getString(R.string.Ice9ServerOwnKey) : "")));
         // The one way to the app's log, in the open, for whoever helps with a
         // problem (#227): Telegram's own ways to it were hidden gestures.
         items.add(SettingCell.Factory.of(61, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9SendLogs), getString(R.string.Ice9SendLogsInfo)));

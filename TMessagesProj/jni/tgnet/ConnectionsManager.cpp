@@ -1820,6 +1820,13 @@ uint8_t ConnectionsManager::getIpStratagy() {
 
 void ConnectionsManager::initDatacenters() {
     Datacenter *datacenter;
+    std::string seedAddress;
+    uint32_t seedPort;
+    {
+        std::lock_guard<std::mutex> lock(seedMutex);
+        seedAddress = this->seedAddress;
+        seedPort = this->seedPort;
+    }
     if (!testBackend) {
         if (datacenters.find(1) == datacenters.end()) {
             datacenter = new Datacenter(instanceNum, 1);
@@ -2076,9 +2083,16 @@ void ConnectionsManager::setUserId(int64_t userId) {
 // Said before init(), from the value the app has kept since somebody typed it.
 // Nothing is dialled here: initDatacenters() reads it when it seeds, and the
 // seed happens once, on a client that has no stored address list yet.
-void ConnectionsManager::setSeedAddress(std::string address, uint32_t port) {
+void ConnectionsManager::setSeedAddress(std::string address, uint32_t port, std::string publicKey) {
+    std::lock_guard<std::mutex> lock(seedMutex);
     seedAddress = std::move(address);
     seedPort = port > 0 ? port : DEFAULT_SERVER_PORT;
+    seedPublicKey = std::move(publicKey);
+}
+
+std::string ConnectionsManager::getSeedPublicKey() {
+    std::lock_guard<std::mutex> lock(seedMutex);
+    return seedPublicKey;
 }
 
 // The way back for somebody who typed the address wrong. Their client cannot
