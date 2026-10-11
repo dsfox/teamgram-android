@@ -529,87 +529,18 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         notifyDataSetChanged();
     }
 
-    /**
-     * What the server cannot read, looked for on the phone (#108).
-     *
-     * A message in a conversation that encrypts reaches the server as
-     * ciphertext, so messages.searchGlobal cannot match a word in one and never
-     * will. The plaintext is here, in messages_v2, and until this nothing asked
-     * it: the chat list showed "a message from before" while a search for
-     * "before" came back empty.
-     *
-     * Kept in its own list rather than written straight into the results,
-     * because the server's reply clears those when it arrives - whichever of
-     * the two lands first, the other must still be able to put its own back.
-     */
-    private final ArrayList<MessageObject> encryptedResultMessages = new ArrayList<>();
-    private String encryptedResultQuery;
+    private final MlsSearchResults encryptedResults = new MlsSearchResults(); // ice9: #108
 
     private void searchEncryptedMessagesInternal(final String query, int searchId) {
-        encryptedResultMessages.clear();
-        encryptedResultQuery = null;
-        final MlsRuntime mls = MlsRuntime.getInstance(currentAccount);
-        MessagesStorage.getInstance(currentAccount).searchEncryptedMessages(
-            query, mls.encryptedPeerIds(), 20, (messages, users, chats) -> {
-                if (searchId > 0 && searchId != lastSearchId) {
-                    return;
-                }
-                MessagesController.getInstance(currentAccount).putUsers(users, true);
-                MessagesController.getInstance(currentAccount).putChats(chats, true);
-                LongSparseArray<TLRPC.User> usersMap = new LongSparseArray<>();
-                for (int a = 0; a < users.size(); a++) {
-                    usersMap.put(users.get(a).id, users.get(a));
-                }
-                LongSparseArray<TLRPC.Chat> chatsMap = new LongSparseArray<>();
-                for (int a = 0; a < chats.size(); a++) {
-                    chatsMap.put(chats.get(a).id, chats.get(a));
-                }
-                encryptedResultMessages.clear();
-                for (int a = 0; a < messages.size(); a++) {
-                    MessageObject messageObject = new MessageObject(
-                        currentAccount, messages.get(a), usersMap, chatsMap, false, true);
-                    messageObject.setQuery(query);
-                    encryptedResultMessages.add(messageObject);
-                }
-                encryptedResultQuery = query;
-                if (mergeEncryptedResults()) {
-                    searchWas = true;
-                    notifyDataSetChanged();
-                    if (delegate != null) {
-                        delegate.searchStateChanged(waitingResponseCount > 0, true);
-                    }
-                }
-            });
-    }
-
-    /**
-     * Puts the phone's own hits in front of the server's, once.
-     *
-     * Returns whether anything moved, so a caller can decide whether the list
-     * is worth redrawing.
-     */
-    private boolean mergeEncryptedResults() {
-        if (encryptedResultMessages.isEmpty()
-                || !TextUtils.equals(encryptedResultQuery, lastMessagesSearchString)) {
-            return false;
-        }
-        int at = 0;
-        for (int a = 0; a < encryptedResultMessages.size(); a++) {
-            MessageObject mine = encryptedResultMessages.get(a);
-            boolean already = false;
-            for (int i = 0; i < searchResultMessages.size(); i++) {
-                MessageObject theirs = searchResultMessages.get(i);
-                if (theirs != null && theirs.getId() == mine.getId()
-                        && theirs.getDialogId() == mine.getDialogId()) {
-                    already = true;
-                    break;
+        encryptedResults.search(currentAccount, query, () -> searchId <= 0 || searchId == lastSearchId, () -> {
+            if (encryptedResults.mergeInto(searchResultMessages, lastMessagesSearchString)) {
+                searchWas = true;
+                notifyDataSetChanged();
+                if (delegate != null) {
+                    delegate.searchStateChanged(waitingResponseCount > 0, true);
                 }
             }
-            if (!already) {
-                searchResultMessages.add(at++, mine);
-            }
-        }
-        return at > 0;
+        });
     }
 
     private void searchMessagesInternal(final String query, int searchId) {
@@ -765,7 +696,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                         // (#108). Done here as well as when the local search
                         // returns: the clear a few lines up throws away
                         // anything that arrived before this reply.
-                        mergeEncryptedResults();
+                        encryptedResults.mergeInto(searchResultMessages, lastMessagesSearchString);
                         searchWas = true;
                         messagesSearchEndReached = res.messages.size() != 20;
                         if (searchId > 0) {
