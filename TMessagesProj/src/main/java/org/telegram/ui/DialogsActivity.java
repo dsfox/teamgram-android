@@ -2988,9 +2988,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     public static void loadDialogs(AccountInstance accountInstance) {
         int currentAccount = accountInstance.getCurrentAccount();
-        // Said out loud because an empty chat list has three possible causes -
-        // never asked, asked and answered with nothing, answered and not drawn -
-        // and they look identical from outside.
+        // ice9: logs the load request, to tell the causes of an empty chat list apart
         FileLog.d("dialogs: asked to load, already loaded = " + dialogsLoaded[currentAccount]);
         if (!dialogsLoaded[currentAccount]) {
             MessagesController messagesController = accountInstance.getMessagesController();
@@ -3522,11 +3520,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else {
                 statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
                 statusDrawable.center = true;
-                // The name, written out, rather than upstream's wordmark drawn
-                // over it. telegram_logo_2 is a picture that says Teamgram, so
-                // no string could change it and every chat list carried the
-                // wrong name - which is what it had been doing since the
-                // rename. iOS shows the name as text here too.
+                // ice9: the app name as text instead of upstream's wordmark picture
                 actionBar.setTitle(getString(R.string.AppName), statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }
@@ -7076,11 +7070,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         if (hasNotNotificationsPermission && NotificationPermissionDialog.shouldAsk(activity)) {
                             PermissionRequest.requestPermission(Manifest.permission.POST_NOTIFICATIONS, granted -> {
                                 if (granted) return;
-                                // A dialog dismissed with Back or a tap outside it comes back as
-                                // the same "denied" as the button, and the system records no
-                                // decision. Only a real refusal turns the rationale flag on, so
-                                // a denial without it, before any refusal, is a dismissal: no
-                                // sheet, no postponing, the next cold start asks again.
+                                // ice9: a dismissed dialog is no refusal: ask again on the next start
                                 final boolean canAsk = PermissionRequest.canAskPermission(Manifest.permission.POST_NOTIFICATIONS);
                                 if (!canAsk && !NotificationPermissionDialog.wasRefused()) {
                                     FileLog.d("notification permission: dialog dismissed, will ask on the next start");
@@ -8869,9 +8859,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             floatingButton3.setButtonVisible(isVisible, animated);
         }
         if (floatingButtonStories != null) {
-            // It never asked whether stories were on: it appeared beside the
-            // compose button whatever the answer, which is why switching
-            // stories off left the camera drawn.
+            // ice9: the stories camera button follows whether stories are on
             floatingButtonStories.setButtonVisible(
                     isVisible && getMessagesController().storiesEnabled(), animated);
         }
@@ -9901,10 +9889,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
         }
         if (archiveItem != null && archive2Item != null) {
-            // The archive is not offered: moving a chat there has no handler
-            // on the server, so it slides away and comes back on the next
-            // sync. The swipe is already a mute; this hides the other doors -
-            // the box on the selection bar and the row in its menu.
+            // ice9: no archive: its selection-bar box and menu row are hidden
             if (!Offered.ARCHIVE) {
                 archiveItem.setVisibility(View.GONE);
                 archive2Item.setVisibility(View.GONE);
@@ -10948,8 +10933,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private void showFiltersHint() {
-        // Folders are not offered - the hint would lead to a screen that can
-        // create nothing. See Offered.
         if (!Offered.FOLDERS) {
             return;
         }

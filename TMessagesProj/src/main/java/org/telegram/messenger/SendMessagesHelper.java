@@ -809,14 +809,10 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         public boolean performCoverUpload;
         public boolean forceReupload;
 
-        /** The bytes went up encrypted and this is not a secret chat, so what
-         *  comes back has to be turned into an ordinary document and described
-         *  inside the message rather than beside it. */
+        /** ice9: uploaded encrypted outside a secret chat; described inside the message */
         public boolean mlsEncrypted;
 
-        /** Who wrote a forwarded file first. A text forward hands this to
-         *  encrypt directly; a file is encrypted only after its upload, so
-         *  the author rides here until then. */
+        /** ice9: a forwarded file's original author, held until it is encrypted after upload */
         public MlsRuntime.Forwarded mlsForwarded;
 
         private boolean retriedToSend;
@@ -2703,12 +2699,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                                             newMsgArr.remove(index);
                                             final int oldId = newMsgObj1.id;
                                             final ArrayList<TLRPC.Message> sentMessages = new ArrayList<>();
-                                            // What comes back for one of ours is a
-                                            // ciphertext this device can never open and,
-                                            // where there was a file, the blob the server
-                                            // was given. Both are less than what is
-                                            // already here, so what we sent goes back on
-                                            // before anything stores it.
+                                            // ice9: our sent copy replaces the server's before storing
                                             MlsRuntime.getInstance(currentAccount)
                                                     .restore(message, newMsgObj1.random_id);
                                             sentMessages.add(message);
@@ -6519,10 +6510,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 if (message.sendRequest != null) {
                     String location = FileLoader.getInstance(currentAccount).getPathToAttach(message.photoSize).toString();
                     putToDelayedMessages(location, message);
-                    // Encrypted on the way up when there is a conversation to
-                    // encrypt into. The same upload either way - it is the same
-                    // code secret chats have used for years - and what differs
-                    // is that the answer comes back with a key.
+                    // ice9: uploaded encrypted when there is a conversation to encrypt into
                     getFileLoader().uploadFile(location, MlsSend.getInstance(currentAccount).uploadEncrypted(message), true, ConnectionsManager.FileTypePhoto);
                     putToUploadingMessages(message.obj);
                 } else {
@@ -6623,15 +6611,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         putToDelayedMessages(location, message);
                         if (message.obj.videoEditedInfo == null || !message.obj.videoEditedInfo.notReadyYet) {
                             boolean encrypted = MlsSend.getInstance(currentAccount).uploadEncrypted(message);
-                            // The form with a size is the one that starts sending a
-                            // video while it is still being converted, and an
-                            // encrypted upload cannot do that - FileUploadOperation
-                            // turns that mode off for itself when there is a key. It
-                            // then sits waiting to be told about bytes that are
-                            // already on disk, and the send stops at 0 KB with
-                            // nothing said. By here the conversion has finished
-                            // anyway - notReadyYet is what says otherwise - so the
-                            // whole file is read instead.
+                            // ice9: an encrypted video uploads the finished file, not while converting
                             if (!encrypted && message.obj.videoEditedInfo != null
                                     && message.obj.videoEditedInfo.needConvert()) {
                                 getFileLoader().uploadFile(location, false, false, document.size, ConnectionsManager.FileTypeVideo, false);
@@ -8231,11 +8211,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                                     if (newMessage.message.action != null) {
                                         continue;
                                     } else {
-                                        // The server's copy of one of ours is a
-                                        // ciphertext this device can never open, and
-                                        // where there was a file it describes the blob
-                                        // it was given. What we sent goes back on before
-                                        // anything stores it.
+                                        // ice9: what we sent replaces the server's copy before it is stored
                                         MlsRuntime.getInstance(currentAccount)
                                                 .restore(newMessage.message, newMsgObj.random_id);
                                         sentMessages.add(message = newMessage.message);
@@ -10792,14 +10768,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             }
 
             boolean isEncrypted = DialogObject.isEncryptedDialog(dialogId);
-            // A file sent once is normally sent again by name alone, with nothing
-            // uploaded - which is right until the bytes have to be encrypted. Then
-            // the second send points at the first send's blob, encrypted with a key
-            // this conversation may never have been given, and skips the path that
-            // describes it: the message arrives with no type, no name and no key,
-            // and the picture in it can never be opened. That is what an empty
-            // bubble on a repeated picture was - 92 bytes in the database where a
-            // described one takes 276.
+            // ice9: an encrypted conversation uploads a file again instead of reusing the first send
             boolean carriesOwnKey = MlsRuntime.getInstance(accountInstance.getCurrentAccount())
                     .hasConversation(dialogId);
             if (!forceDocument && groupMediaFinal) {

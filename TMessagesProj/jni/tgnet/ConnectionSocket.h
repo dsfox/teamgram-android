@@ -60,9 +60,7 @@ private:
     int socketFd = -1;
     time_t timeout = 12;
     bool onConnectedSent = false;
-    // Whether the short first segment has gone out on this connection. See the
-    // send path: a large first packet on a fresh connection is dropped by the
-    // network between here and our server.
+    // ice9: whether the short first segment has gone out on this connection
     bool sentFirstSegment = false;
     int64_t lastEventTime = 0;
     EventObject *eventObject;

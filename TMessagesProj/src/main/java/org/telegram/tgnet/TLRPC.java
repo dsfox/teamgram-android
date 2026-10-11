@@ -28435,8 +28435,7 @@ public class TLRPC {
                     result = new TL_document_layer53();
                     break;
                 case 0x3cdb7d18:
-                    // Ours, and never on the wire: a document from an
-                    // encrypted conversation, kept with the key that opens it.
+                    // ice9: local only, an encrypted conversation's document with its key
                     result = new TLRPCMls.TL_mls_documentEncrypted();
                     break;
             }
@@ -32407,8 +32406,7 @@ public class TLRPC {
                     result = new TL_photo();
                     break;
                 case 0x3efaa4fa:
-                    // Ours, and never on the wire: a picture from an encrypted
-                    // conversation, kept as the document it really is.
+                    // ice9: local only, an encrypted conversation's picture kept as a document
                     result = new TLRPCMls.TL_mls_photoEncrypted();
                     break;
                 case 0x9288dd29:

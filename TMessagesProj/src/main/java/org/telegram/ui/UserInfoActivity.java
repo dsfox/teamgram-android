@@ -282,13 +282,7 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
         doneButton = actionBar.createMenu().addItemWithWidth(done_button, doneButtonDrawable, dp(56), LocaleController.getString(R.string.Done));
         checkDone(false);
 
-        // The guard inside setValue() is there so a late userInfoDidLoad does not
-        // overwrite what somebody has typed. It also blocked filling the fields
-        // when the views are built a second time - which is what a theme change
-        // now does (#88) - and the screen came back with an empty name where the
-        // account plainly has one. Cleared here rather than inside setValue():
-        // at this moment the fields are new and empty, so there is nothing to
-        // overwrite, and anywhere else the guard is still doing its job.
+        // ice9: fields built again after a theme change are filled despite the guard (#88)
         valueSet = false;
         setValue();
 
@@ -402,9 +396,6 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
         }
         items.add(UItem.asShadow(birthdayInfo));
 
-        // A personal channel to put on your profile, in a messenger with no
-        // channels in it (see Offered). The row offered to add one and the
-        // screen behind it offered to create one, and neither can happen.
         if (Offered.CHANNELS) {
             channelRow = items.size();
             if (channel == null) {
@@ -421,10 +412,6 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
         if (hadLocation) {
             items.add(SettingsActivity.SettingCell.Factory.of(BUTTON_LOCATION, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.filled_location, getString(R.string.EditProfileLocation)));
         }
-        // "Chat Automation - add a bot to answer messages on your behalf", on
-        // the first screen inside Settings, in a messenger with no bots: the
-        // server has no bots service and not one bots.* handler, so no account
-        // can be one (#105). See Offered.
         if (Offered.BOTS) {
             if (bots != null && !bots.isEmpty()) {
                 final StringBuilder value = new StringBuilder();

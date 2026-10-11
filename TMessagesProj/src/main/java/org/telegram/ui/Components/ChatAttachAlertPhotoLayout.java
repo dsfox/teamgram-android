@@ -254,12 +254,6 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     private boolean showAvatarConstructor;
 
     public void updateAvatarPicker() {
-    // An avatar built out of an emoji, and there are no emoji to build it from:
-    // the picker opens on a white field with a search box that can find nothing.
-    // It is filled from profileAvatarConstructorDefault, which comes from
-    // account.getDefaultProfilePhotoEmojis - an empty stub - plus the installed
-    // emoji packs, and there are none of those either (#20). The backgrounds
-    // work, but a background alone is not an avatar. See Offered.
         showAvatarConstructor = Offered.EMOJI_AVATAR
                 && parentAlert.avatarPicker != 0 && !parentAlert.isPhotoPicker;
     }

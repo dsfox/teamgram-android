@@ -2455,7 +2455,6 @@ public class ChatEditActivity extends BaseFragment implements ImageUpdater.Image
             }
             reactionsCell.setVisibility(ChatObject.canChangeChatInfo(currentChat) ? View.VISIBLE : View.GONE);
             updateReactionsCell(animated);
-            // See Offered: the link is not how anybody gets in.
             if (!Offered.GROUP_INVITE_LINKS || info == null || !ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_INVITE) || (!isPrivate && currentChat.creator)) {
                 inviteLinksCell.setVisibility(View.GONE);
             } else {

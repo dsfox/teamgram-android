@@ -945,13 +945,9 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
         final Utilities.Callback<TLRPC.User> onUser = user -> {
             if (user == null) {
                 phoneStatusView.setImageDrawable(null);
-                // The invitation used to read "Join me! Download it here:
-                // https://telegram.org/dl" - an invitation to this messenger
-                // that advertised another one (#87). The line above it named
-                // Telegram too, in English, whatever language the phone was in.
+                // ice9: our own not-on-ice9 line, no link to telegram.org (#87)
                 underPhoneTextView.setText(AndroidUtilities.replaceArrows(AndroidUtilities.replaceSingleTag("This phone number is not on ice9. **Invite >**", () -> {
-                    // The one composer: a code bound to the number, in the
-                    // body the phone's SMS app sends (#47, #164).
+                    // ice9: the one composer: an SMS with a code bound to the number (#47, #164)
                     InvitationComposer.invite(parentFragment, "+" + phone, null);
                 }), true, dp(8f / 3f), dp(1)));
             } else {

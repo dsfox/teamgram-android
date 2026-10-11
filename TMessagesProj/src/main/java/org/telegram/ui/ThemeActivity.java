@@ -658,7 +658,6 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
             textSizeHeaderRow = rowCount++;
             textSizeRow = rowCount++;
             backgroundRow = rowCount++;
-            // Name colours follow their switch (#24). See Offered.
             if (Offered.NAME_COLOURS) {
                 changeUserColor = rowCount++;
             }

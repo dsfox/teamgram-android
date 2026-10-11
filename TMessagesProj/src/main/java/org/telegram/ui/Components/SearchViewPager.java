@@ -1460,11 +1460,7 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
     }
 
     public void showDownloads() {
-        // Found rather than counted. This used to be `(expandedPublicPosts ? 1
-        // : 0) + 5`, which is the position downloads happens to sit at when
-        // every tab before it is present - and three of those tabs are now
-        // gone, so the number pointed at Links. A tab is asked for by what it
-        // is, the way getPositionForType already asks.
+        // ice9: the downloads tab found by type, since tabs before it are gone
         for (int i = 0; i < viewPagerAdapter.items.size(); i++) {
             if (viewPagerAdapter.items.get(i).type == ViewPagerAdapter.DOWNLOADS_TYPE) {
                 setPosition(i);
@@ -1546,13 +1542,7 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
                 return;
             }
 
-            // Four tabs across the top of search that can only ever come back
-            // empty (#91). Both kinds of Posts search messages in public
-            // channels - channels.searchPosts on the server, answered with
-            // ErrEnterpriseIsBlocked - and Channels is #16. Apps searches for
-            // mini apps, and there is no bots service on the server at all:
-            // not one bots.* handler, so no account can even be a bot (#105).
-            // See Offered.
+            // ice9: no Posts, Channels or Apps tabs, they can only be empty (#91, #16, #105)
             if (Offered.CHANNELS) {
                 if (expandedPublicPosts) {
                     items.add(new Item(PUBLIC_POSTS_TYPE));

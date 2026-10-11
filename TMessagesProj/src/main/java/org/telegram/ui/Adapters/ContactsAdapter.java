@@ -340,10 +340,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
             }
         } else {
             if (section == 0) {
-                // Without channels the compose rows are one shorter, and the
-                // shadow and header behind them move up with the count - the
-                // rows here are asked for by position, so the count and the
-                // positions have to change together or the list draws wrong.
+                // ice9: one compose row fewer without channels; the positions move with the count
                 if (isEmpty) {
                     return (includeSearch ? 1 : 0) + (Offered.CHANNELS ? 2 : 1);
                 }
@@ -351,8 +348,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 if (isAdmin) {
                     return (includeSearch ? 1 : 0) + 3;
                 } else if (needPhonebook) {
-                    // Invite Friends, Recent Calls, Invite by phone number (#164),
-                    // then the shadow and the header.
+                    // ice9: Invite Friends, Recent Calls, Invite by phone number, shadow, header (#164)
                     return (includeSearch ? 1 : 0) + 5;
                 } else {
                     return (includeSearch ? 1 : 0) + (Offered.CHANNELS ? 4 : 3);
@@ -573,8 +569,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                         } else if (position == 1) {
                             textCell.setTextAndValueAndColorfulIcon(getString(R.string.RecentCalls), "", false, R.drawable.settings_calls, 0xFF55CA47, 0xFF27B434, false);
                         } else if (position == 2) {
-                            // The number goes into the search field; this row only
-                            // puts the cursor there. No address book (#164).
+                            // ice9: puts the cursor in the search field for a number, no address book (#164)
                             textCell.setTextAndValueAndColorfulIcon(getString(R.string.InviteByPhone), "", false, R.drawable.msg_contact_add, 0xFF1CA5ED, 0xFF1488E1, false);
                         }
                     } else if (isAdmin) {

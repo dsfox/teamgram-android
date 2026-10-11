@@ -278,9 +278,7 @@ void setSeedAddress(JNIEnv *env, jclass c, jint instanceNum, jstring address, ji
     }
 }
 
-// Throws away the stored address list and seeds it again, then stops the app so
-// it comes back holding the new one. For the person who typed the address wrong
-// and whose client can therefore reach nothing that might correct it.
+// ice9: drops the stored address list, seeds it again and restarts the app
 void reseedFromAddress(JNIEnv *env, jclass c, jint instanceNum, jboolean restart) {
     ConnectionsManager::getInstance(instanceNum).reseedFromAddress(restart);
 }

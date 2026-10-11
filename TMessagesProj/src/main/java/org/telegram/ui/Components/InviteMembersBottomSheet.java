@@ -434,7 +434,6 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
         rowCount = 0;
         emptyRow = rowCount++;
         if (dialogsDelegate == null) {
-            // See Offered: the link is not how anybody gets in.
             if (Offered.GROUP_INVITE_LINKS && hasLink()) {
                 copyLinkRow = rowCount++;
             }

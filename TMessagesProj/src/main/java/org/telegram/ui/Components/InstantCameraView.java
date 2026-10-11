@@ -3368,12 +3368,7 @@ public class InstantCameraView extends FrameLayout implements NotificationCenter
         }
 
         private void didWriteData(File file, long availableSize, boolean last) {
-            // A conversation that encrypts cannot take a file that is still
-            // growing - the bytes are sealed once, over the whole of them.
-            // So the round video's head start is given up here: nothing is
-            // uploaded while the recording runs, and when the recording is
-            // finished the parked send is woken to read the whole file and
-            // upload it encrypted, the way an ordinary video goes since #80.
+            // ice9: in an encrypted chat the round video uploads whole, after recording (#80)
             if (org.telegram.messenger.MlsRuntime.getInstance(currentAccount)
                     .hasConversation(delegate.getDialogId())) {
                 if (last) {

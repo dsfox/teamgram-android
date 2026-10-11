@@ -529,11 +529,7 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
                         TL_account.resetAuthorization req = new TL_account.resetAuthorization();
                         req.hash = authorization.hash;
                         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-                            // The phone that just lost a device is this one, and
-                            // it is the one that has to take that device's leaf
-                            // out of every conversation. Left to its own rhythm
-                            // it would notice minutes later, and until then the
-                            // phone that was signed out goes on reading (#121).
+                            // ice9: publishes at once so the removed device leaves every conversation (#121)
                             MlsKeyPackages.getInstance(currentAccount).publish();
                             try {
                                 progressDialog.dismiss();
@@ -772,7 +768,6 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
         ttlRow = -1;
         ttlDivideRow = -1;
 
-        // No desktop to link: see Offered.
         if (currentType == 0 && getMessagesController().qrLoginCamera && Offered.DESKTOP) {
             qrCodeRow = rowCount++;
             qrCodeDividerRow = rowCount++;

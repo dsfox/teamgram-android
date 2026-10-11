@@ -760,11 +760,7 @@ public class MessagesController extends BaseController implements NotificationCe
     public boolean giftAttachMenuIcon;
     public boolean giftTextFieldIcon;
 
-    // Whether the server offers translation at all. TranslateController already
-    // refuses to translate (#27), but these two are asked one level up - by the
-    // Language screen, to decide whether to draw its "Translate Messages"
-    // section - so without them a switch was still offered for a button that
-    // can never appear (#91). See Offered.
+    // ice9: translation is off here too, so the Language screen hides its section (#27, #91)
     public boolean isTranslationsManualEnabled() {
         return Offered.TRANSLATION && !"disabled".equals(translationsManualEnabled);
     }
@@ -7725,9 +7721,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (old != null) {
                         res.full_chat.inviterId = old.inviterId;
                     }
-                    // The third copy of the same two lines, and the one that
-                    // matters most: this is the participant list straight from
-                    // the server, which is what a membership change ends with.
+                    // ice9: the server's participant list lands through putChatFull
                     putChatFull(res.full_chat);
 
                     applyDialogNotificationsSettings(-chatId, 0, res.full_chat.notify_settings);
@@ -9157,9 +9151,7 @@ public class MessagesController extends BaseController implements NotificationCe
             uploadingWallpaperInfo = null;
         }
         if (path != null) {
-            // ice9: the server keeps no wallpaper (#23). A photo of one's own
-            // stays the background on this phone, applied by the caller; sending
-            // it up only asked for account.uploadWallPaper, which is refused (#236).
+            // ice9: a wallpaper photo stays on this phone, the server keeps none (#23, #236)
             if (!Offered.CHAT_WALLPAPERS) {
                 return;
             }
@@ -9861,8 +9853,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public ArrayList<TLRPC.Dialog> getDialogs(int folderId) {
         ArrayList<TLRPC.Dialog> dialogs = dialogsByFolder.get(folderId);
-        // Said once per change: the list can be loaded and still not drawn, and
-        // from outside those look the same.
+        // ice9: logs the dialog count once per change
         int size = dialogs == null ? -1 : dialogs.size();
         if (folderId == 0 && size != lastReportedDialogs) {
             lastReportedDialogs = size;
@@ -10457,21 +10448,11 @@ public class MessagesController extends BaseController implements NotificationCe
         putChatFull(chatFull, false);
     }
 
-    /**
-     * @param fromCache whether this list was remembered here rather than just
-     *     handed over by the server. It decides whether the encrypted
-     *     conversation may take somebody out on the strength of it: a
-     *     remembered list can be missing people who joined while this device
-     *     was away (#40).
-     */
+    /** ice9: fromCache, a remembered list that may not take anyone out of the encrypted conversation (#40) */
     public void putChatFull(TLRPC.ChatFull chatFull, boolean fromCache) {
         fullChats.put(chatFull.id, chatFull);
         getTranslateController().updateDialogFull(-chatFull.id);
-        // Whoever is in the chat should be in its encrypted conversation, and
-        // this is where that becomes knowable: a participant list has just
-        // arrived. Hanging it on the places membership is *changed* does not
-        // work - a removal reaches a device by several routes, and hooking one
-        // of them leaves somebody reading a group they were thrown out of.
+        // ice9: each participant list that arrives reconciles the chat's encrypted conversation
         MlsRuntime.getInstance(currentAccount).reconcile(-chatFull.id, !fromCache);
     }
 
@@ -10485,9 +10466,7 @@ public class MessagesController extends BaseController implements NotificationCe
             }
             if (info != null) {
                 if (fullChats.get(chatId) == null) {
-                    // The same three lines putChatFull is, and now it is that
-                    // one call: two copies of where a participant list lands is
-                    // two places anything watching for it has to be hung.
+                    // ice9: through putChatFull, the one place a participant list lands
                     putChatFull(info, fromCache);
                 }
                 putUsers(usersArr, fromCache);
@@ -12142,19 +12121,7 @@ public class MessagesController extends BaseController implements NotificationCe
         for (int a = 0; a < size; a++) {
             final TLRPC.Message message = messagesRes.messages.get(a);
             message.dialog_id = dialogId;
-            // A message this device cannot open is not drawn at all (#40).
-            //
-            // It used to be drawn as a padlock, which is right for the one that
-            // overtook its welcome and is readable a second later. It is wrong
-            // for a group: somebody added to a conversation that has been going
-            // for a month cannot read a word of what came before - MLS gives no
-            // history by design - and a screen of a hundred padlocks is not an
-            // explanation, it is noise with the conversation hidden behind it.
-            //
-            // Hidden rather than deleted: the ciphertext stays in attachPath,
-            // so if the welcome does arrive the message opens and appears on
-            // the next pass. What is lost is nothing; what is gained is a chat
-            // that shows what can be read.
+            // ice9: a message this device cannot open is hidden, kept to open later (#40)
             if (MlsRuntime.LOCKED.equals(message.message)) {
                 continue;
             }
@@ -15870,19 +15837,12 @@ public class MessagesController extends BaseController implements NotificationCe
                     generateJoinMessage(chatId, true);
                 }
             }
-            // Asked for every kind of chat, not only channels. The list the
-            // server holds is the truth about who is in it, and it is what
-            // tells the encrypted conversation who to let in and who to put
-            // out - guessing it locally is how somebody goes on reading a
-            // group they were thrown out of (#40).
+            // ice9: the participant list is reloaded for every kind of chat, not only channels (#40)
             AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
             if (isChannel && inputUser instanceof TLRPC.TL_inputUserSelf) {
                 getMessagesStorage().updateDialogsWithDeletedMessages(-chatId, chatId, new ArrayList<>(), null);
             }
-            // Somebody joined a chat this device may be holding an encrypted
-            // conversation for. They have to be let into it as well, or they sit
-            // in a chat where nothing appears - every message hidden, and no
-            // sign of why (#40).
+            // ice9: a new member is added to the chat's encrypted conversation too (#40)
             MlsRuntime.getInstance(currentAccount).memberAdded(-chatId, user.id);
             if (onFinishRunnable != null) {
                 AndroidUtilities.runOnUIThread(onFinishRunnable);
@@ -15973,11 +15933,7 @@ public class MessagesController extends BaseController implements NotificationCe
             }
             TLRPC.Updates updates = (TLRPC.Updates) response;
             processUpdates(updates, false);
-            // Asked for every kind of chat, not only channels. The list the
-            // server holds is the truth about who is in it, and it is what
-            // tells the encrypted conversation who to let in and who to put
-            // out - guessing it locally is how somebody goes on reading a
-            // group they were thrown out of (#40).
+            // ice9: the participant list is reloaded for every kind of chat, not only channels (#40)
             AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
             if (whenDone != null) {
                 AndroidUtilities.runOnUIThread(whenDone);
@@ -16062,11 +16018,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 TLRPC.Updates updates = (TLRPC.Updates) response;
                 processUpdates(updates, false);
             }
-            // Asked for every kind of chat, not only channels. The list the
-            // server holds is the truth about who is in it, and it is what
-            // tells the encrypted conversation who to let in and who to put
-            // out - guessing it locally is how somebody goes on reading a
-            // group they were thrown out of (#40).
+            // ice9: the participant list is reloaded for every kind of chat, not only channels (#40)
             AndroidUtilities.runOnUIThread(() -> loadFullChat(chatId, 0, true), 1000);
         }, ConnectionsManager.RequestFlagInvokeAfter);
     }
@@ -18404,13 +18356,7 @@ public class MessagesController extends BaseController implements NotificationCe
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("need get diff TL_updatesTooLong");
             }
-            // The server has said "you may have missed something". One of the
-            // things this client may have missed is a phone of its own being
-            // signed out - and the leaf that phone holds in every conversation
-            // goes on reading until another of this person's phones takes it
-            // out. Only the count of devices says one has gone, and this client
-            // asks for it every four minutes; the server sends this the moment
-            // a session ends, so the four minutes stop being the answer (#121).
+            // ice9: updatesTooLong may mean a device of ours signed out; recount devices now (#121)
             MlsKeyPackages.getInstance(currentAccount).publish();
             needGetDiff = true;
         } else if (updates instanceof UserActionUpdatesSeq) {
@@ -23782,8 +23728,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean richEditorAvailable() {
-        // ice9: every way into the article editor asks here - the attachment
-        // menu, the message field's button, a paste (#181, #227). See Offered.
+        // ice9: every way into the article editor asks here (#181, #227)
         if (!Offered.ARTICLES) return false;
         if (BuildVars.DEBUG_VERSION) return true;
         return !TextUtils.equals("disabled", config.richMessagePosting.get());

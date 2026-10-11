@@ -476,9 +476,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         versionView.setPadding(dp(21), dp(10), dp(21), dp(10));
         versionView.setGravity(Gravity.CENTER);
         versionView.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL));
-        // ice9: no taps here open Telegram's developer menu, in any build - a
-        // hidden way in, the kind App Review rejected iOS for (#181, #227).
-        // The log is sent from the "Send app logs" row, in the open.
+        // ice9: no developer menu on taps here, in any build (#181, #227)
 
         navigationBar = new View(context);
 //        fragmentView.addView(navigationBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM | Gravity.FILL_HORIZONTAL));
@@ -694,12 +692,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(8, IconBackgroundColors.CYAN.top, IconBackgroundColors.CYAN.bottom, R.drawable.settings_devices, getString(R.string.SettingsDevices), getString(R.string.SettingsDevicesInfo)));
         items.add(SettingCell.Factory.of(9, IconBackgroundColors.ORANGE_DEEP.top, IconBackgroundColors.ORANGE_DEEP.bottom, R.drawable.settings_power, getString(R.string.SettingsPowerSaving), getString(R.string.SettingsPowerSavingInfo)));
         items.add(SettingCell.Factory.of(10, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_language, getString(R.string.SettingsLanguage), LocaleController.getCurrentLanguageName()));
-        // Which server this phone talks to, with the address on the row rather
-        // than one screen in: a promise about whose machine your messages are
-        // on is worth nothing if checking it takes a search. See ice9 #65.
+        // ice9: the server row, with the address on the row itself (#65)
         items.add(SettingCell.Factory.of(60, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9Server), ServerAddress.describe() + (ServerAddress.keyDer() != null ? " \u00b7 " + getString(R.string.Ice9ServerOwnKey) : "")));
-        // The one way to the app's log, in the open, for whoever helps with a
-        // problem (#227): Telegram's own ways to it were hidden gestures.
+        // ice9: the app log row, in the open (#227)
         items.add(SettingCell.Factory.of(61, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9SendLogs), getString(R.string.Ice9SendLogsInfo)));
 
         items.add(UItem.asShadow(null));
@@ -748,26 +743,12 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(19, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
         }
 
-        // ice9: Telegram's "Debug" rows are gone from every build (#227); the
-        // log is sent from the "Send app logs" row under Server.
+        // ice9: no Debug rows in any build; the log goes from "Send app logs" (#227)
 
         items.add(UItem.asCustomShadow(versionView));
     }
 
-    /**
-     * Changing which server this phone talks to (ice9 #65).
-     *
-     * The address is not typed here. Confirming puts the question back and
-     * signs out, and the address is typed on the screen that already knows how
-     * to check one before keeping it - checking it from inside a signed-in
-     * account would mean a second connection beside the account's own, and
-     * keeping an address that has not answered is the one outcome this whole
-     * feature exists to prevent.
-     *
-     * The sign-out is not a side effect somebody discovers afterwards: messages,
-     * chats and keys belong to the server that issued them and mean nothing on
-     * another, so the whole of what it costs is on the dialog before the button.
-     */
+    /** ice9: changing server asks, then signs out; the address is typed on sign-in (#65) */
     private void askAboutChangingServer() {
         if (getParentActivity() == null) {
             return;
@@ -776,10 +757,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         builder.setTitle(getString(R.string.Ice9ServerChangeTitle));
         builder.setMessage(getString(R.string.Ice9ServerChangeInfo));
         builder.setPositiveButton(getString(R.string.Ice9ServerChange), (dialog, which) -> {
-            // The question goes back first, so that whatever happens to the
-            // sign-out the next launch asks it. The address itself is left
-            // alone: a phone that gets no further goes on reaching the server
-            // it always did rather than silently landing on ours.
+            // ice9: the question goes back before the sign-out; the old address stays
             ServerAddress.askAgain();
             getMessagesController().performLogout(1);
         });

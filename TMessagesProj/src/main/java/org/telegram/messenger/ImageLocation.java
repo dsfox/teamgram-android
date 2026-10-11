@@ -132,12 +132,7 @@ public class ImageLocation {
         } else if (photoSize == null || photo == null) {
             return null;
         }
-        // A picture from an encrypted conversation is a document wearing a
-        // photograph's clothes, so that it is drawn in a bubble like every
-        // other picture. Fetching it is where the disguise has to come off: a
-        // photograph is fetched by a photo id the server would have to know,
-        // and it does not - it was never given a photograph, only a document
-        // full of noise.
+        // ice9: an encrypted conversation's picture is fetched as the document it is on the server
         if (photo instanceof org.telegram.tgnet.TLRPCMls.TL_mls_photoEncrypted) {
             return getForDocument(((org.telegram.tgnet.TLRPCMls.TL_mls_photoEncrypted) photo).document);
         }

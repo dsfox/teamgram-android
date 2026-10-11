@@ -424,7 +424,6 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
         int inviteViaLink;
         if (chatId != 0) {
             TLRPC.Chat chat = getMessagesController().getChat(chatId);
-            // See Offered: the link is not how anybody gets in.
             inviteViaLink = Offered.GROUP_INVITE_LINKS && ChatObject.canUserDoAdminAction(chat, ChatObject.ACTION_INVITE) ? 1 : 0;
         } else if (channelId != 0) {
             TLRPC.Chat chat = getMessagesController().getChat(channelId);
@@ -684,8 +683,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                         } else if (row == 1) {
                             presentFragment(new CallLogActivity());
                         } else if (row == 2) {
-                            // A window that asks for the number, rather than a search
-                            // to guess it goes into (#164).
+                            // ice9: a window that asks for the number (#164)
                             InvitationComposer.askForNumber(ContactsActivity.this, ContactsActivity.this::openOrInvite);
                         }
                     } else if (Offered.GROUP_INVITE_LINKS && inviteViaLink != 0) {
@@ -1027,10 +1025,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
         return false;
     }
 
-    /**
-     * A typed number: somebody on ice9 opens, anybody else is invited by SMS
-     * with a code. No address book (#164).
-     */
+    /** ice9: a typed number opens a user on ice9 or invites by SMS with a code (#164) */
     private void openOrInvite(String digits) {
         NumberLookup.resolve(currentAccount, digits, user -> {
             if (user != null) {

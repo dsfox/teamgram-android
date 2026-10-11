@@ -1045,16 +1045,7 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.AddMembersAlertNamesText, stringBuilder, chat == null ? "" : chat.title)));
             }
             CheckBoxCell[] cells = new CheckBoxCell[1];
-            // "Show the last 100 messages to the new member" is a promise this
-            // messenger cannot keep (#40). Those messages are encrypted to an
-            // epoch the new member was never in, and MLS gives no history by
-            // design - no key exists on any device that would open them, so the
-            // hundred messages would arrive and be hidden as unreadable.
-            //
-            // Offering the choice would be worse than not having it: the person
-            // ticking it believes they have shared something. The real answer
-            // to giving somebody history is a backup keyed by the recovery
-            // phrase (#43), which is a different thing entirely.
+            // ice9: no "show the last 100 messages" choice, MLS gives no history (#40, #43)
             if (false && !ChatObject.isChannel(chat)) {
                 LinearLayout linearLayout = new LinearLayout(getParentActivity());
                 linearLayout.setOrientation(LinearLayout.VERTICAL);
@@ -1358,17 +1349,11 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 count += contacts.size();
                 inviteByNumberRow = -1;
                 if (addToGroup && chatId != 0) {
-                    // "Invite by phone number": the picker's first row, where the
-                    // link used to be (#163), and it asks for the number (#164).
-                    // The row is where the first contact was: the contacts move
-                    // down one. It stood after them once, and with a single
-                    // contact the list read contacts.get(-1) and stopped the app.
+                    // ice9: "Invite by phone number" is the first row, contacts move down one (#163, #164)
                     inviteByNumberRow = usersStartRow;
                     usersStartRow++;
                     count++;
                 }
-                // The "invite via link" row: a member is added from contacts, and
-                // the link would admit anyone holding it. See Offered.
                 if (addToGroup && Offered.GROUP_INVITE_LINKS) {
                     if (chatId != 0) {
                         TLRPC.Chat chat = getMessagesController().getChat(chatId);
@@ -1573,8 +1558,7 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
             }
         }
 
-        /** The phone rows a typed number produced: a "section" marker, then a
-         *  number nobody on ice9 holds - or the contacts whose number starts so (#164). */
+        /** ice9: phone rows of a typed number: a section marker, then the number or contacts (#164) */
         int phoneCount() {
             return searching ? searchAdapterHelper.getPhoneSearch().size() : 0;
         }

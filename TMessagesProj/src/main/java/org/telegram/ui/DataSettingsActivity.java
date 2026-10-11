@@ -172,8 +172,7 @@ public class DataSettingsActivity extends BaseFragment {
         saveToGallerySectionRow = rowCount++;
         saveToGalleryPeerRow = rowCount++;
         saveToGalleryGroupsRow = rowCount++;
-        // Saving media out of channels, in a messenger with no channels (#16).
-        // -1 rather than unassigned: 0 is a real position. See Offered.
+        // ice9: no save-from-channels row (#16); -1 because 0 is a real position
         saveToGalleryChannelsRow = Offered.CHANNELS ? rowCount++ : -1;
         saveToGalleryDividerRow = rowCount++;
 
@@ -193,8 +192,7 @@ public class DataSettingsActivity extends BaseFragment {
         enableAllStreamInfoRow = rowCount++;
 
         enableCacheStreamRow = -1;//rowCount++;
-        // The call data rows come and go with calls (#14). -1 rather than
-        // unassigned: an int field starts at 0, a real position.
+        // ice9: call data rows only with calls (#14); -1 because 0 is a real position
         callsSectionRow = Offered.CALLS ? rowCount++ : -1;
         useLessDataForCallsRow = Offered.CALLS ? rowCount++ : -1;
 //        quickRepliesRow = rowCount++;

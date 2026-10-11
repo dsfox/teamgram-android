@@ -667,34 +667,17 @@ public class ConnectionsManager extends BaseController {
             packageId = "";
         }
 
-        // Before native_init, always: it decides what the first datacenter is
-        // seeded with, and the seeding happens inside it. Said even when nobody
-        // has chosen anything, so that the value and the default live in one
-        // place rather than two that can disagree.
+        // ice9: the server to seed from, always set before native_init
         native_setSeedAddress(currentAccount, ServerAddress.dialable(), ServerAddress.port(), ServerAddress.publicKeyPem());
 
-        // And look the name up again behind all this, so that a server moved to
-        // another machine is followed. It cannot happen before the seeding -
-        // that is a DNS lookup and this is the main thread - so what it finds is
-        // used from the next launch, or by the next reseed. The seed above is
-        // never wrong enough to matter in between: it is the address the name
-        // meant last time, and the client replaces its list from help.getConfig
-        // the moment it connects.
+        // ice9: resolves the server name again off the main thread, used from the next launch
         Utilities.globalQueue.postRunnable(ServerAddress::refreshDialable);
 
         native_init(currentAccount, version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, systemLangCode, configPath, logPath, regId, cFingerprint, installer, packageId, timezoneOffset, userId, userPremium, enablePushConnection, ApplicationLoader.isNetworkOnline(), ApplicationLoader.getCurrentNetworkType(), SharedConfig.measureDevicePerformanceClass());
         checkConnection();
     }
 
-    // Somebody named a different server. The stored address list is thrown
-    // away and seeded again from what they typed, because a client that cannot
-    // connect can receive nothing that would tell it where to go instead.
-    //
-    // restart is false while an address is only being tried out, before
-    // anything has been signed into: stopping the app under somebody who has
-    // typed one line would be its own bug. It is true once an account exists,
-    // because the caches are keyed to the old server's ids and the only safe
-    // thing to do with them is not to have them.
+    // ice9: reseeds the address list from the typed server; restart once an account exists
     public static void reseedFromAddress(boolean restart) {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             native_setSeedAddress(a, ServerAddress.dialable(), ServerAddress.port(), ServerAddress.publicKeyPem());

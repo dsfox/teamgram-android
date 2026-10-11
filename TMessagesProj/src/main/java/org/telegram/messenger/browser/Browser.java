@@ -220,19 +220,7 @@ public class Browser {
         return null;
     }
 
-    /**
-     * Whether this link opens without asking the person first.
-     *
-     * Ours only. It used to trust telegra.ph, graph.org, fragment.com and two
-     * paths on upstream's own domains: a link somebody sent you to any of those
-     * opened with no question asked, and not one of them is a domain we own or
-     * can vouch for (#102).
-     *
-     * The two upstream ones survived the sweep of #87 because they were written
-     * as regular expressions: a dot escaped for the regex is a backslash in the
-     * source, and a search for the plain host name walks straight past it. The
-     * gate in tests/test_link_domain_gate.py allows for that now.
-     */
+    /** ice9: only ice9's own links open without asking first (#87, #102) */
     public static boolean urlMustNotHaveConfirmation(String url) {
         return url.matches("^(https://)?(i\\.)?ice9\\.app(/.*|$)");
     }
@@ -717,9 +705,7 @@ public class Browser {
             return true;
         } else if ("tg2".equals(uri.getScheme())) {
             return true;
-        // A branch for one of upstream's own hosts stood here and treated it as
-        // ours. It is not, and a link to it is a link like any other (#87); the
-        // branch below answers for the host we actually own.
+        // ice9: no branch treating upstream's host as ours (#87)
         } else if ("i.ice9.app".equals(host)) {
             String path = uri.getPath();
             if (path != null && path.length() > 1) {

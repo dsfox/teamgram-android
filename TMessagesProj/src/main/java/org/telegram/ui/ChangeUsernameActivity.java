@@ -852,21 +852,13 @@ public class ChangeUsernameActivity extends BaseFragment {
             tme.setLines(1);
             tme.setPadding(0, 0, 0, 0);
             tme.setSingleLine(true);
-            // An at sign, not a domain. Upstream puts its own address in front
-            // of the box, and the address arrives from the server - so ours
-            // offered a name at somebody else's domain, one we do not own and
-            // whose links go nowhere near this app.
+            // ice9: an at sign instead of the server's domain in front of the box
             tme.setText("@");
             tme.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
             tme.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-            // The whole row height, with the line centred in it, rather than a
-            // box the height of one line. The at sign's tail is drawn below the
-            // descent, so in a box that ends at the descent its bottom left came
-            // out sliced flat - measured at one pixel from the edge. Upstream
-            // never saw it: "t.me/" has no glyph that reaches down there.
+            // ice9: full row height, centred, so the at sign's tail is not clipped
             tme.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
-            // Upstream's lift, kept so the sign sits where it did against the
-            // name beside it. It is the box that changed, not the position.
+            // ice9: upstream's lift, so the sign sits where it did beside the name
             tme.setTranslationY(-dp(3));
             content.addView(tme, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, 0, Gravity.CENTER_VERTICAL, 21, 0, 0, 0));
             content.addView(field, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 1, Gravity.CENTER_VERTICAL, 0, 15, 21, 15));

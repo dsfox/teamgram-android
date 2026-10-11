@@ -4437,7 +4437,6 @@ public class ChatActivity extends BaseFragment implements
             if (currentChat != null && !isTopic) {
                 viewAsTopics = headerItem.lazilyAddSubItem(view_as_topics, R.drawable.msg_topics, LocaleController.getString(R.string.TopicViewAsTopics));
             }
-            // Chat themes follow their switch (#23). See Offered.
             if (org.telegram.messenger.Offered.CHAT_THEMES && themeDelegate.isThemeChangeAvailable(true)) {
                 headerItem.lazilyAddSubItem(change_colors, R.drawable.msg_background, LocaleController.getString(R.string.SetWallpapers));
             }
@@ -25300,14 +25299,7 @@ public class ChatActivity extends BaseFragment implements
     private void processNewMessages(ArrayList<MessageObject> arr, final boolean animatedFromBottom) {
         FileLog.d("processNewMessages " + arr.size() + " messages");
 
-        // A message this device cannot open is not drawn at all (#40) - and
-        // not as it arrives either. A load from storage already hides one; the
-        // live path drew it as a padlock, because the commit that opens it is
-        // polled and the message is pushed, so after any change of membership
-        // the next message overtakes its commit and stood on the screen as a
-        // lock for the round trip it takes to fetch that commit. When it
-        // opens, processLoadedMessages hands it over as new (#109). A new
-        // list rather than the one given, which other listeners are reading.
+        // ice9: a message this device cannot open is not drawn as it arrives (#40, #109)
         ArrayList<MessageObject> readable = null;
         for (int a = 0, N = arr.size(); a < N; a++) {
             MessageObject messageObject = arr.get(a);
@@ -43275,9 +43267,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void showChatThemeBottomSheet() {
-        // Held here as well as at the menu: a theme service message or a
-        // wallpaper action can still lead in. Chat themes follow their
-        // switch (#23). See Offered.
+        // ice9: no chat theme sheet when themes are off, for the ways in besides the menu (#23)
         if (!org.telegram.messenger.Offered.CHAT_THEMES) {
             return;
         }

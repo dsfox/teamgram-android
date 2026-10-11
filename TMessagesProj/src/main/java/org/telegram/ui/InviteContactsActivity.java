@@ -255,12 +255,7 @@ public class InviteContactsActivity extends BaseFragment implements Notification
             addView(span);
         }
 
-        /**
-         * One at a time (#47): whatever was picked before goes at once, without
-         * its leaving animation. That animation only starts on the next measure
-         * pass, and addSpan cancels a not-yet-started set without ending it -
-         * which would leave the old chip drawn for good.
-         */
+        /** ice9: one chip at a time; the old one goes at once, without animation (#47) */
         public void replaceSpans(final GroupCreateSpan span) {
             for (int a = allSpans.size() - 1; a >= 0; a--) {
                 final GroupCreateSpan old = allSpans.get(a);
@@ -518,8 +513,7 @@ public class InviteContactsActivity extends BaseFragment implements Notification
             if (selectedSpan != null) {
                 spansContainer.removeSpan(selectedSpan);
             } else {
-                // One invitation is one person vouched for (#47): picking a
-                // second contact replaces the first rather than adding to it.
+                // ice9: a second contact replaces the first, one invitation per person (#47)
                 currentDeletingSpan = null;
                 GroupCreateSpan span = new GroupCreateSpan(getContext(), null, contact, true, resourceProvider);
                 spansContainer.replaceSpans(span);

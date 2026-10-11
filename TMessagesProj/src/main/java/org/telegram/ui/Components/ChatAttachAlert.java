@@ -6442,7 +6442,6 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
 
     private boolean shownAiButton;
     private void showAiButton(boolean show_) {
-        // ice9: nothing here answers the AI editor (#227). See Offered.
         final boolean show = Offered.AI_EDITOR && show_ && (baseFragment instanceof ChatActivity && !((ChatActivity) baseFragment).isSecretChat());
 
         if (shownAiButton == show) return;
@@ -6747,8 +6746,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                 if (pollsEnabled) {
                     pollButton = buttonsCount++;
                 }
-                // ice9: a checklist is a Premium feature, and where Premium cannot
-                // be bought the button only sells it (#227).
+                // ice9: no checklist button where Premium cannot be bought (#227)
                 if (todoEnabled && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {
                     todoButton = buttonsCount++;
                 }

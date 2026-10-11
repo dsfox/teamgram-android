@@ -89,13 +89,7 @@ public:
     void receivedCaptchaResult(int32_t requestTokensCount, int32_t* requestTokens, std::string token);
     void moveToDatacenter(uint32_t datacenterId);
 
-    // Which server this phone was told to talk to (ice9 #65). Said before
-    // init(), because it decides what the very first datacenter is seeded
-    // with; said again, with reseed, when somebody corrects a typo and there
-    // is no other way back to a client that cannot connect.
-    //
-    // publicKey is the PEM of a server of one's own (#244), empty for the key
-    // built into the app; the handshake then uses that key and no other.
+    // ice9: the server this phone was told to use and its PEM key, empty for the built-in one (#65, #244)
     void setSeedAddress(std::string address, uint32_t port, std::string publicKey);
     void reseedFromAddress(bool restart);
     std::string getSeedPublicKey();
@@ -159,8 +153,7 @@ private:
     int32_t pingTime;
     int64_t pingTimeMs;
     bool testBackend = false;
-    // Empty until somebody says otherwise, and then initDatacenters() seeds
-    // from this instead of the address compiled in.
+    // ice9: when set, initDatacenters() seeds from this instead of the compiled-in address
     std::string seedAddress = "";
     uint32_t seedPort = 0;
     std::string seedPublicKey = "";

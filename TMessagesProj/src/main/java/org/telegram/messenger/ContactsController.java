@@ -379,13 +379,7 @@ public class ContactsController extends BaseController {
         return LocaleController.formatString(R.string.InviteText2, link);
     }
 
-    /**
-     * ice9: the system account's type, the same string auth.xml and
-     * sync_contacts.xml declare (#205). Release keeps the type its
-     * installations already hold; other builds take their own application id,
-     * so debug and release can both sync contacts on one phone. Read straight
-     * from the resources: a language pack must never be able to change it.
-     */
+    /** ice9: the system account type auth.xml and sync_contacts.xml declare, per build (#205) */
     private static String systemAccountType() {
         return ApplicationLoader.applicationContext.getString(R.string.ice9_account_type);
     }

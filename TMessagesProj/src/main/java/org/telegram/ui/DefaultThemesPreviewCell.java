@@ -170,10 +170,7 @@ public class DefaultThemesPreviewCell extends LinearLayout {
             browseThemesCell = new TextCell(context);
             browseThemesCell.setTextAndIcon(LocaleController.getString(R.string.SettingsBrowseThemes), R.drawable.msg_colors, false);
 
-            // The browser it opens has nothing to show: account.getThemes is
-            // answered with an empty list (#23). Built either way, because the
-            // colours are reapplied to it from several places and a null there
-            // is a crash rather than a missing row. See Offered.
+            // ice9: no Browse Themes row (#23); the cell is built anyway, others recolour it
             if (Offered.CLOUD_THEMES) {
                 addView(browseThemesCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
             }
@@ -343,9 +340,7 @@ public class DefaultThemesPreviewCell extends LinearLayout {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 
-    // ice9: the themes arrive from account.getThemes, and on a first run that is
-    // after this cell was built; the screen redraws it on emojiPreviewThemesChanged,
-    // which lands here, so an empty row is filled here (#223).
+    // ice9: an empty themes row is filled once account.getThemes answers (#223)
     private void setThemesIfLoaded() {
         if (adapter.items != null && !adapter.items.isEmpty()) {
             return;

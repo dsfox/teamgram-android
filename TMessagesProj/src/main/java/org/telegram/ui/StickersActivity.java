@@ -356,9 +356,6 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
         final int emojiCount    = mediaDataController.getStickerSets(TYPE_EMOJIPACKS).size();
 
         if (currentType == TYPE_IMAGE) {
-            // Trending packs, from a server that has none to trend:
-            // messages.getFeaturedStickers is answered with an empty list (#20).
-            // See Offered.
             if (Offered.STICKER_PACKS) {
                 featuredRow = items.size();
                 items.add(UItem.asButton(ID_FEATURED, R.drawable.msg2_trending, getString(R.string.FeaturedStickers), featuredCount > 0 ? formatNumber(featuredCount, ',') : ""));
@@ -390,9 +387,6 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
         }
 
         if (currentType == TYPE_IMAGE) {
-            // The reaction a double tap sends follows Offered.REACTIONS (#18).
-            // The line under it points at a @stickers bot that does not exist
-            // here, over a list of packs that is always empty (#20).
             if (Offered.REACTIONS) {
                 reactionsDoubleTapRow = items.size();
                 items.add(UItem.asSettingsCell(ID_QUICK_REACTION, R.drawable.msg2_reactions2, getString(R.string.DoubleTapSetting)).onBind(this::setQuickReactionImage));

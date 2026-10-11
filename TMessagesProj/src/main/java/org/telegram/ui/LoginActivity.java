@@ -263,11 +263,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             VIEW_CODE_WORD = 16,
             VIEW_CODE_PHRASE = 17,
             VIEW_PAY = 18,
-            // Added at the end rather than in front of VIEW_PHONE_INPUT: the
-            // numbers are saved with the activity's state and compared in
-            // ranges, so renumbering the others would send a restored session
-            // to the wrong screen. Its place in the sequence is decided by
-            // which page is shown first, not by its number. See ice9 #65.
+            // ice9: added last, since saved state stores these numbers (#65)
             VIEW_SERVER = 19;
 
     public final static int COUNTRY_STATE_NOT_SET_OR_VALID = 0,
@@ -711,15 +707,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
 
         Bundle savedInstanceState = activityMode == MODE_LOGIN ? loadCurrentState(newAccount, currentAccount) : null;
-        // A sign-in saved from before does not get to answer the server
-        // question. That page was written down during a login against a server
-        // nobody has confirmed since, and restoring it walks straight past the
-        // screen that asks - which is what changing the server from Settings
-        // did: it put the question back, signed out, and the app came up on the
-        // phone number as if nothing had been asked. Thrown away here rather
-        // than worked around below, because a half-finished login against a
-        // server that may be about to change is not state worth keeping. See
-        // ice9 #65.
+        // ice9: a saved sign-in is dropped while the server question is open (#65)
         if (savedInstanceState != null && activityMode == MODE_LOGIN && !newAccount
                 && (!ServerAddress.wasChosen() || ServerAddress.hasPending())) {
             savedInstanceState = null;
@@ -820,12 +808,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         floatingButton.addView(floatingButtonIcon, LayoutHelper.createFrame(56, 56, Gravity.CENTER));
         floatingButton.addAdditionalView(floatingButtonIcon);
 
-        // Which server this app talks to, asked once and before anything else:
-        // a code cannot be sent for until it is answered. Not on a later
-        // sign-in, not when a second account is added and not when a phone
-        // number changes - those all happen against the server already chosen,
-        // and Settings is where it is changed afterwards. See ice9 #65.
-        // A server link opened before this screen existed asks it again (#244).
+        // ice9: the server question first, on a first sign-in or a pending server link (#65, #244)
         if (savedInstanceState == null && activityMode == MODE_LOGIN && !newAccount
                 && (!ServerAddress.wasChosen() || ServerAddress.hasPending())) {
             currentViewNum = VIEW_SERVER;
@@ -1137,8 +1120,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             return false;
         }
 
-        // The server question unanswered has nothing behind it: back from it
-        // must not walk past it onto the phone number.
+        // ice9: back from an unanswered server question does not go on to the phone number
         if (currentViewNum == VIEW_PHONE_INPUT || currentViewNum == VIEW_SERVER && !ServerAddress.wasChosen()
                 || activityMode == MODE_CHANGE_LOGIN_EMAIL && currentViewNum == VIEW_ADD_EMAIL) {
             if (invoked) {
@@ -1544,10 +1526,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         showEditDoneProgress(false, animated);
     }
 
-    /**
-     * A server link (#244) kept by LaunchActivity: the server screen takes it
-     * and fills its fields. Before the views exist, createView sees it waiting.
-     */
+    /** ice9: the server screen takes a server link kept by LaunchActivity (#244) */
     public void openServerLink() {
         if (views[VIEW_SERVER] == null || activityMode != MODE_LOGIN || newAccount) {
             return;
@@ -2088,8 +2067,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             titleView.setGravity(Gravity.CENTER);
             titleView.setLineSpacing(dp(2), 1.0f);
             addView(titleView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 0, 32, 0));
-            // ice9: five taps on the title opened Telegram's developer menu, with
-            // its log, before anybody signed in - gone from every build (#227).
+            // ice9: no developer menu on five taps of the title, in any build (#227)
 
             subtitleView = new LinkSpanDrawable.LinksTextView(context);
             subtitleView.setText(getString(activityMode == MODE_CHANGE_PHONE_NUMBER ? R.string.ChangePhoneHelp : R.string.StartText));
@@ -4459,8 +4437,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 if (currentType == AUTH_TYPE_MESSAGE) {
                     str = AndroidUtilities.replaceTags(LocaleController.formatString("SentAppCodeWithPhone", R.string.SentAppCodeWithPhone, LocaleController.addNbsp(number)));
                 } else if (currentType == AUTH_TYPE_SMS) {
-                    // Nobody on our side sent an SMS: the code came from whoever
-                    // invited this person, over their own carrier (#47).
+                    // ice9: the code came by SMS from the inviter, not from us (#47)
                     str = getString(R.string.InviteCodeHint);
                 } else if (currentType == AUTH_TYPE_FLASH_CALL) {
                     str = AndroidUtilities.replaceTags(LocaleController.formatString("SentCallCode", R.string.SentCallCode, LocaleController.addNbsp(number)));

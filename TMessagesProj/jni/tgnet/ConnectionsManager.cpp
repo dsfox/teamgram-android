@@ -1069,11 +1069,7 @@ TLObject *ConnectionsManager::TLdeserialize(TLObject *request, uint32_t bytes, N
                 object = apiRequest->deserializeResponse(data, bytes, instanceNum, error);
                 if (LOGS_ENABLED) DEBUG_D("api request constructor 0x%x, don't parse", constructor);
             } else {
-                // A reply the store does not know is about to be handed to the
-                // request that asked for it, and most of those parsers answer a
-                // constructor they did not expect with DEBUG_FATAL. Name the
-                // request and the size first, so the log says what was being
-                // parsed rather than only that parsing died.
+                // ice9: logs the request and size before a parser that may DEBUG_FATAL
                 if (LOGS_ENABLED) DEBUG_D("reply 0x%x to %s, %u bytes declared, %u in the buffer", constructor, typeid(*request).name(), bytes, data->limit() - position);
                 object = request->deserializeResponse(data, constructor, instanceNum, error);
                 if (object != nullptr && error) {
@@ -1830,20 +1826,13 @@ void ConnectionsManager::initDatacenters() {
     if (!testBackend) {
         if (datacenters.find(1) == datacenters.end()) {
             datacenter = new Datacenter(instanceNum, 1);
-            // Whichever server this phone was told to talk to, and only that
-            // one. The old address was kept here as a fallback while it was
-            // still bound; it is not any more, so the client rotated onto a
-            // dead endpoint, waited out an eight-second timeout and showed
-            // "Connecting" for as long as it took to come back round. A
-            // fallback that does not answer is worse than none, which is why
-            // there is one address here and never two.
+            // ice9: the one server this phone was told to use, no fallback address
             if (!seedAddress.empty()) {
                 datacenter->addAddressAndPort(seedAddress, seedPort, 0, "");
             } else {
                 datacenter->addAddressAndPort(DEFAULT_SERVER_ADDRESS, DEFAULT_SERVER_PORT, 0, "");
             }
-            // datacenter->addAddressAndPort("149.154.175.50", 443, 0, "");
-            // datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000a", 443, 1, "");
+            // ice9: no Telegram addresses
             datacenters[1] = datacenter;
         }
 
@@ -1880,20 +1869,13 @@ void ConnectionsManager::initDatacenters() {
     } else {
         if (datacenters.find(1) == datacenters.end()) {
             datacenter = new Datacenter(instanceNum, 1);
-            // Whichever server this phone was told to talk to, and only that
-            // one. The old address was kept here as a fallback while it was
-            // still bound; it is not any more, so the client rotated onto a
-            // dead endpoint, waited out an eight-second timeout and showed
-            // "Connecting" for as long as it took to come back round. A
-            // fallback that does not answer is worse than none, which is why
-            // there is one address here and never two.
+            // ice9: the one server this phone was told to use, no fallback address
             if (!seedAddress.empty()) {
                 datacenter->addAddressAndPort(seedAddress, seedPort, 0, "");
             } else {
                 datacenter->addAddressAndPort(DEFAULT_SERVER_ADDRESS, DEFAULT_SERVER_PORT, 0, "");
             }
-            // datacenter->addAddressAndPort("149.154.175.40", 443, 0, "");
-            // datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000e", 443, 1, "");
+            // ice9: no Telegram addresses
             datacenters[1] = datacenter;
         }
 
@@ -2080,9 +2062,7 @@ void ConnectionsManager::setUserId(int64_t userId) {
     });
 }
 
-// Said before init(), from the value the app has kept since somebody typed it.
-// Nothing is dialled here: initDatacenters() reads it when it seeds, and the
-// seed happens once, on a client that has no stored address list yet.
+// ice9: the typed server, set before init() and read by initDatacenters() when it seeds
 void ConnectionsManager::setSeedAddress(std::string address, uint32_t port, std::string publicKey) {
     std::lock_guard<std::mutex> lock(seedMutex);
     seedAddress = std::move(address);
@@ -2095,16 +2075,7 @@ std::string ConnectionsManager::getSeedPublicKey() {
     return seedPublicKey;
 }
 
-// The way back for somebody who typed the address wrong. Their client cannot
-// connect, so nothing can arrive to correct it; the stored list has to be
-// thrown away and seeded again from what they just typed. This is the shape
-// switchBackend has used for years for the same reason, minus the flag.
-//
-// restart is false while somebody is still signing in and only trying an
-// address out: killing the app under a person who has typed nothing yet would
-// be its own bug. It is true when the address changes under an account that
-// exists, because by then there are caches keyed to the old server and the
-// only safe thing to do with them is not to have them.
+// ice9: drops the stored address list and seeds it from the typed one; restart for a signed-in account
 void ConnectionsManager::reseedFromAddress(bool restart) {
     scheduleTask([&, restart] {
         currentDatacenterId = 1;
@@ -2850,17 +2821,7 @@ void ConnectionsManager::processRequestQueue(uint32_t connectionTypes, uint32_t 
                     }
                     allDc.push_back(datacenter.first);
                 }
-                // There may be nowhere else to go. Upstream is written for a
-                // network of several datacenters, and ours is one: the loop
-                // above skips the current one, so the list comes back empty,
-                // and `allDc[index % 0]` walked off it and killed the app on
-                // the networking thread. It happened on the first request that
-                // timed out - which is every sign-in on a slow connection - so
-                // the client returned to the welcome screen with nothing said.
-                //
-                // Staying put is the right answer as well as the safe one: a
-                // request that timed out against the only server there is will
-                // not do better against the same server named differently.
+                // ice9: with one datacenter there is no other to move a timed-out request to
                 if (allDc.empty()) {
                     if (LOGS_ENABLED) DEBUG_D("request timed out and there is no other datacenter to try");
                 } else {

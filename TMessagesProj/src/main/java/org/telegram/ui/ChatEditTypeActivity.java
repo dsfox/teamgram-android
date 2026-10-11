@@ -394,8 +394,7 @@ public class ChatEditTypeActivity extends BaseFragment implements NotificationCe
         linkContainer.addView(publicContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 36, 23, 7, 23, 0));
 
         editText = new EditTextBoldCursor(context);
-        // An at sign, not a domain - the same reason as on the username screen:
-        // the address in front of the box comes from the server and is not ours.
+        // ice9: an at sign instead of the server's domain in front of the box
         editText.setText("@");
         editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         editText.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));

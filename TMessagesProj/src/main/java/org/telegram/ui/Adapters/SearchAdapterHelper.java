@@ -344,12 +344,7 @@ public class SearchAdapterHelper {
         }
     }
 
-    /**
-     * A query that is a phone number: "+" and at least four digits, or seven
-     * or more digits with only spaces, dashes or brackets between them (#164).
-     * Read as an international number either way - there is no country to
-     * guess from a search field.
-     */
+    /** ice9: a phone number query: "+" and four digits, or seven digits with separators (#164) */
     public static boolean looksLikeANumber(String query) {
         if (query == null) {
             return false;

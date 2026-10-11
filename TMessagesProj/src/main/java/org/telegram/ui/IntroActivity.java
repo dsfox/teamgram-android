@@ -152,10 +152,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
 
     @Override
     public View createView(Context context) {
-        // The name, written out, rather than upstream's wordmark drawn over it -
-        // the same fault the chat list had: telegram_logo is a picture that says
-        // Teamgram, so the string underneath it could say anything and the first
-        // screen a new person sees still carried somebody else's name.
+        // ice9: the app name as text instead of upstream's wordmark picture
         titles[0] = LocaleController.getString(R.string.Page1Title);
 
 

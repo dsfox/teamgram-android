@@ -1044,24 +1044,7 @@ void ConnectionSocket::onEvent(uint32_t events) {
                             adjustWriteOp();
                         }
                     } else {
-                        // Measured between this network and our server, again on
-                        // 24 August with tools/first-packet-probe.py: a first
-                        // data packet of 400 bytes or more on a fresh connection
-                        // is dropped on the way - 588 bytes arrived 0 times in 6
-                        // - while the same payload sent after a 64-byte segment
-                        // arrived 8 times in 8, at 400, 588 and 1024. Plain
-                        // sockets with random bytes behave identically, so it is
-                        // the path and not the protocol.
-                        //
-                        // The client's first write once it has keys is 588-636
-                        // bytes, so it vanished, the response timeout fired, and
-                        // the cycle repeated: "Connecting..." for ever. iOS does
-                        // the same thing in MTTcpConnection.
-                        //
-                        // The rest is not lost by capping this: what is not sent
-                        // stays in outgoingByteStream, adjustWriteOp keeps
-                        // EPOLLOUT armed, and the next event carries it. That is
-                        // the same path a partial send already takes.
+                        // ice9: first segment of a connection at most 64 bytes, larger is dropped
                         if (!sentFirstSegment && remaining > 64) {
                             remaining = 64;
                         }

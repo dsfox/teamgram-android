@@ -603,9 +603,7 @@ public class VoIPHelper {
 
 		checkbox.setVisibility(View.GONE);
 		logsText.setVisibility(View.GONE);
-		// ice9: the call's log went as a message to Telegram's support account,
-		// which this server does not have - a way into nothing (#227). The app's
-		// log is sent from Settings > Send app logs.
+		// ice9: no call log to Telegram's support account; Settings sends the app log (#227)
 		includeLogs[0] = false;
 
 		final AlertDialog alert = new AlertDialog.Builder(context)

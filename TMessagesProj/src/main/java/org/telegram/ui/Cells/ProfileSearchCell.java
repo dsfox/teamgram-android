@@ -533,13 +533,9 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
             if (user != null && !TextUtils.isEmpty(user.phone)) {
                 nameString = PhoneFormat.getInstance().format("+" + user.phone);
             } else if (!TextUtils.isEmpty(publicName) && !UserObject.isDeleted(user)) {
-                // A living account that never set a name. Upstream calls anyone
-                // nameless a deleted account, because Telegram demands a name at
-                // sign-up and ours does not - so people who are perfectly alive
-                // were shown to the person searching for them as deleted.
+                // ice9: a nameless living account shows as @username, not as deleted
                 nameString = "@" + publicName;
-                // The line below this one is the username, and it would now say
-                // the same thing twice.
+                // ice9: no username line that repeats the name
                 if (subLabel != null && subLabel.toString().equals(nameString)) {
                     subLabel = null;
                 }

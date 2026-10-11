@@ -5483,10 +5483,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             info.setCheckable(true);
             info.setChecked(true);
         }
-        // The words a screen reader would say, put on the node itself as well.
-        // The event below fires only while a reader is driving; anything that
-        // reads the tree cold - accessibility tooling, the checks on two
-        // phones - was seeing a row with a name it could not ask for.
+        // ice9: the spoken description on the node too, for tools that read the tree cold
         info.setContentDescription(buildAccessibilityDescription());
     }
 

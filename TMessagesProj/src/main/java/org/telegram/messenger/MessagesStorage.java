@@ -11902,8 +11902,7 @@ public class MessagesStorage extends BaseController {
                     threadMessageId = MessageObject.getQuickReplyId(currentAccount, messages.get(0));
                 }
             }
-            // Before anything is stored: a copy that arrived unreadable must
-            // not replace words this device already holds (#143).
+            // ice9: an unreadable copy does not replace words this device holds (#143)
             if (mode == ChatActivity.MODE_DEFAULT) {
                 MlsStorage.of(this).keepWhatIsReadable(messages); // ice9: #143
             }
@@ -15864,8 +15863,7 @@ public class MessagesStorage extends BaseController {
                     MessageObject.getDialogId(message);
                 }
 
-                // Asked for again from the server, which hands back a ciphertext
-                // where this device is holding the words (#143).
+                // ice9: a refetched ciphertext does not replace words this device holds (#143)
                 ArrayList<TLRPC.Message> replaced = new ArrayList<>(1);
                 replaced.add(message);
                 MlsStorage.of(this).keepWhatIsReadable(replaced); // ice9: #143
@@ -16209,9 +16207,7 @@ public class MessagesStorage extends BaseController {
                     database.commitTransaction();
                     broadcastScheduledMessagesChange(dialogId);
                 } else {
-                    // A history load from the server carries the server's copy of
-                    // every message, including the ones this device wrote and can
-                    // never read back (#143).
+                    // ice9: a history load keeps the words of messages this device wrote (#143)
                     MlsStorage.of(this).keepWhatIsReadable(messages.messages); // ice9: #143
                     int mentionCountUpdate = Integer.MAX_VALUE;
                     boolean isTopic = threadMessageId != 0;
@@ -17347,8 +17343,7 @@ public class MessagesStorage extends BaseController {
         SQLiteCursor cursor = null;
         try {
             database.beginTransaction();
-            // The top message of every chat is written here too, and it is as
-            // often as not the last thing this device said (#143).
+            // ice9: each chat's top message keeps the words this device holds (#143)
             MlsStorage.of(this).keepWhatIsReadable(dialogs.messages); // ice9: #143
             LongSparseArray<TLRPC.Message> new_dialogMessage = new LongSparseArray<>(dialogs.messages.size());
             for (int a = 0; a < dialogs.messages.size(); a++) {

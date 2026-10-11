@@ -252,8 +252,6 @@ public class LiteModeSettingsActivity extends BaseFragment {
         items.add(Item.asSwitch(R.drawable.msg2_smile_status, LocaleController.getString(R.string.LiteOptionsEmoji), LiteMode.FLAGS_ANIMATED_EMOJI));
         if (expanded[1]) {
             items.add(Item.asCheckbox(LocaleController.getString(R.string.LiteOptionsAutoplayKeyboard), LiteMode.FLAG_ANIMATED_EMOJI_KEYBOARD));
-            // How lively the reactions menu should be: there is one only with
-            // reactions (#18). See Offered.
             if (Offered.REACTIONS) {
                 items.add(Item.asCheckbox(LocaleController.getString(R.string.LiteOptionsAutoplayReactions), LiteMode.FLAG_ANIMATED_EMOJI_REACTIONS));
             }
@@ -262,9 +260,7 @@ public class LiteModeSettingsActivity extends BaseFragment {
         items.add(Item.asSwitch(R.drawable.msg2_ask_question, LocaleController.getString(R.string.LiteOptionsChat), FLAGS_CHAT));
         if (expanded[2]) {
             items.add(Item.asCheckbox(LocaleController.getString("LiteOptionsBackground"), LiteMode.FLAG_CHAT_BACKGROUND));
-            // The side menu of a forum, in a client with no forums: there is
-            // not one channels.toggleForum handler on the server, so no group
-            // can become one (#16). See Offered.
+            // ice9: no forum side-menu option, forums need channels (#16)
             if (!AndroidUtilities.isTablet() && Offered.CHANNELS) {
                 items.add(Item.asCheckbox(LocaleController.getString("LiteOptionsTopics"), LiteMode.FLAG_CHAT_FORUM_TWOCOLUMN));
             }
@@ -280,9 +276,6 @@ public class LiteModeSettingsActivity extends BaseFragment {
                 items.add(Item.asCheckbox(LocaleController.getString("LiteOptionsThanos"), LiteMode.FLAG_CHAT_THANOS));
             }
         }
-        // Animations during a call, in a client that cannot place one. This
-        // used to read Offered.VIDEO_CHATS, which is #28 and a different
-        // thing; the switch it wants is the one for calls. See Offered.
         if (Offered.CALLS) {
             items.add(Item.asSwitch(R.drawable.msg2_call_earpiece, LocaleController.getString(R.string.LiteOptionsCalls), LiteMode.FLAG_CALLS_ANIMATIONS));
         }

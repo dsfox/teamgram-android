@@ -1111,13 +1111,7 @@ public class ReactionsContainerLayout extends FrameLayout implements Notificatio
 
     public void setMessage(MessageObject message, TLRPC.ChatFull chatFull, boolean animated) {
         this.messageObject = message;
-        // The strip of reactions follows Offered.REACTIONS (#18).
-        //
-        // Hidden here rather than by not building the strip at all: the menu
-        // that holds reply, forward, copy and delete uses this object sixteen
-        // times without ever checking whether it is there, and taking those
-        // down to hide a row of faces is a bad trade. Gone takes no space and
-        // nothing else changes. See Offered.
+        // ice9: no reactions strip; hidden, not unbuilt, as the message menu uses it (#18)
         if (!Offered.REACTIONS) {
             setVisibility(GONE);
             return;

@@ -104,8 +104,7 @@ public class LinkManager {
         if (host == null) return false;
         final Matcher prefixMatcher = LaunchActivity.PREFIX_T_ME_PATTERN.matcher(host.toLowerCase());
         final boolean isPrefix = prefixMatcher.find();
-        // Ours only. Upstream answered for its own three hosts here, which made
-        // a link to somebody else's messenger open inside this one (#87).
+        // ice9: our host only, not upstream's three (#87)
         if (!"i.ice9.app".equalsIgnoreCase(host) && !isPrefix)
             return false;
 

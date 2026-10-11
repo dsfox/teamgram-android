@@ -313,12 +313,9 @@ public class UserConfig extends BaseController {
             webappRatingLoadTime = preferences.getInt("webappRatingLoadTime", 0);
             loginTime = preferences.getInt("loginTime", currentAccount);
             syncContacts = preferences.getBoolean("syncContacts", true);
-            // Shown until the person hides it, as on iOS (#14): the calls tab is
-            // where a call is placed from, and the long-press that reveals it
-            // is not something anybody finds.
+            // ice9: the calls tab is shown until the person hides it, as on iOS (#14)
             showCallsTab = preferences.getBoolean("showCallsTab", true);
-            // An install from before calls existed saved false without anybody
-            // choosing it. Shown once; hidden again only by the person.
+            // ice9: an old install's unchosen false is overridden once
             if (!preferences.getBoolean("callsTabOffered", false)) {
                 showCallsTab = true;
             }

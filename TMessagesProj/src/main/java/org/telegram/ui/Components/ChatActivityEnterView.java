@@ -6044,7 +6044,6 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     private boolean shownAiButton;
     private void showAiButton(boolean show_) {
-        // ice9: nothing here answers the AI editor (#227). See Offered.
         final boolean show = Offered.AI_EDITOR && (show_ || richDraftActive) && parentFragment != null && !parentFragment.isSecretChat();
 
         if (shownAiButton == show) return;

@@ -447,15 +447,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 }
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
-                    // The server's copy, and the server cannot read it. Every
-                    // other route that turns a stored message into one on
-                    // screen opens it first - open() says so in its own words,
-                    // "the chat list shows the last one, search indexes it, a
-                    // notification quotes it" - and this route did not, so a
-                    // result came back reading mls1:AAEAAh... (#106).
-                    //
-                    // Safe from here: open() asks what it has already opened
-                    // before it asks MLS, and MLS opens a ciphertext once.
+                    // ice9: the server's copy is opened before it becomes a result (#106)
                     if (MlsRuntime.isCiphertext(message.message)) {
                         MlsRuntime.getInstance(currentAccount).open(message);
                     }
@@ -618,15 +610,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 }
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
-                    // The server's copy, and the server cannot read it. Every
-                    // other route that turns a stored message into one on
-                    // screen opens it first - open() says so in its own words,
-                    // "the chat list shows the last one, search indexes it, a
-                    // notification quotes it" - and this route did not, so a
-                    // result came back reading mls1:AAEAAh... (#106).
-                    //
-                    // Safe from here: open() asks what it has already opened
-                    // before it asks MLS, and MLS opens a ciphertext once.
+                    // ice9: the server's copy is opened before it becomes a result (#106)
                     if (MlsRuntime.isCiphertext(message.message)) {
                         MlsRuntime.getInstance(currentAccount).open(message);
                     }
@@ -690,12 +674,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                                 message.unread = value < message.id;
                             }
                         }
-                        // The server has said its piece. What it could not
-                        // read goes in front of it, because a hit the server
-                        // cannot give at all is the one worth showing first
-                        // (#108). Done here as well as when the local search
-                        // returns: the clear a few lines up throws away
-                        // anything that arrived before this reply.
+                        // ice9: hits found locally go in front of the server's (#108)
                         encryptedResults.mergeInto(searchResultMessages, lastMessagesSearchString);
                         searchWas = true;
                         messagesSearchEndReached = res.messages.size() != 20;
@@ -1325,12 +1304,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 });
             }, 300);
 
-            // A hashtag is looked for in public channels, and there are none:
-            // channels.searchPosts is answered with ErrEnterpriseIsBlocked
-            // (#16). Asked anyway, it costs a round trip for every hashtag
-            // typed and puts an error in the server log, and the reply can
-            // only be empty - so the tab it would fill is gone too. See
-            // Offered.
+            // ice9: no hashtag search, it looks only in public channels (#16)
             final String finalHashtag = Offered.CHANNELS ? hashtag : null;
 
             if (finalHashtag != null) {

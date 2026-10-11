@@ -211,8 +211,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 FileLog.e(e);
             }
             if (response instanceof TLRPC.TL_boolTrue) {
-                // The server signs every device out as part of this, so the
-                // answer sometimes never arrives; when it does, leave cleanly.
+                // ice9: logs out on success; the server signs every device out, may never answer
                 getMessagesController().performLogout(0);
             } else if (getParentActivity() != null) {
                 new AlertDialog.Builder(getParentActivity())
@@ -453,9 +452,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         }));
                     });
                 }
-                // Deleting the account on the spot, not in a year's time. Apple
-                // requires it and Google expects it; without it the only way out
-                // was an email to us, which the deletion page had to admit.
+                // ice9: the account is deleted at once, not in a year
                 builder.setNeutralButton(getString("DeleteAccountNow", R.string.DeleteAccountNow),
                         (dialog, which) -> confirmDeleteAccount());
                 builder.setNegativeButton(getString(R.string.Cancel), null);
@@ -761,20 +758,12 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         rowCount = 0;
 
         securitySectionRow = rowCount++;
-        // A cloud password protects nothing here: the server answers
-        // account.getPassword with "there is no password" and has no handler
-        // for setting one, so the screen would take a password and leave the
-        // account exactly as open as before. See Offered.
         passwordRow = Offered.CLOUD_PASSWORD ? rowCount++ : -1;
         autoDeleteMesages = rowCount++;
         passcodeRow = rowCount++;
         if (getMessagesController().config.settingsDisplayPasskeys.get() && Build.VERSION.SDK_INT >= 28 && BuildVars.SUPPORTS_PASSKEYS) {
             passkeysRow = rowCount++;
         }
-        // An address to receive login codes at, which no account can have here:
-        // account.sendVerifyEmailCode is not implemented. The condition already
-        // hid it, since login_email_pattern is never set - the switch says so
-        // out loud, and iOS hides it by the same one. See Offered.
         if (Offered.LOGIN_EMAIL && (currentPassword != null ? currentPassword.login_email_pattern != null : SharedConfig.hasEmailLogin)) {
             emailLoginRow = rowCount++;
         } else {
@@ -796,8 +785,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         lastSeenRow = rowCount++;
         profilePhotoRow = rowCount++;
         forwardsRow = rowCount++;
-        // Who may call you comes and goes with calls (#14). -1 rather than
-        // unassigned: an int field starts at 0, a real position.
+        // ice9: who may call you only with calls (#14); -1 because 0 is a real position
         callsRow = Offered.CALLS ? rowCount++ : -1;
         groupsDetailRow = -1;
         if (!getMessagesController().premiumFeaturesBlocked() || getUserConfig().isPremium()) {
@@ -808,9 +796,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             noncontactsRow = -1;
         }
         birthdayRow = rowCount++;
-        // Who may send you a gift, in a messenger where nobody can send one:
-        // the catalogue is answered with an empty list and nothing can be
-        // bought. See Offered.
         giftsRow = Offered.GIFTS ? rowCount++ : -1;
         bioRow = rowCount++;
         musicRow = rowCount++;
@@ -829,14 +814,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         advancedSectionRow = rowCount++;
         deleteAccountRow = rowCount++;
         deleteAccountDetailRow = rowCount++;
-        // A whole section headed "Bots and websites", in a messenger that has
-        // neither. Its four rows: a passport whose ten handlers are all
-        // blocked, biometry for bots that cannot exist (#105), the websites a
-        // bot logged you into, and "Clear Payment and Shipping Info" - which
-        // was the only one ever visible, because the other three appear only
-        // once there is something to show and there never is. There is no
-        // payments service on the server either, so payments.clearSavedInfo is
-        // refused and the row clears nothing. See Offered.
+        // ice9: no "Bots and websites" section: passport, bot biometry, sites, payments (#105)
         if (Offered.BOTS) {
             botsSectionRow = rowCount++;
             if (getUserConfig().hasSecureData) {
@@ -935,8 +913,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     }
 
     private void loadPasskeys() {
-        // Nothing on the other end and nothing to show: the row is hidden by the
-        // same switch, so this was a request whose answer went nowhere.
+        // ice9: no passkeys request when the passkeys row is off
         if (!BuildVars.SUPPORTS_PASSKEYS) {
             return;
         }

@@ -338,8 +338,7 @@ void Handshake::processHandshakeResponse(TLObject *message, int64_t messageId) {
     }
 }
 
-// The fingerprint MTProto gives a key: the low 64 bits of SHA-1 over n and e
-// as TL strings. 0 when the PEM does not parse.
+// ice9: MTProto fingerprint of a PEM key, 0 when it does not parse
 static uint64_t pinnedKeyFingerprint(const std::string &pem) {
     BIO *keyBio = BIO_new_mem_buf(pem.c_str(), (int) pem.length());
     RSA *rsaKey = PEM_read_bio_RSAPublicKey(keyBio, nullptr, nullptr, nullptr);
@@ -392,8 +391,7 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
                 }
             }
         } else if (!pinnedKey.empty()) {
-            // A server of one's own (#244): the key whose code was checked
-            // when its address was typed, and never the built-in one beside it.
+            // ice9: a server of one's own uses only its checked key, never the built-in one (#244)
             uint64_t pinnedFingerprint = pinnedKeyFingerprint(pinnedKey);
             for (uint32_t a = 0; a < count1; a++) {
                 if (pinnedFingerprint != 0 && (uint64_t) result->server_public_key_fingerprints[a] == pinnedFingerprint) {

@@ -1148,7 +1148,6 @@ public class PeerColorActivity extends BaseFragment implements NotificationCente
 //                previewRow = rowCount++;
 //            }
             colorPickerRow = rowCount++;
-            // The icon picker opens empty while colour icons are off (#222). See Offered.
             iconRow = Offered.COLOUR_ICONS ? rowCount++ : -1;
             infoRow = rowCount++;
             if ((type == PAGE_PROFILE) && (selectedColor >= 0 || selectedEmojiCollectible != null || selectedPeerCollectible != null)) {
@@ -1156,7 +1155,6 @@ public class PeerColorActivity extends BaseFragment implements NotificationCente
                 shadowRow = rowCount++;
             }
             final StarsController.GiftsList giftsList = type == PAGE_NAME ? giftsWithPeerColor : gifts;
-            // Gifts are not offered, and their section would load for ever. See Offered.
             if (Offered.GIFTS && (type == PAGE_PROFILE || type == PAGE_NAME) && giftsList != null) {
                 giftsTabsRow = rowCount++;
                 if (selectedTabGift == null) {
@@ -3615,9 +3613,7 @@ public class PeerColorActivity extends BaseFragment implements NotificationCente
 
     public static boolean eq(TLRPC.EmojiStatus emoji_status, TLRPC.TL_emojiStatusCollectible b) {
         if ((b != null) != (emoji_status instanceof TLRPC.TL_emojiStatusCollectible)) return false;
-        // ice9: no collectible on either side is the same, not a change: the
-        // unsaved-changes question came up on every way out of an untouched
-        // screen once colours were offered without Premium (#24).
+        // ice9: no collectible on either side counts as equal, not a change (#24)
         if (b == null) return true;
         final TLRPC.TL_emojiStatusCollectible a = (TLRPC.TL_emojiStatusCollectible) emoji_status;
         return a.collectible_id == b.collectible_id;

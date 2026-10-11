@@ -41,10 +41,7 @@ public class BuildVars {
     public static boolean IS_BILLING_UNAVAILABLE = false;
 
     // works only on official app ids, disable on your forks
-    // Off: the server has no passkeys, and the client asks for them at the login
-    // screen whether or not anything can answer. One switch covers the request,
-    // the settings row and the controller, so nothing is left offering a door
-    // that opens onto nothing.
+    // ice9: off, the server has no passkeys; covers the login request, settings row and controller
     public static boolean SUPPORTS_PASSKEYS = false;
 
     static {

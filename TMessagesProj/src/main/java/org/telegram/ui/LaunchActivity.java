@@ -263,11 +263,7 @@ import java.util.zip.ZipInputStream;
 public class LaunchActivity extends BasePermissionsActivity implements INavigationLayout.INavigationLayoutDelegate, NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, IPipActivity {
     public final static String EXTRA_FORCE_NOT_INTERNAL_APPS = "force_not_internal_apps";
     public final static String EXTRA_FORCE_REQUEST = "force_request";
-    // Upstream's web client gives every name a short host of its own - name.t.me.
-    // We have no web client and i.ice9.app has no subdomains, so this matches
-    // nothing; it names our host rather than somebody else's because a link to
-    // another messenger has no business being recognised here (#87). iOS emptied
-    // its equivalent list for the same reason.
+    // ice9: our host's subdomains, which match nothing; no other messenger's host (#87)
     public final static Pattern PREFIX_T_ME_PATTERN = Pattern.compile("^(?:http(?:s|)://|)([A-z0-9-]+?)\\.i\\.ice9\\.app");
 
     public static boolean isActive;
@@ -1510,12 +1506,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         return handleIntent(intent, isNew, restore, fromPassword, null, true, false);
     }
 
-    /**
-     * A link to a server of one's own (#244), from the installer's QR code or a
-     * message: it fills the server screen when signed out, and asks about
-     * changing servers when signed in - a sign-out here, as from Settings.
-     * Nothing is kept until the server screen's check passes.
-     */
+    /** ice9: a server link fills the server screen, or offers a server change when signed in (#244) */
     private void openServerLink(ServerCode.Link link) {
         if (!UserConfig.getInstance(currentAccount).isClientActivated()) {
             ServerAddress.putPending(link);
@@ -1567,8 +1558,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 return true;
             }
         }
-        // ice9: a link into what nothing on screen offers opens nothing (#227).
-        // Every reader of links starts here, so the one check does. See OfferedLinks.
+        // ice9: a link to what is switched off opens nothing; the one check for every link (#227)
         if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) && OfferedLinks.leadsToWhatIsOff(intent.getData())) {
             if (progress != null) {
                 progress.end();
@@ -1759,8 +1749,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     photoPathsArray.add(info);
                                 } else {
                                     String originalPath = uri.toString();
-                                    // ice9: a chat export is shared as the file it is - the
-                                    // server imports no history (#230). See Offered.
                                     if (Offered.CHAT_IMPORT && dialogId == 0 && originalPath != null) {
                                         if (BuildVars.LOGS_ENABLED) {
                                             FileLog.d("export path = " + originalPath);
@@ -7419,19 +7407,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 checkNavigationBarColor = (boolean) args[1];
             }
             checkSystemBarColors(args.length > 2 && (boolean) args[2], true, checkNavigationBarColor && !isNavigationBarColorFrozen && !actionBarLayout.isTransitionAnimationInProgress());
-            // And the screens themselves. A theme change repaints what a screen
-            // declares in getThemeDescriptions(), and a screen that declares
-            // nothing keeps what it was built with: the Account screen came back
-            // with its cards in the old colour and its fields in the new one, so
-            // a name read as dark text on a dark field (#88). Two of the screens
-            // it happens on answer no descriptions at all, and enumerating every
-            // colour of every cell is a list that is wrong the moment a cell is
-            // added.
-            //
-            // Rebuilt instead, which cannot miss one. This is the same call the
-            // app already makes when the interface reloads for other reasons,
-            // and it defers itself while a transition is running - the animated
-            // day/night switch included.
+            // ice9: every screen is rebuilt on a theme change, so none keeps old colours (#88)
             rebuildAllFragments(true);
         } else if (id == NotificationCenter.needSetDayNightTheme) {
             boolean instant = false;

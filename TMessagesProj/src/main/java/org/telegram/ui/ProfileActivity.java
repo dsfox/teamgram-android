@@ -3704,8 +3704,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
             @Override
             protected boolean isStoriesView() {
-                // One's own posts and their archive are stories, which are not
-                // offered (#224). See Offered.
+                // ice9: one's own posts are stories, off without them (#224)
                 return myProfile && Offered.STORIES;
             }
 
@@ -6061,7 +6060,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         } else {
             buttonsTranslationY = dp(72);
         }
-        // The buttons are "Add a post" and the archive's: stories (#224). See Offered.
         animatorBottomButtonVisibility.setValue(Offered.STORIES && buttonsTranslationY <= 0, true);
 
         final float factor = animatorBottomButtonVisibility.getFloatValue();
@@ -6108,8 +6106,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 VoIPHelper.startCall(user, isVideoCall, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
             }
         } else if (chatId != 0) {
-            // The entries that lead here are hidden, and this holds the door
-            // for any that were missed: a video chat cannot be started.
+            // ice9: no video chat start, for any entry still showing
             if (!Offered.VIDEO_CHATS) {
                 return;
             }
@@ -10831,8 +10828,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     reportDividerRow = rowCount++;
                 }
 
-                // One's own profile always had the row for its posts, which are
-                // stories (#224); without them it is the media, like anybody's.
+                // ice9: one's own posts row only with stories, else the media as anybody's (#224)
                 if (hasMedia || (user != null && user.bot && user.bot_can_edit && user.bot_has_main_app) || userInfo != null && userInfo.common_chats_count != 0 || (myProfile && Offered.STORIES)) {
                     sharedMediaRow = rowCount++;
                 } else if (lastSectionRow == -1 && needSendMessage) {
@@ -12123,7 +12119,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         otherItem.addSubItem(add_photo, R.drawable.msg_addphoto, LocaleController.getString(R.string.AddPhoto));
                     }
                 }
-                // Name colours follow their switch (#24). See Offered.
                 if (Offered.NAME_COLOURS) {
                     editColorItem = otherItem.addSubItem(edit_color, R.drawable.menu_profile_colors, LocaleController.getString(R.string.ProfileColorEdit));
                     updateEditColorIcon();
@@ -12197,7 +12192,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         otherItem.addSubItem(gift_premium, R.drawable.msg_gift_premium, LocaleController.getString(R.string.ProfileSendAGift));
                         giftAction = true;
                     }
-                    // ice9: Telegram's secret chats have no server here (#181). See Offered.
                     if (Offered.SECRET_CHATS) {
                         otherItem.addSubItem(start_secret_chat, R.drawable.msg_secret, LocaleController.getString(R.string.StartEncryptedChat));
                         otherItem.setSubItemShown(start_secret_chat, DialogObject.isEmpty(getMessagesController().isUserContactBlocked(userId)));
@@ -12234,9 +12228,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }
                 }
                 if (chatInfo != null) {
-                    // Video chats are not offered: nothing implements them on
-                    // the server, and the button would open a room nobody can
-                    // enter. See Offered.
                     if (Offered.VIDEO_CHATS && ChatObject.canManageCalls(chat) && chatInfo.call == null) {
                         otherItem.addSubItem(call_item, R.drawable.msg_voicechat, chat.megagroup && !chat.gigagroup ? LocaleController.getString(R.string.StartVoipChat) : LocaleController.getString(R.string.StartVoipChannel));
                         hasVoiceChatItem = true;
@@ -13586,9 +13577,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             }
                             if (ChatObject.isPublic(chat)) {
                                 containsQr = !myProfile;
-                                // The name, the way a person's own row above says
-                                // it, rather than a name hung off a domain that
-                                // is not ours.
+                                // ice9: @name instead of a name on a domain that is not ours
                                 text = "@" + username + (topicId != 0 ? "/" + topicId : "");
                                 value = LocaleController.getString(R.string.InviteLink);
                             } else {
@@ -16578,7 +16567,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
     private void updateEditColorIcon() {
         if (getContext() == null || editColorItem == null) return;
-        // Colours save without Premium here (#24). See Offered.
         if (getUserConfig().isPremium() || Offered.NAME_COLOURS) {
             editColorItem.setIcon(R.drawable.menu_profile_colors);
         } else {
