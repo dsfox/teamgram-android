@@ -17,7 +17,8 @@ import java.util.Map;
  * opened the cloud password screen, "calls" found six settings for calls
  * nobody could place. So an entry lives exactly as long as the row it points
  * at, and this table is where that is decided: upstream's list stays as
- * upstream writes it and passes through keep() once.
+ * upstream writes it, its links ours (tools/carry_links.py), and passes
+ * through keep() once.
  *
  * An entry is known by its link, or by its number when it has none - not by
  * the number alone, because upstream gives 122 to two entries, the calls' P2P
@@ -31,45 +32,45 @@ final class OfferedSearchItems {
     private static final Map<Integer, Boolean> BY_GUID = new HashMap<>();
 
     static {
-        link("tg://settings/notifications/channels", Offered.CHANNELS);
+        link("tg2://settings/notifications/channels", Offered.CHANNELS);
         guid(5, Offered.CALLS);
 
-        link("tg://settings/privacy/2sv", Offered.CLOUD_PASSWORD);
-        link("tg://settings/privacy/calls/p2p", Offered.CALLS);
-        link("tg://settings/privacy/calls", Offered.CALLS);
-        link("tg://settings/privacy/data-settings/clear-payment-info", Offered.BOTS);
-        link("tg://settings/privacy/active-websites", Offered.BOTS);
-        link("tg://settings/devices/link-desktop", Offered.DESKTOP);
+        link("tg2://settings/privacy/2sv", Offered.CLOUD_PASSWORD);
+        link("tg2://settings/privacy/calls/p2p", Offered.CALLS);
+        link("tg2://settings/privacy/calls", Offered.CALLS);
+        link("tg2://settings/privacy/data-settings/clear-payment-info", Offered.BOTS);
+        link("tg2://settings/privacy/active-websites", Offered.BOTS);
+        link("tg2://settings/devices/link-desktop", Offered.DESKTOP);
 
         guid(217, Offered.CALLS);
-        link("tg://settings/data/use-less-data", Offered.CALLS);
+        link("tg2://settings/data/use-less-data", Offered.CALLS);
         guid(219, Offered.CALLS);
-        link("tg://settings/data/proxy/use-for-calls", Offered.CALLS);
-        link("tg://settings/data/save-to-photos/channels", Offered.CHANNELS);
+        link("tg2://settings/data/proxy/use-for-calls", Offered.CALLS);
+        link("tg2://settings/data/save-to-photos/channels", Offered.CHANNELS);
 
         guid(319, Offered.CLOUD_THEMES);
-        link("tg://settings/appearance/themes/create", Offered.CLOUD_THEMES);
+        link("tg2://settings/appearance/themes/create", Offered.CLOUD_THEMES);
 
         guid(602, Offered.STICKER_PACKS);
         guid(603, Offered.STICKER_PACKS);
-        link("tg://settings/appearance/stickers-and-emoji/archived", Offered.STICKER_PACKS);
+        link("tg2://settings/appearance/stickers-and-emoji/archived", Offered.STICKER_PACKS);
         guid(605, Offered.STICKER_PACKS);
         guid(610, Offered.STICKER_PACKS);
-        link("tg://settings/appearance/stickers-and-emoji/emoji/quick-reaction", Offered.REACTIONS);
+        link("tg2://settings/appearance/stickers-and-emoji/emoji/quick-reaction", Offered.REACTIONS);
 
-        link("tg://settings/folders", Offered.FOLDERS);
-        link("tg://settings/folders/create", Offered.FOLDERS);
+        link("tg2://settings/folders", Offered.FOLDERS);
+        link("tg2://settings/folders/create", Offered.FOLDERS);
 
         guid(906, Offered.REACTIONS);
         guid(910, Offered.CHANNELS);
-        link("tg://settings/power-saving/call-animations", Offered.CALLS);
+        link("tg2://settings/power-saving/call-animations", Offered.CALLS);
 
-        link("tg://settings/language/show-button", Offered.TRANSLATION);
-        link("tg://settings/language/do-not-translate", Offered.TRANSLATION);
+        link("tg2://settings/language/show-button", Offered.TRANSLATION);
+        link("tg2://settings/language/do-not-translate", Offered.TRANSLATION);
 
-        link("tg://settings/ask-question", Offered.HELP);
-        link("tg://settings/faq", Offered.HELP);
-        link("tg://settings/privacy-policy", Offered.HELP);
+        link("tg2://settings/ask-question", Offered.HELP);
+        link("tg2://settings/faq", Offered.HELP);
+        link("tg2://settings/privacy-policy", Offered.HELP);
     }
 
     private OfferedSearchItems() {

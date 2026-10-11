@@ -330,7 +330,7 @@ public class SessionsActivity extends BaseFragment implements NotificationCenter
                         if (!TextUtils.isEmpty(username)) {
                             if (chatbots.length() > 0) chatbots.append(", ");
                             SpannableStringBuilder link = new SpannableStringBuilder("@").append(username);
-                            link.setSpan(new URLSpanNoUnderline("https://t.me/" + username), 0, link.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                            link.setSpan(new URLSpanNoUnderline("https://i.ice9.app/" + username), 0, link.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                             chatbots.append(link);
                         } else {
                             chatbots.append(UserObject.getUserName(botUser));

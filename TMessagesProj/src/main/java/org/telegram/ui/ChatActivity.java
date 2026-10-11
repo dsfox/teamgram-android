@@ -44595,7 +44595,7 @@ public class ChatActivity extends BaseFragment implements
             }
         });
 
-        if (inAppBrowser && !isHashtag && !isMail && !str.startsWith("tg:")) {
+        if (inAppBrowser && !isHashtag && !isMail && !str.startsWith("tg2:")) {
             options.add(R.drawable.outline_saved_24, getString(R.string.WebBookmarkAdd), () -> {
                 ArticleViewer.addBookmark(str, currentAccount, contentView, null, themeDelegate);
             });
@@ -44781,7 +44781,7 @@ public class ChatActivity extends BaseFragment implements
             });
             if (selling) {
                 options.add(R.drawable.outline_gram_24, getString(R.string.BuyUsernameOnFragment), () -> {
-                    Browser.openUrl(getContext(), "https://fragment.com/username/" + username);
+                    Browser.openUrl(getContext(), "https://ice9.app/username/" + username);
                 });
             }
             options.addGap();

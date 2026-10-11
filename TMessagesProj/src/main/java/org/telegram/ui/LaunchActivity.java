@@ -2771,19 +2771,19 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                         }
                                         String purpose = data.getQueryParameter("purpose");
                                         StarsController.getInstance(intentAccount[0]).showStarsTopup(this, balance, purpose);
-                                    } else if (url.startsWith("tg:ton") || url.startsWith("tg://ton")) {
+                                    } else if (url.startsWith("tg2:ton") || url.startsWith("tg2://ton")) {
                                         if (progress != null) {
                                             progress.end();
                                         }
                                         presentFragment(new TONIntroActivity());
                                         return pushOpened;
-                                    } else if (url.startsWith("tg:stars") || url.startsWith("tg://stars")) {
+                                    } else if (url.startsWith("tg2:stars") || url.startsWith("tg2://stars")) {
                                         if (progress != null) {
                                             progress.end();
                                         }
                                         presentFragment(new StarsIntroActivity());
                                         return pushOpened;
-                                    } else if (url.startsWith("tg:send_gift") || url.startsWith("tg://send_gift")) {
+                                    } else if (url.startsWith("tg2:send_gift") || url.startsWith("tg2://send_gift")) {
                                         final String to = data.getQueryParameter("to");
                                         if (TextUtils.isEmpty(to)) {
                                             if (progress != null) {
