@@ -239,6 +239,20 @@ public final class Offered {
      */
     public static final boolean DESKTOP = false;
 
+    /**
+     * Help: "Ask a Question", the FAQ, "Telegram Features" and the privacy
+     * policy - the rows in Settings, the older settings screen in
+     * ProfileActivity and their settings-search entries (#197).
+     *
+     * Three of them lead to Telegram: a support chat that is not ours, their
+     * FAQ and their features page. The policy pointed at ice9.app/privacy but
+     * opened telegram.org anyway, because the language pack our own server
+     * serves carried a PrivacyPolicyUrl of its own and a pack overrides what
+     * the app was compiled with. Hidden until there is a page of ours worth
+     * opening from inside the app; the stores are given the address directly.
+     */
+    public static final boolean HELP = false;
+
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which
     // an encrypted upload cannot take. It is offered again since #80 - the
