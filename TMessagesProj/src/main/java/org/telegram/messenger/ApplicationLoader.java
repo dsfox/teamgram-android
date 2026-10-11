@@ -345,6 +345,7 @@ public class ApplicationLoader extends Application {
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
+        Ice9Updates.start(applicationContext); // ice9: the site's build updates itself
     }
 
     public static void startPushService() {
