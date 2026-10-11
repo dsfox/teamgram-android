@@ -2650,27 +2650,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void loadAppConfig() {
         loadAppConfig(true);
-        // Publishing a key package is a promise: encrypt to me, I can read it.
-        // It was left out while this client had the crypto and no receive path,
-        // because a false promise is worse than silence - an iPhone would
-        // encrypt to a device that could never read a single message, and the
-        // person here would see `mls1:...` for ever instead of merely an
-        // unprotected message.
-        //
-        // Both halves are wired now, so the promise is one this client keeps.
-        MlsKeyPackages.getInstance(currentAccount).publish();
-
-        // And the invitations waiting on the server, which are what let this
-        // device into conversations somebody else began. Asked for at start
-        // rather than only when a message arrives, because a welcome sent while
-        // this phone was off has nothing to arrive behind.
-        MlsRuntime.getInstance(currentAccount).collectWelcomes();
-        MlsRuntime.getInstance(currentAccount).collectCommits();
-
-        // And the six words that get this account back when the phone is gone.
-        // Made on the device: the server is told a one-way derivation of them
-        // and never the words themselves.
-        MlsRecoveryPhrase.getInstance(currentAccount).ensure();
+        MlsReceive.getInstance(currentAccount).onAppConfig(); // ice9: keys, welcomes, commits, recovery phrase
     }
 
     public void loadAppConfig(boolean force) {
@@ -11993,109 +11973,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         Timer.Task t1 = Timer.start(loaderLogger, "processLoadedMessages");
 
-        // History goes through the same door as an update does. Without this a
-        // message read after a restart, or re-read once the welcome that lets
-        // this device in has arrived, stays a ciphertext for ever - and it is
-        // exactly the re-read that matters, because a message and its welcome
-        // travel by different routes and the message often wins.
-        MlsRuntime mls = MlsRuntime.getInstance(currentAccount);
-        boolean anyLocked = false;
-        ArrayList<TLRPC.Message> opened = null;
-        for (int i = 0; i < messagesRes.messages.size(); i++) {
-            TLRPC.Message message = messagesRes.messages.get(i);
-            if (!MlsRuntime.isCiphertext(message.message)) {
-                continue;
-            }
-            if (mls.open(message)) {
-                if (opened == null) {
-                    opened = new ArrayList<>();
-                }
-                opened.add(message);
-            } else {
-                anyLocked = true;
-            }
-        }
-        if (opened != null) {
-            // Written back at once, and whether this came from the cache or the
-            // server. MLS opens a message exactly once: the key moves on as it
-            // is used, and the same ciphertext handed back a second time is
-            // refused with UnableToDecrypt. So the plaintext has to be kept the
-            // moment it exists.
-            //
-            // It was kept only for loads from the server at first, and the one
-            // successful reading happened during a load from the cache - so the
-            // words were shown once, thrown away, and the message was then
-            // unreadable for good. That is the whole cost of getting this wrong:
-            // not a slow path, a lost message.
-            FileLog.d("mls: opened " + opened.size() + " stored messages in " + dialogId
-                    + (isCache ? " from the cache" : " from the server"));
-            getMessagesStorage().putMessages(opened, true, true, false, 0, 0, 0);
-
-            // And to the chat somebody is looking at. The load that opened
-            // these was asked for by the repair under a guid of its own, so
-            // nothing was listening for the answer: they went into storage and
-            // the screen went on showing what it had (#109).
-            //
-            // Replaced rather than added, and the difference is the whole fix.
-            // A message that arrives and will not open is drawn straight away,
-            // as a lock - only a load from storage hides those. So the chat
-            // already holds it, by that id, and handing it over as new is
-            // dropped on sight by the check that stops a message appearing
-            // twice. What it needs is the same id with words in it.
-            final ArrayList<TLRPC.Message> justOpened = new ArrayList<>(opened);
-            AndroidUtilities.runOnUIThread(() -> {
-                ArrayList<MessageObject> drawable = new ArrayList<>(justOpened.size());
-                for (int i = 0; i < justOpened.size(); i++) {
-                    drawable.add(new MessageObject(currentAccount, justOpened.get(i), true, true));
-                }
-                FileLog.d("mls: handing " + drawable.size() + " opened messages to "
-                        + dialogId + " to be drawn");
-                getNotificationCenter().postNotificationName(
-                        NotificationCenter.replaceMessagesObjects, dialogId, drawable);
-                // And as new as well, for the ones the chat never had - a
-                // message hidden by a load from storage was never given to it,
-                // and replacing something that is not there does nothing.
-                getNotificationCenter().postNotificationName(
-                        NotificationCenter.didReceiveNewMessages, dialogId, drawable, false, 0);
-            });
-
-            // And the copy the chat list is holding in memory, which is a third
-            // one and the one a person actually looks at. Storage alone leaves
-            // the row saying mls1:... until something else happens to rebuild
-            // it, which may be never.
-            ArrayList<MessageObject> shownInList = dialogMessage.get(dialogId);
-            if (shownInList != null) {
-                boolean changed = false;
-                for (int i = 0; i < shownInList.size(); i++) {
-                    MessageObject shown = shownInList.get(i);
-                    if (shown == null) {
-                        continue;
-                    }
-                    for (int j = 0; j < opened.size(); j++) {
-                        if (opened.get(j).id == shown.getId()) {
-                            shown.messageOwner.message = opened.get(j).message;
-                            shown.messageOwner.entities = opened.get(j).entities;
-                            shown.generateCaption();
-                            shown.setType();
-                            changed = true;
-                        }
-                    }
-                }
-                if (changed) {
-                    AndroidUtilities.runOnUIThread(() ->
-                            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload));
-                }
-            }
-        }
-        if (anyLocked) {
-            // Something here cannot be opened yet, and what would open it - an
-            // invitation, or a membership change this device has not applied -
-            // may be waiting on the server. Named by this chat, because a
-            // conversation just joined is written down against whoever sent the
-            // invitation, and reading again by that name reloads the wrong
-            // dialog while this one stays locked (#40).
-            mls.catchUp(dialogId);
-        }
+        MlsReceive.getInstance(currentAccount).openLoaded(messagesRes, dialogId, isCache); // ice9: history opens like an update
 
         long startProcessTime = SystemClock.elapsedRealtime();
         boolean createDialog = false;
@@ -13556,31 +13434,7 @@ public class MessagesController extends BaseController implements NotificationCe
             ArrayList<MessageObject> newMessages = new ArrayList<>();
             for (int a = 0; a < dialogsRes.messages.size(); a++) {
                 TLRPC.Message message = dialogsRes.messages.get(a);
-                // The dialog list arrives by its own route and used to miss this
-                // entirely, so the row read `mls1:AAEAAh...` while the chat
-                // behind it read a lock: history goes through
-                // processLoadedMessages, which does open, and the top message of
-                // a dialog does not. It shows on a device signing in to an
-                // account that already has conversations, because the dialogs
-                // land before any history does (#86).
-                //
-                // Safe to call from here as well: open() asks what it has
-                // already opened before it asks MLS, and MLS opens a ciphertext
-                // exactly once.
-                if (MlsRuntime.isCiphertext(message.message)) {
-                    boolean read = MlsRuntime.getInstance(currentAccount).open(message);
-                    // Said out loud, because it cannot be checked any other way.
-                    // The row is drawn on a canvas, so no dump can see it, and
-                    // the ciphertext of a message this device sent is kept on
-                    // purpose - so the bytes in the database cannot tell the two
-                    // apart either. The log can: this line means a top message
-                    // arrived as a ciphertext and did not stay one.
-                    // Without the dialog id: it is not filled in yet on this
-                    // path, so printing it said "in 0" for every message and
-                    // would have sent somebody looking for dialog zero.
-                    FileLog.d("mls: dialog top message " + (read ? "opened" : "locked")
-                            + ", id " + message.id);
-                }
+                MlsReceive.getInstance(currentAccount).openTop(message); // ice9 #86
                 if (message.date == 0) {
                     continue;
                 }
@@ -14276,16 +14130,7 @@ public class MessagesController extends BaseController implements NotificationCe
             ArrayList<MessageObject> newMessages = new ArrayList<>();
             for (int a = 0; a < dialogsRes.messages.size(); a++) {
                 TLRPC.Message message = dialogsRes.messages.get(a);
-                // The other route the dialog list comes in by, and it needs the
-                // same thing for the same reason - see processLoadedDialogs.
-                if (MlsRuntime.isCiphertext(message.message)) {
-                    boolean read = MlsRuntime.getInstance(currentAccount).open(message);
-                    // Without the dialog id: it is not filled in yet on this
-                    // path, so printing it said "in 0" for every message and
-                    // would have sent somebody looking for dialog zero.
-                    FileLog.d("mls: dialog top message " + (read ? "opened" : "locked")
-                            + ", id " + message.id);
-                }
+                MlsReceive.getInstance(currentAccount).openTop(message); // ice9 #86
                 if (promoDialogId == 0 || promoDialogId != message.dialog_id) {
                     if (message.peer_id != null && message.peer_id.channel_id != 0) {
                         TLRPC.Chat chat = chatsDict.get(message.peer_id.channel_id);
@@ -17220,9 +17065,125 @@ public class MessagesController extends BaseController implements NotificationCe
                             }
                         }
 
-                        Utilities.stageQueue.postRunnable(() -> {
-                            applyDifferenceInOrder(res, usersDict, chatsDict);
-                        });
+                        Utilities.stageQueue.postRunnable(() -> MlsReceive.getInstance(currentAccount).whenDifferenceOpens(res, () -> { // ice9 #157
+                            if (!res.new_messages.isEmpty() || !res.new_encrypted_messages.isEmpty()) {
+                                LongSparseArray<ArrayList<MessageObject>> messages = new LongSparseArray<>();
+                                for (int b = 0; b < res.new_encrypted_messages.size(); b++) {
+                                    TLRPC.EncryptedMessage encryptedMessage = res.new_encrypted_messages.get(b);
+                                    ArrayList<TLRPC.Message> decryptedMessages = getSecretChatHelper().decryptMessage(encryptedMessage);
+                                    if (decryptedMessages != null && !decryptedMessages.isEmpty()) {
+                                        res.new_messages.addAll(decryptedMessages);
+                                    }
+                                }
+
+                                ImageLoader.saveMessagesThumbs(res.new_messages);
+
+                                ArrayList<MessageObject> pushMessages = new ArrayList<>();
+                                long clientUserId = getUserConfig().getClientUserId();
+                                for (int a = 0; a < res.new_messages.size(); a++) {
+                                    TLRPC.Message message = res.new_messages.get(a);
+                                    if (message instanceof TLRPC.TL_messageEmpty) {
+                                        continue;
+                                    }
+                                    MessageObject.getDialogId(message);
+
+                                    if (!DialogObject.isEncryptedDialog(message.dialog_id)) {
+                                        if (message.action instanceof TLRPC.TL_messageActionChatDeleteUser) {
+                                            TLRPC.User user = usersDict.get(message.action.user_id);
+                                            if (user != null && user.bot) {
+                                                message.reply_markup = new TLRPC.TL_replyKeyboardHide();
+                                                message.flags |= 64;
+                                            }
+                                        }
+                                        if (message.action instanceof TLRPC.TL_messageActionChatMigrateTo || message.action instanceof TLRPC.TL_messageActionChannelCreate) {
+                                            message.unread = false;
+                                            message.media_unread = false;
+                                        } else {
+                                            ConcurrentHashMap<Long, Integer> read_max = message.out ? dialogs_read_outbox_max : dialogs_read_inbox_max;
+                                            Integer value = read_max.get(message.dialog_id);
+                                            if (value == null) {
+                                                value = getMessagesStorage().getDialogReadMax(message.out, message.dialog_id);
+                                                read_max.put(message.dialog_id, value);
+                                            }
+                                            message.unread = value < message.id;
+                                        }
+                                    }
+                                    if (message.dialog_id == clientUserId) {
+                                        message.unread = false;
+                                        message.media_unread = false;
+                                        message.out = true;
+                                    }
+
+                                    boolean isDialogCreated = createdDialogIds.contains(message.dialog_id);
+                                    MessageObject obj = new MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated);
+
+                                    if ((!obj.isOut() || obj.messageOwner.from_scheduled) && obj.isUnread()) {
+                                        pushMessages.add(obj);
+                                    }
+
+                                    ArrayList<MessageObject> arr = messages.get(message.dialog_id);
+                                    if (arr == null) {
+                                        arr = new ArrayList<>();
+                                        messages.put(message.dialog_id, arr);
+                                    }
+                                    arr.add(obj);
+                                }
+
+                                getMessagesStorage().getStorageQueue().postRunnable(() -> {
+                                    if (!pushMessages.isEmpty()) {
+                                        AndroidUtilities.runOnUIThread(() -> getNotificationsController().processNewMessages(pushMessages, !(res instanceof TLRPC.TL_updates_differenceSlice), false, null));
+                                    }
+                                    getMessagesStorage().putMessages(res.new_messages, true, false, false, getDownloadController().getAutodownloadMask(), 0, 0);
+
+                                    for (int a = 0; a < messages.size(); a++) {
+                                        long dialogId = messages.keyAt(a);
+                                        ArrayList<MessageObject> arr = messages.valueAt(a);
+                                        getMediaDataController().loadReplyMessagesForMessages(arr, dialogId, 0, 0, () -> {
+                                            AndroidUtilities.runOnUIThread(() -> {
+                                                updateInterfaceWithMessages(dialogId, arr, 0);
+                                                getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+                                            });
+                                        }, 0, null);
+                                    }
+                                });
+
+                                getSecretChatHelper().processPendingEncMessages();
+                            }
+
+                            if (!res.other_updates.isEmpty()) {
+                                processUpdateArray(res.other_updates, res.users, res.chats, true, 0);
+                            }
+
+                            if (res instanceof TLRPC.TL_updates_difference) {
+                                gettingDifference = false;
+                                getMessagesStorage().setLastSeqValue(res.state.seq);
+                                getMessagesStorage().setLastDateValue(res.state.date);
+                                getMessagesStorage().setLastPtsValue(res.state.pts);
+                                getMessagesStorage().setLastQtsValue(res.state.qts);
+                                FileLog.d("received difference: isUpdating = false");
+                                getConnectionsManager().setIsUpdating(false);
+                                for (int a = 0; a < 3; a++) {
+                                    processUpdatesQueue(a, 1);
+                                }
+                            } else if (res instanceof TLRPC.TL_updates_differenceSlice) {
+                                getMessagesStorage().setLastDateValue(res.intermediate_state.date);
+                                getMessagesStorage().setLastPtsValue(res.intermediate_state.pts);
+                                getMessagesStorage().setLastQtsValue(res.intermediate_state.qts);
+                            } else if (res instanceof TLRPC.TL_updates_differenceEmpty) {
+                                gettingDifference = false;
+                                getMessagesStorage().setLastSeqValue(res.seq);
+                                getMessagesStorage().setLastDateValue(res.date);
+                                getConnectionsManager().setIsUpdating(false);
+                                FileLog.d("received differenceEmpty: isUpdating = false");
+                                for (int a = 0; a < 3; a++) {
+                                    processUpdatesQueue(a, 1);
+                                }
+                            }
+                            getMessagesStorage().saveDiffParams(getMessagesStorage().getLastSeqValue(), getMessagesStorage().getLastPtsValue(), getMessagesStorage().getLastDateValue(), getMessagesStorage().getLastQtsValue());
+                            if (BuildVars.LOGS_ENABLED) {
+                                FileLog.d("received difference with date = " + getMessagesStorage().getLastDateValue() + " pts = " + getMessagesStorage().getLastPtsValue() + " seq = " + getMessagesStorage().getLastSeqValue() + " messages = " + res.new_messages.size() + " users = " + res.users.size() + " chats = " + res.chats.size() + " other updates = " + res.other_updates.size());
+                            }
+                        }));
                     });
                 }
             } else {
@@ -17231,191 +17192,6 @@ public class MessagesController extends BaseController implements NotificationCe
                 FileLog.d("received: isUpdating = false");
             }
         });
-    }
-
-    // ice9 #157: a difference holding a message that will not open waits for the
-    // commits waiting in the box; any difference after it waits its turn, so the
-    // state each one sets is never written out of order.
-    private boolean differenceWaitsForCommits;
-    private final ArrayList<Runnable> differencesWaiting = new ArrayList<>();
-
-    /** On the stage queue, in the order the differences came in. */
-    private void applyDifferenceInOrder(TLRPC.updates_Difference res, LongSparseArray<TLRPC.User> usersDict, LongSparseArray<TLRPC.Chat> chatsDict) {
-        Runnable apply = () -> applyDifference(res, usersDict, chatsDict);
-        if (differenceWaitsForCommits) {
-            differencesWaiting.add(apply);
-            return;
-        }
-        apply.run();
-    }
-
-    private void applyDifference(TLRPC.updates_Difference res, LongSparseArray<TLRPC.User> usersDict, LongSparseArray<TLRPC.Chat> chatsDict) {
-        boolean anyMessages = !res.new_messages.isEmpty() || !res.new_encrypted_messages.isEmpty();
-        ArrayList<TLRPC.Message> locked = new ArrayList<>();
-        if (anyMessages) {
-            for (int b = 0; b < res.new_encrypted_messages.size(); b++) {
-                TLRPC.EncryptedMessage encryptedMessage = res.new_encrypted_messages.get(b);
-                ArrayList<TLRPC.Message> decryptedMessages = getSecretChatHelper().decryptMessage(encryptedMessage);
-                if (decryptedMessages != null && !decryptedMessages.isEmpty()) {
-                    res.new_messages.addAll(decryptedMessages);
-                }
-            }
-
-            // Everything that arrives while the app was not
-            // running comes through here, as a list of
-            // messages rather than as updates - so the hook
-            // on updateNewMessage never saw any of it, and
-            // every message received while the phone was
-            // closed stayed a ciphertext.
-            MlsRuntime mlsFromDifference = MlsRuntime.getInstance(currentAccount);
-            for (int a = 0; a < res.new_messages.size(); a++) {
-                TLRPC.Message message = res.new_messages.get(a);
-                if (MlsRuntime.isCiphertext(message.message)
-                        && !mlsFromDifference.open(message)) {
-                    locked.add(message);
-                }
-            }
-        }
-        if (locked.isEmpty()) {
-            finishDifference(res, usersDict, chatsDict, anyMessages);
-            return;
-        }
-        // A phone back from offline learns its messages from here, and this
-        // never carries #156's wake-up: a message of a new epoch can be here
-        // before the commit that opens it, waiting in the box. Stored as it
-        // was, it stood as a lock until a catch-up read it back. So whatever
-        // opened is kept as it is - applying the commits first would lose the
-        // older epochs' messages, since the core keeps only two - and only
-        // what would not open waits for the commits and is opened once more.
-        differenceWaitsForCommits = true;
-        FileLog.d("mls: " + locked.size() + " message(s) of a difference would not open; catching up on commits before storing it");
-        MlsRuntime mls = MlsRuntime.getInstance(currentAccount);
-        mls.catchUpThen(() -> {
-            int still = 0;
-            for (TLRPC.Message message : locked) {
-                if (!mls.open(message)) {
-                    still++;
-                }
-            }
-            FileLog.d("mls: caught up; " + still + " of " + locked.size() + " still locked");
-            finishDifference(res, usersDict, chatsDict, anyMessages);
-            differenceWaitsForCommits = false;
-            while (!differenceWaitsForCommits && !differencesWaiting.isEmpty()) {
-                differencesWaiting.remove(0).run();
-            }
-        });
-    }
-
-    private void finishDifference(TLRPC.updates_Difference res, LongSparseArray<TLRPC.User> usersDict, LongSparseArray<TLRPC.Chat> chatsDict, boolean anyMessages) {
-        if (anyMessages) {
-            LongSparseArray<ArrayList<MessageObject>> messages = new LongSparseArray<>();
-                ImageLoader.saveMessagesThumbs(res.new_messages);
-
-                ArrayList<MessageObject> pushMessages = new ArrayList<>();
-                long clientUserId = getUserConfig().getClientUserId();
-                for (int a = 0; a < res.new_messages.size(); a++) {
-                    TLRPC.Message message = res.new_messages.get(a);
-                    if (message instanceof TLRPC.TL_messageEmpty) {
-                        continue;
-                    }
-                    MessageObject.getDialogId(message);
-
-                    if (!DialogObject.isEncryptedDialog(message.dialog_id)) {
-                        if (message.action instanceof TLRPC.TL_messageActionChatDeleteUser) {
-                            TLRPC.User user = usersDict.get(message.action.user_id);
-                            if (user != null && user.bot) {
-                                message.reply_markup = new TLRPC.TL_replyKeyboardHide();
-                                message.flags |= 64;
-                            }
-                        }
-                        if (message.action instanceof TLRPC.TL_messageActionChatMigrateTo || message.action instanceof TLRPC.TL_messageActionChannelCreate) {
-                            message.unread = false;
-                            message.media_unread = false;
-                        } else {
-                            ConcurrentHashMap<Long, Integer> read_max = message.out ? dialogs_read_outbox_max : dialogs_read_inbox_max;
-                            Integer value = read_max.get(message.dialog_id);
-                            if (value == null) {
-                                value = getMessagesStorage().getDialogReadMax(message.out, message.dialog_id);
-                                read_max.put(message.dialog_id, value);
-                            }
-                            message.unread = value < message.id;
-                        }
-                    }
-                    if (message.dialog_id == clientUserId) {
-                        message.unread = false;
-                        message.media_unread = false;
-                        message.out = true;
-                    }
-
-                    boolean isDialogCreated = createdDialogIds.contains(message.dialog_id);
-                    MessageObject obj = new MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated);
-
-                    if ((!obj.isOut() || obj.messageOwner.from_scheduled) && obj.isUnread()) {
-                        pushMessages.add(obj);
-                    }
-
-                    ArrayList<MessageObject> arr = messages.get(message.dialog_id);
-                    if (arr == null) {
-                        arr = new ArrayList<>();
-                        messages.put(message.dialog_id, arr);
-                    }
-                    arr.add(obj);
-                }
-
-                getMessagesStorage().getStorageQueue().postRunnable(() -> {
-                    if (!pushMessages.isEmpty()) {
-                        AndroidUtilities.runOnUIThread(() -> getNotificationsController().processNewMessages(pushMessages, !(res instanceof TLRPC.TL_updates_differenceSlice), false, null));
-                    }
-                    getMessagesStorage().putMessages(res.new_messages, true, false, false, getDownloadController().getAutodownloadMask(), 0, 0);
-
-                    for (int a = 0; a < messages.size(); a++) {
-                        long dialogId = messages.keyAt(a);
-                        ArrayList<MessageObject> arr = messages.valueAt(a);
-                        getMediaDataController().loadReplyMessagesForMessages(arr, dialogId, 0, 0, () -> {
-                            AndroidUtilities.runOnUIThread(() -> {
-                                updateInterfaceWithMessages(dialogId, arr, 0);
-                                getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
-                            });
-                        }, 0, null);
-                    }
-                });
-
-                getSecretChatHelper().processPendingEncMessages();
-        }
-
-        if (!res.other_updates.isEmpty()) {
-            processUpdateArray(res.other_updates, res.users, res.chats, true, 0);
-        }
-
-        if (res instanceof TLRPC.TL_updates_difference) {
-            gettingDifference = false;
-            getMessagesStorage().setLastSeqValue(res.state.seq);
-            getMessagesStorage().setLastDateValue(res.state.date);
-            getMessagesStorage().setLastPtsValue(res.state.pts);
-            getMessagesStorage().setLastQtsValue(res.state.qts);
-            FileLog.d("received difference: isUpdating = false");
-            getConnectionsManager().setIsUpdating(false);
-            for (int a = 0; a < 3; a++) {
-                processUpdatesQueue(a, 1);
-            }
-        } else if (res instanceof TLRPC.TL_updates_differenceSlice) {
-            getMessagesStorage().setLastDateValue(res.intermediate_state.date);
-            getMessagesStorage().setLastPtsValue(res.intermediate_state.pts);
-            getMessagesStorage().setLastQtsValue(res.intermediate_state.qts);
-        } else if (res instanceof TLRPC.TL_updates_differenceEmpty) {
-            gettingDifference = false;
-            getMessagesStorage().setLastSeqValue(res.seq);
-            getMessagesStorage().setLastDateValue(res.date);
-            getConnectionsManager().setIsUpdating(false);
-            FileLog.d("received differenceEmpty: isUpdating = false");
-            for (int a = 0; a < 3; a++) {
-                processUpdatesQueue(a, 1);
-            }
-        }
-        getMessagesStorage().saveDiffParams(getMessagesStorage().getLastSeqValue(), getMessagesStorage().getLastPtsValue(), getMessagesStorage().getLastDateValue(), getMessagesStorage().getLastQtsValue());
-        if (BuildVars.LOGS_ENABLED) {
-            FileLog.d("received difference with date = " + getMessagesStorage().getLastDateValue() + " pts = " + getMessagesStorage().getLastPtsValue() + " seq = " + getMessagesStorage().getLastSeqValue() + " messages = " + res.new_messages.size() + " users = " + res.users.size() + " chats = " + res.chats.size() + " other updates = " + res.other_updates.size());
-        }
     }
 
     public void markDialogAsUnread(long dialogId, TLRPC.InputPeer peer, long taskId) {
@@ -18810,20 +18586,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 if (message instanceof TLRPC.TL_messageEmpty) {
                     continue;
                 }
-                // Opened here, before anything stores it or shows it, because
-                // the text is read by more than the chat: the chat list shows
-                // the last one, search indexes it, a notification quotes it.
-                // Decrypting at each of those would be four chances to miss one.
-                //
-                // One that cannot be opened is left exactly as it is - see
-                // MlsRuntime.open - and asked for again once the welcome that
-                // lets this device into the conversation has arrived.
-                if (MlsRuntime.isCiphertext(message.message)) {
-                    if (!MlsRuntime.getInstance(currentAccount).open(message)) {
-                        MlsRuntime.getInstance(currentAccount)
-                                .catchUp(MessageObject.getDialogId(message));
-                    }
-                }
+                MlsReceive.getInstance(currentAccount).openOrCatchUp(message); // ice9: opened before anything stores or shows it
                 if (newMessageCallback != null && newMessageCallback.onMessageReceived(message)) {
                     newMessageCallback = null;
                 }
@@ -18907,65 +18670,9 @@ public class MessagesController extends BaseController implements NotificationCe
                     } else if (message.from_id instanceof TLRPC.TL_peerUser && message.from_id.user_id == clientUserId && message.action.user_id == clientUserId) {
                         continue;
                     }
-                    // Out of the chat means out of the MLS group, or the removal
-                    // is only a line in an interface: a device left in the group
-                    // goes on reading everything said afterwards (#40).
-                    //
-                    // Hung on the service message, which is the one thing every
-                    // member gets. The button was the obvious place and was
-                    // wrong twice over: deleteParticipantFromChat has two
-                    // separate implementations and the member list uses the
-                    // other one, and the update naming the person who left goes
-                    // only to whoever pressed it - everybody else learns from
-                    // this message and nothing else.
-                    //
-                    // So every member tries, and that is deliberate. Removing
-                    // costs nothing: it is local, one commit takes the epoch,
-                    // and the rest then find the person already gone. Adding is
-                    // hooked at the action instead, because claiming a key
-                    // package spends one, and a sweep already catches the misses.
-                    if (message.peer_id != null && message.peer_id.chat_id != 0) {
-                        MlsRuntime.getInstance(currentAccount)
-                                .memberRemoved(-message.peer_id.chat_id, message.action.user_id);
-                    }
+                    MlsMembership.getInstance(currentAccount).removed(message); // ice9 #40
                 }
-                // Somebody joined, and if it was us there is an invitation
-                // waiting on the server this second. Nothing else goes and
-                // fetches it promptly: a phone sat three minutes in a chat it
-                // had just been added to, with the welcome there the whole time,
-                // until an unrelated four-minute check happened to run (#110).
-                //
-                // The same message every member gets, like the removal above.
-                //
-                // All three ways in, not just the one somebody presses. A person
-                // who follows a link or is let in from a request joins without
-                // anybody choosing them, so no device is running the addition -
-                // they are let into the conversation by whoever next compares it
-                // with the chat, and until they fetch that welcome they sit in a
-                // group where nothing appears (#40, step 4.3).
-                if ((message.action instanceof TLRPC.TL_messageActionChatAddUser
-                        || message.action instanceof TLRPC.TL_messageActionChatJoinedByLink
-                        || message.action instanceof TLRPC.TL_messageActionChatJoinedByRequest)
-                        && message.peer_id != null && message.peer_id.chat_id != 0) {
-                    MlsRuntime.getInstance(currentAccount).invited();
-                    // And the group has somebody in it that the conversation
-                    // does not. Named, like the removal above, and for the same
-                    // reason turned round: this message arrives before the
-                    // participant list here catches up, so comparing the two
-                    // finds nobody missing and the newcomer waits for a sweep -
-                    // which is what happened to the first person who followed a
-                    // link into an encrypted group and sat in silence (#40, 4.3).
-                    ArrayList<Long> joined = new ArrayList<>();
-                    if (message.action.users != null && !message.action.users.isEmpty()) {
-                        joined.addAll(message.action.users);
-                    } else if (message.from_id instanceof TLRPC.TL_peerUser) {
-                        // A link or a request is followed by one person alone,
-                        // and the message they cause is from them.
-                        joined.add(message.from_id.user_id);
-                    }
-                    MlsRuntime.getInstance(currentAccount)
-                            .memberAdded(-message.peer_id.chat_id, joined);
-                }
+                MlsMembership.getInstance(currentAccount).joined(message); // ice9 #40, #110
 
                 ImageLoader.saveMessageThumbs(message);
 
@@ -21137,12 +20844,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     } else if (baseUpdate instanceof TL_update.TL_updateWebBrowserException) {
                         applyWebBrowserUpdate((TL_update.TL_updateWebBrowserException) baseUpdate);
                     } else if (baseUpdate instanceof TLRPCMls.TL_updateMlsMailbox) {
-                        // The server says there is a commit or a welcome waiting.
-                        // Fetch both boxes: the two travel by different routes and
-                        // a change of membership can leave one of each. This is
-                        // what used to be a poll on a ladder of delays (#156).
-                        MlsRuntime.getInstance(currentAccount).collectWelcomes();
-                        MlsRuntime.getInstance(currentAccount).collectCommits();
+                        MlsReceive.getInstance(currentAccount).mailbox(); // ice9 #156
                     } else if (ApplicationLoader.applicationLoaderInstance != null) {
                         ApplicationLoader.applicationLoaderInstance.processUpdate(currentAccount, baseUpdate);
                     }
