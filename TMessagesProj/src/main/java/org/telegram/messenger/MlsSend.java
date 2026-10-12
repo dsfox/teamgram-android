@@ -8,6 +8,7 @@ import org.telegram.tgnet.TLRPCMls;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * Sending into a conversation that encrypts: text encrypted once there is a
@@ -16,9 +17,16 @@ import java.util.ArrayList;
  * SendMessagesHelper, which upstream rewrites at every release, and reached
  * from it by one call at each place it begins (#196).
  */
-final class MlsSend extends BaseController {
+final class MlsSend extends BaseController implements NotificationCenter.NotificationCenterDelegate {
 
     private static final MlsSend[] Instance = new MlsSend[UserConfig.MAX_ACCOUNT_COUNT];
+
+    /**
+     * Albums on their way into a conversation that encrypts, by the group id
+     * the attachment sheet gave them (#254). Touched on the main thread only,
+     * where every item is given, uploaded, failed and cancelled.
+     */
+    private final HashMap<Long, Album> albums = new HashMap<>();
 
     static MlsSend getInstance(int num) {
         MlsSend local = Instance[num];
@@ -35,6 +43,234 @@ final class MlsSend extends BaseController {
 
     private MlsSend(int num) {
         super(num);
+        // An item of an album that fails or is cancelled has to stop being
+        // waited for, or the rest of its album waits for good.
+        AndroidUtilities.runOnUIThread(() -> {
+            getNotificationCenter().addObserver(this, NotificationCenter.messageSendError);
+            getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+        });
+    }
+
+    /** One album being gathered: its items in the order they were given, and
+     *  whether the last of them has been. */
+    private static final class Album {
+        final long id;
+        final long peer;
+        final ArrayList<Item> items = new ArrayList<>();
+        boolean whole;
+
+        Album(long id, long peer) {
+            this.id = id;
+            this.peer = peer;
+        }
+
+        Item item(long randomId) {
+            for (Item each : items) {
+                if (each.randomId == randomId) {
+                    return each;
+                }
+            }
+            return null;
+        }
+
+        boolean ready() {
+            if (!whole) {
+                return false;
+            }
+            for (Item each : items) {
+                if (each.encrypted == null) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    /** An item of an album, and once it has gone up, the send that carries it
+     *  - its request already holding the blob and the ciphertext. */
+    private static final class Item {
+        final int messageId;
+        final long randomId;
+        SendMessagesHelper.DelayedMessage encrypted;
+
+        Item(int messageId, long randomId) {
+            this.messageId = messageId;
+            this.randomId = randomId;
+        }
+    }
+
+    /**
+     * Whether an item of an album leaves upstream's album path for this one
+     * (#254): yes when the chat has a conversation.
+     *
+     * Upstream's album path uploaded the pictures as pictures and sent the
+     * captions beside them, and nothing on it knew about encryption. So an
+     * item here is sent the way a single file is - encrypted on the way up and
+     * described inside its own ciphertext - and drawn at once, still in its
+     * album; then, instead of going out alone, it waits in sendMedia for the
+     * rest, and the album goes as one messages.sendMultiMedia. That is the
+     * shape iOS sends, and the server makes it one album.
+     *
+     * An item sent again - after it failed, or after the app was closed under
+     * it - is not gathered: the rest of its album may be long gone, and an item
+     * waiting for them would wait for good. It goes alone, encrypted.
+     */
+    boolean takesAlbumItem(long peer, TLRPC.Message message, long groupId, boolean last, boolean again) {
+        if (!MlsRuntime.getInstance(currentAccount).hasConversation(peer)) {
+            return false;
+        }
+        if (again) {
+            FileLog.d("mls: message " + message.id + " of album " + groupId + " is sent again, alone");
+            return true;
+        }
+        Album album = albums.get(groupId);
+        if (album == null) {
+            albums.put(groupId, album = new Album(groupId, peer));
+        }
+        album.items.add(new Item(message.id, message.random_id));
+        album.whole |= last;
+        FileLog.d("mls: message " + message.id + " is item " + album.items.size() + " of album " + groupId
+                + " for " + peer + (last ? ", the last" : ""));
+        return true;
+    }
+
+    /**
+     * The end of an album, said after its last item was given rather than on
+     * it: upstream closes a group this way when the next file is of another
+     * kind, or when the last of the pictures went as a file.
+     */
+    void albumEnds(long groupId) {
+        Album album = albums.get(groupId);
+        if (album == null || album.whole) {
+            return;
+        }
+        album.whole = true;
+        FileLog.d("mls: album " + groupId + " ends with " + album.items.size() + " item(s)");
+        if (album.ready()) {
+            albums.remove(groupId);
+            send(album);
+        }
+    }
+
+    /** The album of the item this send carries, or null when it is not one
+     *  gathered here. */
+    private Album albumOf(SendMessagesHelper.DelayedMessage message) {
+        if (message.obj == null) {
+            return null;
+        }
+        for (Album album : albums.values()) {
+            if (album.item(message.obj.messageOwner.random_id) != null) {
+                return album;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * An item whose request is ready - blob and ciphertext in it - kept until
+     * the rest of its album is; the album goes when the last one is in.
+     *
+     * @return whether the send was an item of an album, and is taken care of.
+     */
+    private boolean gathered(SendMessagesHelper.DelayedMessage message) {
+        Album album = albumOf(message);
+        if (album == null || !(message.sendRequest instanceof TLRPC.TL_messages_sendMedia)) {
+            return false;
+        }
+        album.item(message.obj.messageOwner.random_id).encrypted = message;
+        if (album.ready()) {
+            albums.remove(album.id);
+            send(album);
+        }
+        return true;
+    }
+
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (albums.isEmpty()) {
+            return;
+        }
+        if (id == NotificationCenter.messageSendError) {
+            forget((Integer) args[0], "failed");
+        } else if (id == NotificationCenter.messagesDeleted) {
+            @SuppressWarnings("unchecked")
+            ArrayList<Integer> ids = (ArrayList<Integer>) args[0];
+            for (Integer each : new ArrayList<>(ids)) {
+                forget(each, "was cancelled");
+            }
+        }
+    }
+
+    /** An item that will not be sent: the album goes without it once the rest
+     *  is in, rather than waiting for something that cannot come. */
+    private void forget(int messageId, String why) {
+        for (Album album : albums.values()) {
+            for (int index = 0; index < album.items.size(); index++) {
+                Item item = album.items.get(index);
+                if (item.messageId != messageId) {
+                    continue;
+                }
+                album.items.remove(index);
+                FileLog.d("mls: message " + messageId + " of album " + album.id + " " + why
+                        + ", " + album.items.size() + " item(s) left");
+                if (item.encrypted != null) {
+                    // Whatever was sent after it and waits for it goes now.
+                    item.encrypted.sendDelayedRequests();
+                }
+                if (album.ready()) {
+                    albums.remove(album.id);
+                    send(album);
+                }
+                return;
+            }
+        }
+    }
+
+    /**
+     * The album, out as one messages.sendMultiMedia: each item the blob it
+     * went up as and its own ciphertext, with its caption inside. What the
+     * album shares - the peer, a reply, a schedule, an effect - is taken from
+     * the first item's own request, where upstream put it.
+     */
+    private void send(Album album) {
+        if (album.items.isEmpty()) {
+            return;
+        }
+        SendMessagesHelper.DelayedMessage head = album.items.get(0).encrypted;
+        TLRPC.TL_messages_sendMedia first = (TLRPC.TL_messages_sendMedia) head.sendRequest;
+        TLRPC.TL_messages_sendMultiMedia request = new TLRPC.TL_messages_sendMultiMedia();
+        request.peer = first.peer;
+        request.silent = first.silent;
+        request.invert_media = first.invert_media;
+        // reply_to, schedule_date, quick_reply_shortcut and effect sit at the
+        // same bits in both requests.
+        request.flags = first.flags & (1 | 1024 | 131072 | 262144);
+        request.reply_to = first.reply_to;
+        request.schedule_date = first.schedule_date;
+        request.quick_reply_shortcut = first.quick_reply_shortcut;
+        request.effect = first.effect;
+
+        ArrayList<MessageObject> objects = new ArrayList<>();
+        ArrayList<String> paths = new ArrayList<>();
+        ArrayList<Object> parents = new ArrayList<>();
+        for (Item item : album.items) {
+            TLRPC.TL_messages_sendMedia single = (TLRPC.TL_messages_sendMedia) item.encrypted.sendRequest;
+            TLRPC.TL_inputSingleMedia media = new TLRPC.TL_inputSingleMedia();
+            media.random_id = single.random_id;
+            media.media = single.media;
+            media.message = single.message;
+            request.multi_media.add(media);
+            objects.add(item.encrypted.obj);
+            paths.add(item.encrypted.originalPath);
+            parents.add(item.encrypted.parentObject);
+        }
+        FileLog.d("mls: album " + album.id + " goes to " + album.peer + " as " + request.multi_media.size()
+                + " encrypted item(s)");
+        getSendMessagesHelper().performSendMessageRequestMulti(request, objects, paths, parents, null, head.scheduled);
+        // Whatever was sent after an item and waits for it goes after the album.
+        for (Item item : album.items) {
+            item.encrypted.sendDelayedRequests();
+        }
     }
 
     /**
@@ -399,13 +635,18 @@ final class MlsSend extends BaseController {
      * Asked for every kind of file rather than only for pictures. A photograph
      * was going up encrypted and a video, a voice message and a document were
      * going up in the clear, in the same conversation, with nothing said.
+     *
+     * An item of an album gathered here goes up encrypted even when the
+     * conversation has gone since it was given: it then fails in sendMedia and
+     * the album goes without it, rather than the item going alone in the clear
+     * while the album waits for it.
      */
     boolean uploadEncrypted(SendMessagesHelper.DelayedMessage message) {
         if (message.sendRequest == null) {
             return true;
         }
         message.mlsEncrypted = MlsRuntime.getInstance(currentAccount)
-                .hasConversation(message.peer);
+                .hasConversation(message.peer) || albumOf(message) != null;
         FileLog.d("mls: a file of type " + message.type + " for " + message.peer
                 + " goes up " + (message.mlsEncrypted ? "encrypted" : "in the clear"));
         return message.mlsEncrypted;
@@ -494,6 +735,9 @@ final class MlsSend extends BaseController {
         FileLog.d("mls: sending " + decryptedSize + " encrypted bytes to " + message.peer
                 + " as " + descriptor.name + ", placeholder "
                 + (descriptor.thumb == null ? 0 : descriptor.thumb.length) + " bytes");
+        if (gathered(message)) {
+            return;
+        }
         getSendMessagesHelper().performSendMessageRequest(message.sendRequest, message.obj, message.originalPath,
                 message, true, null, message.parentObject, null, message.scheduled);
     }

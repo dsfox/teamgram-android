@@ -1254,7 +1254,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             if (arr != null) {
                 for (int a = 0; a < arr.size(); a++) {
                     DelayedMessage obj = arr.get(a);
-                    if (enc && obj.sendEncryptedRequest != null || !enc && obj.sendRequest != null) {
+                    if (enc && (obj.sendEncryptedRequest != null || obj.mlsEncrypted) || !enc && obj.sendRequest != null) { // ice9: an encrypted upload of ours that fails fails its message (#254)
                         obj.markAsError();
                         arr.remove(a);
                         a--;
@@ -5135,6 +5135,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 }
                 isFinalGroupMedia = params.get("final") != null;
             }
+            if (groupId != 0 && stars == 0 && pollSendParams == null && MlsSend.getInstance(currentAccount).takesAlbumItem(peer, newMsg, groupId, isFinalGroupMedia, retryMessageObject != null)) { // ice9: an album into a conversation goes encrypted, item by item (#254)
+                groupId = 0;
+            }
 
             if (stars > 0) {
                 TLRPC.MessageMedia media = newMsg.media;
@@ -7785,6 +7788,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             TLRPC.Message message = newMessages.get(id);
                             if (message != null) {
                                 MessageObject.getDialogId(message);
+                                MlsRuntime.getInstance(currentAccount).restore(message, newMsgObj.random_id); // ice9: what we sent replaces the server's copy (#254)
                                 sentMessages.add(message);
                                 if ((message.flags & 33554432) != 0) {
                                     msgObj.messageOwner.ttl_period = message.ttl_period;
@@ -9948,6 +9952,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     private static void finishGroup(AccountInstance accountInstance, long groupId, int scheduleDate) {
         AndroidUtilities.runOnUIThread(() -> {
             SendMessagesHelper instance = accountInstance.getSendMessagesHelper();
+            MlsSend.getInstance(accountInstance.getCurrentAccount()).albumEnds(groupId); // ice9: an album gathered for encryption ends here too (#254)
             ArrayList<DelayedMessage> arrayList = instance.delayedMessages.get("group_" + groupId);
             if (arrayList != null && !arrayList.isEmpty()) {
 
