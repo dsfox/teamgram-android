@@ -4308,7 +4308,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         MessageObject replyToTopMsg = sendMessageParams.replyToTopMsg;
         TLRPC.WebPage webPage = sendMessageParams.webPage;
         TLRPC.TL_messageMediaWebPage mediaWebPage = sendMessageParams.mediaWebPage;
-        if (MlsRuntime.getInstance(currentAccount).hasConversation(peer)) { // ice9: a preview would name the link beside the ciphertext (#255)
+        if (MlsRuntime.getInstance(currentAccount).encrypts(peer)) { // ice9: a preview would name the link beside the ciphertext (#255)
             webPage = null;
             mediaWebPage = null;
         }
@@ -5378,7 +5378,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         final Object sendingParent = parentObject;
                         final HashMap<String, String> sendingParams = params;
                         final boolean sendingScheduled = scheduleDate != 0;
-                        MlsSend.getInstance(currentAccount).encryptThenSend(peer, reqSend, newMsg.random_id, message, entities,
+                        MlsSend.getInstance(currentAccount).encryptThenSend(peer, newMsg.id, reqSend, newMsg.random_id, message, entities,
                                 sendMessageParams.mlsForwarded,
                                 () -> performSendMessageRequest(reqSend, sendingObj, null, null, sendingParent, sendingParams, sendingScheduled));
                         if (retryMessageObject == null) {

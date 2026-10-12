@@ -187,6 +187,8 @@ public class MlsKeyPackages {
         // And whatever changed while this phone was not running, which no
         // update will ever tell it about (#124).
         MlsRuntime.getInstance(currentAccount).catchUpOnMembership();
+        // And what still waits to be encrypted tries again (#256).
+        MlsSend.getInstance(currentAccount).tryWaitingAgain();
     }
 
     public void save(MlsCore.Identity identity) throws MlsCore.MlsException {

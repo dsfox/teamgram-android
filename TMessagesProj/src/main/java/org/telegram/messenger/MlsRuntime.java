@@ -750,13 +750,12 @@ public class MlsRuntime {
     private final Map<Long, java.util.ArrayList<Waiter>> waitingForConversation = new HashMap<>();
 
     /**
-     * How long a message may wait for a handshake before it goes anyway.
+     * How long a send waits for a handshake before it looks again.
      *
-     * Encryption must never be able to stop a message. A slow network, a server
-     * that does not answer, anything - after this the message goes in the clear
-     * rather than waiting behind something a person cannot see. The other client
-     * gives it the same ten seconds, and the handshake it waits for has been
-     * measured in milliseconds.
+     * Past it the message is encrypted if a conversation is there by then, and
+     * waits for one if not (#256) - the handshake goes on behind it, and the
+     * message goes the moment it lands. The other client gives it the same ten
+     * seconds, and the handshake has been measured in milliseconds.
      */
     private static final long CONVERSATION_WAIT = 10_000L;
 
@@ -772,8 +771,8 @@ public class MlsRuntime {
      * comparison that claims packages and commits took 4.9 s on 26 September,
      * five ran out with the commit still in flight, the core refused to encrypt
      * over a commit it had staged, and the message went in the clear (#212).
-     * Past it the message goes as it would have, because a message that never
-     * leaves is worse than one somebody cannot open.
+     * Past it the message is encrypted if it can be, and waits if it cannot
+     * (#256).
      */
     private static final long COMPARISON_WAIT = 10_000L;
 
@@ -802,31 +801,55 @@ public class MlsRuntime {
     }
 
     /**
-     * Whether it makes any sense to encrypt to this peer at all.
+     * Whether messages in this chat are encrypted at all (#256): a person who is
+     * not this account, a bot or the service account, or a group that is not a
+     * channel. Such a chat sends nothing in the clear - a message that cannot be
+     * encrypted yet waits for its conversation. Anything else goes as it always
+     * did.
      *
-     * Only conversations between two people. A group or a channel has no device
-     * to encrypt to, so every attempt would cost a round trip and end in the
-     * clear anyway - once per message, for ever, because nothing is remembered.
+     * A group is an MLS group of n, which is what MLS was built for (#40). A
+     * channel is not: broadcasting is a different thing and none of it is built
+     * (#16). Saved Messages is out because a conversation with oneself would be
+     * one where every message is written by the only person who cannot read it
+     * back. A bot has no device to encrypt to and never will.
      *
-     * Saved Messages is out for a harder reason: a conversation with oneself
-     * would be one where every message is written by the only person who cannot
-     * read it back, and the notes would go in unreadable.
+     * A person or a chat this phone knows nothing about yet counts as one that
+     * encrypts: waiting a little longer can be undone, a word in the clear
+     * cannot.
      */
-    private boolean worthEncrypting(long peerId) {
+    public boolean encrypts(long peerId) {
         if (peerId == 0 || peerId == UserConfig.getInstance(currentAccount).getClientUserId()) {
             return false;
         }
-        // A group is an MLS group of n, which is what MLS was built for - the
-        // protocol does not care whether a leaf belongs to a second person or
-        // to a second phone of the first (#40).
-        //
-        // A channel is not: broadcasting is a different thing and none of it is
-        // built (#16). A folder id is not a conversation at all.
-        if (peerId < 0 && !DialogObject.isChatDialog(peerId)) {
-            return false;
+        if (DialogObject.isUserDialog(peerId)) {
+            if (UserObject.isService(peerId)) {
+                return false;
+            }
+            TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(peerId);
+            return user == null || !user.bot;
         }
+        if (DialogObject.isChatDialog(peerId)) {
+            TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-peerId);
+            return chat == null || !ChatObject.isChannel(chat);
+        }
+        return false;
+    }
+
+    /**
+     * Whether a conversation with this peer may be built now: a chat that
+     * encrypts, not asked about a moment ago. Somebody with no device, or a
+     * claim that was lost to a conversation this phone is waiting to be let
+     * into, is asked about again after a while rather than before every
+     * message - each attempt claims a key package of every one of their
+     * devices.
+     */
+    private boolean worthEncrypting(long peerId) {
+        return encrypts(peerId) && !backingOff(peerId);
+    }
+
+    private boolean backingOff(long peerId) {
         Long asked = withoutDevices.get(peerId);
-        return asked == null || System.currentTimeMillis() - asked > 600_000L;
+        return asked != null && System.currentTimeMillis() - asked <= 600_000L;
     }
 
     /**
@@ -1011,7 +1034,9 @@ public class MlsRuntime {
         if (text == null) {
             text = "";
         }
-        if (!worthEncrypting(peerId)) {
+        // Into a conversation that exists whatever the pause on building one
+        // says: a phone let in a moment ago must not wait ten minutes (#256).
+        if (!encrypts(peerId)) {
             return null;
         }
         loadConversations();
@@ -1020,8 +1045,7 @@ public class MlsRuntime {
             groupId = groupIdByPeer.get(peerId);
         }
         if (groupId == null) {
-            // Nothing yet. Started now so the next message is protected; this
-            // one goes as it always did.
+            // Nothing yet. Started now; this message waits for it (#256).
             ensureConversation(peerId);
             return null;
         }
@@ -1041,7 +1065,7 @@ public class MlsRuntime {
                     // conversation yet" - a thing the client mends by itself:
                     // it asks whose the chat is, and either starts one or is
                     // told where the chat is and waits to be let in. This
-                    // message still goes in the clear; the next one need not.
+                    // message waits for it (#256).
                     if (forgetConversation(peerId, groupId)) {
                         FileLog.e("mls: " + peerId + " was written down as "
                                 + shortId(groupId) + ", which is not on this device; "
@@ -1120,19 +1144,20 @@ public class MlsRuntime {
      * has since it was built; this is the same thing, as a callback, because
      * here the send starts on the thread drawing the screen and cannot block.
      *
-     * The callback always runs. Not worth encrypting, no key packages, a
-     * handshake that fails, ten seconds gone - every one of them ends in the
-     * callback and the message goes as it always did. A message that never
-     * leaves is worse than a message the server can read.
+     * The callback always runs. No key packages, a handshake that fails, ten
+     * seconds gone - every one of them ends in the callback, and a message that
+     * still cannot be encrypted then waits (MlsSend, #256); in a chat that does
+     * not encrypt it goes as it always did.
      */
     public void ensureConversation(long peerId, Runnable then) {
-        if (!worthEncrypting(peerId)) {
+        if (!encrypts(peerId)) {
             fire(then);
             return;
         }
         loadConversations();
         Waiter waiter = null;
         boolean startNow;
+        boolean pausing = false;
         synchronized (this) {
             if (groupIdByPeer.containsKey(peerId)) {
                 // Before a message goes out is the moment worth checking that
@@ -1162,19 +1187,30 @@ public class MlsRuntime {
                 });
                 return;
             }
-            if (then != null) {
-                waiter = new Waiter(then);
-                java.util.ArrayList<Waiter> waiting = waitingForConversation.get(peerId);
-                if (waiting == null) {
-                    waiting = new java.util.ArrayList<>();
-                    waitingForConversation.put(peerId, waiting);
+            if (backingOff(peerId)) {
+                // Asked about a moment ago: nothing is built until the pause
+                // is over, and the message waits for whatever comes first.
+                pausing = true;
+                startNow = false;
+            } else {
+                if (then != null) {
+                    waiter = new Waiter(then);
+                    java.util.ArrayList<Waiter> waiting = waitingForConversation.get(peerId);
+                    if (waiting == null) {
+                        waiting = new java.util.ArrayList<>();
+                        waitingForConversation.put(peerId, waiting);
+                    }
+                    waiting.add(waiter);
                 }
-                waiting.add(waiter);
+                startNow = !starting.contains(peerId);
+                if (startNow) {
+                    starting.add(peerId);
+                }
             }
-            startNow = !starting.contains(peerId);
-            if (startNow) {
-                starting.add(peerId);
-            }
+        }
+        if (pausing) {
+            fire(then);
+            return;
         }
         if (waiter != null) {
             final Waiter deadline = waiter;
@@ -1187,10 +1223,9 @@ public class MlsRuntime {
 
         List<Long> members = membersOf(peerId);
         if (members == null) {
-            // The membership is not known here yet. Sending in the clear is
-            // right: a group encrypted to a guessed list leaves somebody out of
-            // their own conversation, and with unreadable messages hidden they
-            // would see an empty chat and never learn why.
+            // The membership is not known here yet, and a group encrypted to a
+            // guessed list leaves somebody out of their own conversation. The
+            // message waits for the list (#256).
             giveUp(peerId, "no membership for " + peerId);
             return;
         }
@@ -1200,23 +1235,34 @@ public class MlsRuntime {
     /**
      * Collects the key packages of every member, then builds the conversation.
      *
-     * All of them or none: a member whose devices we cannot reach is a member
-     * who would sit in a chat where every message is hidden - which is worse
-     * than a chat that says it is not encrypted, because nothing on screen says
-     * why. So one empty answer sends the whole group in the clear.
+     * A member with no device is left out and let in by the comparison once a
+     * device of theirs appears (the owner's word of 12 October, #256). It was
+     * all of them or none, and one empty answer sent the whole group in the
+     * clear; with nothing in the clear that would keep the group waiting for
+     * one person. Nobody else with a device - the other person of a chat
+     * between two, or every member of a group - and there is no conversation
+     * yet: whatever is sent waits.
      *
      * One at a time rather than in parallel. A group is a handful of people,
      * this happens once per conversation, and a sequence is a thing that can be
      * read in a log when it goes wrong.
      */
     private void claimEveryone(long peerId, List<Long> members) {
-        claimNext(peerId, members, 0, new ArrayList<>());
+        claimNext(peerId, members, 0, new ArrayList<>(), new ArrayList<>());
     }
 
-    private void claimNext(long peerId, List<Long> members, int at, ArrayList<byte[]> collected) {
+    private void claimNext(long peerId, List<Long> members, int at, ArrayList<byte[]> collected,
+                           ArrayList<Long> reached) {
         if (at >= members.size()) {
+            if (collected.isEmpty()) {
+                synchronized (MlsRuntime.this) {
+                    withoutDevices.put(peerId, System.currentTimeMillis());
+                }
+                giveUp(peerId, members.size() > 1 ? "nobody in " + peerId + " has a device, so it waits" : null);
+                return;
+            }
             final ArrayList<byte[]> packages = collected;
-            Utilities.globalQueue.postRunnable(() -> begin(peerId, packages, members));
+            Utilities.globalQueue.postRunnable(() -> begin(peerId, packages, reached));
             return;
         }
         long member = members.get(at);
@@ -1231,18 +1277,15 @@ public class MlsRuntime {
             TLRPCMls.TL_mls_keyPackages claimed = (TLRPCMls.TL_mls_keyPackages) response;
             if (claimed.packages.isEmpty()) {
                 // Not a failure: somebody whose client does not do this yet, or
-                // a device that has not published. Remembered so the next
-                // message does not pay for the same round trip.
-                synchronized (MlsRuntime.this) {
-                    withoutDevices.put(peerId, System.currentTimeMillis());
+                // a device that has not published.
+                if (members.size() > 1) {
+                    FileLog.d("mls: member " + member + " has no devices, so " + peerId + " starts without them");
                 }
-                giveUp(peerId, members.size() > 1
-                        ? "member " + member + " has no devices, so the group goes in the clear"
-                        : null);
-                return;
+            } else {
+                collected.addAll(claimed.packages);
+                reached.add(member);
             }
-            collected.addAll(claimed.packages);
-            claimNext(peerId, members, at + 1, collected);
+            claimNext(peerId, members, at + 1, collected, reached);
         });
     }
 
@@ -1375,7 +1418,7 @@ public class MlsRuntime {
      * An unanswered claim adopts nothing. Going ahead on a claim that was not
      * granted is exactly the split this exists to stop, and it is the one
      * mistake here with no way back - a chat can wait for the next attempt,
-     * and until then a message goes as it always did.
+     * and so can its messages (#256).
      */
     private void claimThenInvite(long peerId, byte[] groupId, byte[] welcome,
                                  List<Long> members) {
@@ -1423,6 +1466,10 @@ public class MlsRuntime {
                 letGoOf(groupId);
                 synchronized (MlsRuntime.this) {
                     starting.remove(peerId);
+                    // Not built again for a while: each try claims a key package
+                    // of every device of theirs, and the way in is the
+                    // conversation's own phones letting this one in (#256).
+                    withoutDevices.put(peerId, System.currentTimeMillis());
                 }
                 settle(peerId);
                 return;
@@ -1453,7 +1500,24 @@ public class MlsRuntime {
             settle(peerId);
             FileLog.d("mls: started conversation " + shortId(groupId) + " with "
                     + members.size() + " member(s) of " + peerId);
+            ready(peerId);
         });
+    }
+
+    /**
+     * A conversation this device can write into now - built with everybody
+     * invited, or joined. Whatever waited for it goes (MlsSend, #256), and the
+     * pause on building one is over.
+     *
+     * Not when the note is written: a conversation just built is written down
+     * before its welcomes go, and a message sent then would reach people before
+     * the invitation that opens it.
+     */
+    private void ready(long peerId) {
+        synchronized (this) {
+            withoutDevices.remove(peerId);
+        }
+        AndroidUtilities.runOnUIThread(() -> MlsSend.getInstance(currentAccount).conversationReady(peerId));
     }
 
     /**
@@ -3488,6 +3552,7 @@ public class MlsRuntime {
                         // usually wins, so without this the first thing anybody
                         // ever receives stays a ciphertext.
                         reopen(belongsTo);
+                        ready(belongsTo);
                     } catch (MlsCore.MlsException e) {
                         // One invitation that cannot be joined must not stop the
                         // others: they are from different people.

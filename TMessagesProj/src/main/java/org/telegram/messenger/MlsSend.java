@@ -28,6 +28,23 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      */
     private final HashMap<Long, Album> albums = new HashMap<>();
 
+    /**
+     * Messages that cannot be encrypted yet, by their id: what to do again
+     * once they can (#256). Touched on the main thread only.
+     */
+    private final HashMap<Integer, Waiting> waiting = new HashMap<>();
+
+    private static final class Waiting {
+        final long peer;
+        final Runnable again;
+        boolean going;
+
+        Waiting(long peer, Runnable again) {
+            this.peer = peer;
+            this.again = again;
+        }
+    }
+
     static MlsSend getInstance(int num) {
         MlsSend local = Instance[num];
         if (local == null) {
@@ -44,7 +61,8 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
     private MlsSend(int num) {
         super(num);
         // An item of an album that fails or is cancelled has to stop being
-        // waited for, or the rest of its album waits for good.
+        // waited for, or the rest of its album waits for good; and a message
+        // deleted while it waits to be encrypted must never go.
         AndroidUtilities.runOnUIThread(() -> {
             getNotificationCenter().addObserver(this, NotificationCenter.messageSendError);
             getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
@@ -187,7 +205,7 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (albums.isEmpty()) {
+        if (albums.isEmpty() && waiting.isEmpty()) {
             return;
         }
         if (id == NotificationCenter.messageSendError) {
@@ -197,6 +215,10 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
             ArrayList<Integer> ids = (ArrayList<Integer>) args[0];
             for (Integer each : new ArrayList<>(ids)) {
                 forget(each, "was cancelled");
+                // A message deleted while it waits must never go.
+                if (waiting.remove(each) != null) {
+                    FileLog.d("mls: message " + each + " was deleted while it waited");
+                }
             }
         }
     }
@@ -286,20 +308,40 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      * message the server could read.
      *
      * The message is already drawn in the chat as sending, so nothing on screen
-     * waits; what waits is the ciphertext, and only the first time to each
-     * person. The callback always runs - no conversation possible, a handshake
-     * that failed, ten seconds gone - and then the message goes in the clear
-     * exactly as it did before.
+     * waits but the clock. When no conversation can be had yet - none so far,
+     * one this phone is waiting to be let into, a handshake that failed - the
+     * message waits for it and goes once there is one (the owner's word of 12
+     * October, #256); it is never sent in the clear. A chat that does not
+     * encrypt at all, a bot or Saved Messages, sends as it always did.
      */
-    void encryptThenSend(long peer, TLRPC.TL_messages_sendMessage sending, long randomId, String plain,
+    void encryptThenSend(long peer, int messageId, TLRPC.TL_messages_sendMessage sending, long randomId, String plain,
                          ArrayList<TLRPC.MessageEntity> entities, MlsRuntime.Forwarded forwarded, Runnable send) {
-        MlsRuntime.getInstance(currentAccount).ensureConversation(peer, () -> {
-            String carried = MlsRuntime.getInstance(currentAccount).encrypt(peer, plain, entities, forwarded);
+        if (waiting.containsKey(messageId)) {
+            // Sent again by the app's own resend while it waits here, or while it
+            // is on its way: once is enough.
+            FileLog.d("mls: message " + messageId + " is already waiting to be encrypted");
+            return;
+        }
+        attempt(peer, messageId, sending, randomId, plain, entities, forwarded, send);
+    }
+
+    private void attempt(long peer, int messageId, TLRPC.TL_messages_sendMessage sending, long randomId, String plain,
+                         ArrayList<TLRPC.MessageEntity> entities, MlsRuntime.Forwarded forwarded, Runnable send) {
+        MlsRuntime runtime = MlsRuntime.getInstance(currentAccount);
+        runtime.ensureConversation(peer, () -> {
+            String carried = runtime.encrypt(peer, plain, entities, forwarded);
+            if (carried == null && runtime.encrypts(peer)) {
+                waiting.put(messageId, new Waiting(peer,
+                        () -> attempt(peer, messageId, sending, randomId, plain, entities, forwarded, send)));
+                FileLog.d("mls: message " + messageId + " to " + peer + " waits until it can be encrypted");
+                return;
+            }
+            waiting.remove(messageId);
             if (carried != null) {
                 // Remembered under the same random id the server will echo
                 // back, so its copy does not replace what was written with
                 // base64.
-                MlsRuntime.getInstance(currentAccount).wrote(randomId, plain);
+                runtime.wrote(randomId, plain);
                 sending.message = carried;
                 // The formatting travels inside the ciphertext, so it must not
                 // travel beside it as well.
@@ -307,6 +349,43 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
                 sending.flags &= ~8;
             }
             send.run();
+        });
+    }
+
+    /** A conversation with this peer can be written into now: what waits for
+     *  it goes, oldest first. */
+    void conversationReady(long peer) {
+        ArrayList<Integer> ready = new ArrayList<>();
+        for (java.util.Map.Entry<Integer, Waiting> each : waiting.entrySet()) {
+            if (each.getValue().peer == peer && !each.getValue().going) {
+                ready.add(each.getKey());
+            }
+        }
+        // Local ids count down, so the oldest message has the highest.
+        java.util.Collections.sort(ready, java.util.Collections.reverseOrder());
+        if (!ready.isEmpty()) {
+            FileLog.d("mls: " + ready.size() + " message(s) to " + peer + " try again");
+        }
+        for (Integer id : ready) {
+            Waiting held = waiting.get(id);
+            held.going = true;
+            held.again.run();
+        }
+    }
+
+    /** On every round, whatever still waits tries again: a person who had no
+     *  device may have one now, and a pause on building may be over. */
+    void tryWaitingAgain() {
+        AndroidUtilities.runOnUIThread(() -> {
+            java.util.HashSet<Long> peers = new java.util.HashSet<>();
+            for (Waiting held : waiting.values()) {
+                if (!held.going) {
+                    peers.add(held.peer);
+                }
+            }
+            for (Long peer : peers) {
+                conversationReady(peer);
+            }
         });
     }
 
@@ -318,8 +397,9 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      * then on, the words it had never been able to read. So an edit into a chat
      * with a conversation goes encrypted or not at all - when encrypting fails
      * the edit is taken back on this phone and the person is told, rather than
-     * the words going up readable. A chat with no conversation edits as before;
-     * holding those is #256.
+     * the words going up readable - and so is one in a chat that encrypts but
+     * has no conversation yet (#256): an edit is not kept for later the way a
+     * new message is. A chat that does not encrypt edits as before.
      *
      * Asked where every edit request ends (performSendMessageRequest), so the
      * text edit, the caption edit and the file edit all pass here. One already
@@ -333,11 +413,12 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
             return true;
         }
         TLRPC.TL_messages_editMessage edit = (TLRPC.TL_messages_editMessage) request;
-        if (edit.message == null || MlsRuntime.isCiphertext(edit.message)) {
+        // A caption taken away carries nothing to hide.
+        if (edit.message == null || edit.message.isEmpty() || MlsRuntime.isCiphertext(edit.message)) {
             return true;
         }
         long peer = message.getDialogId();
-        if (!MlsRuntime.getInstance(currentAccount).hasConversation(peer)) {
+        if (!MlsRuntime.getInstance(currentAccount).encrypts(peer)) {
             return true;
         }
         String carried = MlsRuntime.getInstance(currentAccount).encrypt(peer, edit.message, edit.entities, null);

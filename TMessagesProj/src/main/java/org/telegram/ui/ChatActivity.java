@@ -14077,7 +14077,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     public void searchLinks(final CharSequence charSequence, final boolean force) {
-        if (MlsRuntime.getInstance(currentAccount).hasConversation(dialog_id)) { // ice9: no link preview in an encrypted chat, the server would see the link (#255)
+        if (MlsRuntime.getInstance(currentAccount).encrypts(dialog_id)) { // ice9: no link preview in an encrypted chat, the server would see the link (#255)
             return;
         }
         if (currentEncryptedChat != null && getMessagesController().secretWebpagePreview == 0 || editingMessageObject != null && (!editingMessageObject.isWebpage() || editingMessageObject.messageOwner.media.webpage instanceof TLRPC.TL_webPagePending)) {
