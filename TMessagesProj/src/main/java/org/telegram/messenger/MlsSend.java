@@ -2,6 +2,7 @@ package org.telegram.messenger;
 
 import android.widget.Toast;
 
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.TLRPCMls;
 
@@ -71,6 +72,55 @@ final class MlsSend extends BaseController {
             }
             send.run();
         });
+    }
+
+    /**
+     * The new words of an edit, encrypted on their way out (#252).
+     *
+     * Editing used to undo the encryption of a message that had gone out
+     * encrypted: the new text went up in the clear and the server held, from
+     * then on, the words it had never been able to read. So an edit into a chat
+     * with a conversation goes encrypted or not at all - when encrypting fails
+     * the edit is taken back on this phone and the person is told, rather than
+     * the words going up readable. A chat with no conversation edits as before;
+     * holding those is #256.
+     *
+     * Asked where every edit request ends (performSendMessageRequest), so the
+     * text edit, the caption edit and the file edit all pass here. One already
+     * carrying a ciphertext - a replaced file, encrypted with its description in
+     * sendMedia - is left as it is.
+     *
+     * @return whether the request may go.
+     */
+    boolean encryptEdit(TLObject request, MessageObject message) {
+        if (!(request instanceof TLRPC.TL_messages_editMessage) || message == null) {
+            return true;
+        }
+        TLRPC.TL_messages_editMessage edit = (TLRPC.TL_messages_editMessage) request;
+        if (edit.message == null || MlsRuntime.isCiphertext(edit.message)) {
+            return true;
+        }
+        long peer = message.getDialogId();
+        if (!MlsRuntime.getInstance(currentAccount).hasConversation(peer)) {
+            return true;
+        }
+        String carried = MlsRuntime.getInstance(currentAccount).encrypt(peer, edit.message, edit.entities, null);
+        if (carried == null) {
+            FileLog.e("mls: an edit of message " + message.getId() + " in " + peer
+                    + " could not be encrypted, so it is not sent");
+            getSendMessagesHelper().revertEditingMessageObject(message);
+            AndroidUtilities.runOnUIThread(() -> Toast.makeText(ApplicationLoader.applicationContext,
+                    LocaleController.getString(R.string.ErrorOccurred), Toast.LENGTH_SHORT).show());
+            return false;
+        }
+        MlsRuntime.getInstance(currentAccount).edited(peer, message.getId(), edit.message,
+                edit.entities == null ? null : new ArrayList<>(edit.entities), null);
+        FileLog.d("mls: an edit of message " + message.getId() + " in " + peer + " goes encrypted");
+        edit.message = carried;
+        // The formatting travelled inside the ciphertext.
+        edit.entities = new ArrayList<>();
+        edit.flags &= ~8;
+        return true;
     }
 
     /**
@@ -383,6 +433,21 @@ final class MlsSend extends BaseController {
             TLRPC.TL_messages_sendMedia sending = (TLRPC.TL_messages_sendMedia) message.sendRequest;
             caption = sending.message == null ? "" : sending.message;
             entities = sending.entities;
+        } else if (message.sendRequest instanceof TLRPC.TL_messages_editMessage) {
+            // A file replaced by an edit: the caption is the edit's, or the one
+            // the message already has when the edit left it alone (#252).
+            TLRPC.TL_messages_editMessage editing = (TLRPC.TL_messages_editMessage) message.sendRequest;
+            if (editing.message != null) {
+                caption = editing.message;
+                entities = editing.entities;
+            } else if (message.obj != null && message.obj.messageOwner.message != null) {
+                caption = message.obj.messageOwner.message;
+                entities = message.obj.messageOwner.entities;
+            }
+        } else {
+            FileLog.e("mls: a file went up encrypted for a request of another kind, so it is not sent");
+            message.markAsError();
+            return;
         }
 
         String carried = file == null || descriptor == null ? null
@@ -398,18 +463,32 @@ final class MlsSend extends BaseController {
             return;
         }
 
-        TLRPC.TL_messages_sendMedia request = (TLRPC.TL_messages_sendMedia) message.sendRequest;
-        request.media = MlsMedia.asBlob(file);
-        request.message = carried;
-        // An entity is a pair of offsets into the caption, and beside a
-        // ciphertext they point at nothing. They travelled inside instead.
-        request.entities.clear();
-        request.flags &= ~8;
-        if (message.obj != null) {
-            // Remembered under the random id the server will echo back, so its
-            // copy of this message does not replace the caption with base64.
-            MlsRuntime.getInstance(currentAccount)
-                    .wrote(message.obj.messageOwner.random_id, caption, descriptor);
+        if (message.sendRequest instanceof TLRPC.TL_messages_editMessage) {
+            TLRPC.TL_messages_editMessage editing = (TLRPC.TL_messages_editMessage) message.sendRequest;
+            editing.media = MlsMedia.asBlob(file);
+            editing.message = carried;
+            editing.entities = new ArrayList<>();
+            editing.flags = (editing.flags | 2048 | 16384) & ~8;
+            if (message.obj != null) {
+                // An edit has no random id to be remembered under: its copy is
+                // put back by the message it edits.
+                MlsRuntime.getInstance(currentAccount).edited(message.obj.getDialogId(), message.obj.getId(),
+                        caption, entities == null ? null : new ArrayList<>(entities), descriptor);
+            }
+        } else {
+            TLRPC.TL_messages_sendMedia request = (TLRPC.TL_messages_sendMedia) message.sendRequest;
+            request.media = MlsMedia.asBlob(file);
+            request.message = carried;
+            // An entity is a pair of offsets into the caption, and beside a
+            // ciphertext they point at nothing. They travelled inside instead.
+            request.entities.clear();
+            request.flags &= ~8;
+            if (message.obj != null) {
+                // Remembered under the random id the server will echo back, so its
+                // copy of this message does not replace the caption with base64.
+                MlsRuntime.getInstance(currentAccount)
+                        .wrote(message.obj.messageOwner.random_id, caption, descriptor);
+            }
         }
 
         FileLog.d("mls: sending " + decryptedSize + " encrypted bytes to " + message.peer

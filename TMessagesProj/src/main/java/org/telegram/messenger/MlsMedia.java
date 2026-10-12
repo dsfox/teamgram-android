@@ -335,6 +335,25 @@ public final class MlsMedia {
         return blob;
     }
 
+    /**
+     * Whether this is the blob the server holds for an encrypted file, as it
+     * comes back: what asBlob sent, not yet put together with its description.
+     * A file this device has described is a TL_mls_documentEncrypted.
+     */
+    public static boolean isBlob(TLRPC.MessageMedia media) {
+        if (!(media instanceof TLRPC.TL_messageMediaDocument) || media.document == null
+                || media.document instanceof TLRPCMls.TL_mls_documentEncrypted
+                || !"application/octet-stream".equals(media.document.mime_type)) {
+            return false;
+        }
+        for (TLRPC.DocumentAttribute attribute : media.document.attributes) {
+            if (attribute instanceof TLRPC.TL_documentAttributeFilename && "file".equals(attribute.file_name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ----------------------------------------------------------------------
     // Coming in
     // ----------------------------------------------------------------------

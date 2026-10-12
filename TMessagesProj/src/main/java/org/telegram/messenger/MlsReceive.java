@@ -220,6 +220,25 @@ final class MlsReceive extends BaseController {
         }
     }
 
+    /**
+     * An edit, opened the way a new message is (#252), and with the file it
+     * already had. An edit carries only its words - the other client writes it
+     * that way too - so the server's copy brings back the blob of noise it was
+     * given rather than the file this phone described; the stored one stays.
+     * The storage layer keeps it as well (MlsStorage.keepWhatIsReadable), and
+     * this is for the copy that is drawn before anything is stored.
+     */
+    void openEdit(TLRPC.Message message) {
+        openOrCatchUp(message);
+        if (!MlsMedia.isBlob(message.media)) {
+            return;
+        }
+        TLRPC.Message stored = getMessagesStorage().getMessage(MessageObject.getDialogId(message), message.id);
+        if (stored != null && stored.media != null && !MlsMedia.isBlob(stored.media)) {
+            message.media = stored.media;
+        }
+    }
+
     // ice9 #157: a difference holding a message that will not open waits for the
     // commits waiting in the box; any difference after it waits its turn, so the
     // state each one sets is never written out of order.

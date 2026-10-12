@@ -1512,7 +1512,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
     }
 
-    private void revertEditingMessageObject(MessageObject object) {
+    void revertEditingMessageObject(MessageObject object) { // ice9: MlsSend takes back an edit it cannot encrypt (#252)
         object.cancelEditing = true;
         object.messageOwner.media = object.previousMedia;
         object.messageOwner.message = object.previousMessage;
@@ -7970,6 +7970,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     return;
                 }
             }
+        }
+        if (!MlsSend.getInstance(currentAccount).encryptEdit(req, msgObj)) { // ice9: an edit goes encrypted or not at all (#252)
+            return;
         }
         final TLRPC.Message newMsgObj = msgObj.messageOwner;
         putToSendingMessages(newMsgObj, scheduled);

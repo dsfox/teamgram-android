@@ -175,7 +175,14 @@ public final class MlsStorage {
             TLRPC.Message message = messages.get(a);
             // A message with no id of its own has nothing stored to compare
             // against: it is being written for the first time.
-            if (message == null || message.id <= 0 || !unreadable(message.message)) {
+            if (message == null || message.id <= 0) {
+                continue;
+            }
+            // Readable words can still arrive over the server's blob: an edit
+            // carries only its words, so the file under an edited caption comes
+            // back as the noise the server was given (#252, the twin of #58).
+            boolean wordsLost = unreadable(message.message);
+            if (!wordsLost && !MlsMedia.isBlob(message.media)) {
                 continue;
             }
             long dialogId = MessageObject.getDialogId(message);
@@ -202,7 +209,18 @@ public final class MlsStorage {
                     cursor.dispose();
                 }
             }
-            if (stored == null || unreadable(stored.message)) {
+            if (stored == null) {
+                continue;
+            }
+            if (!wordsLost) {
+                if (stored.media != null && !MlsMedia.isBlob(stored.media)) {
+                    message.media = stored.media;
+                    FileLog.d("mls: kept the file of message " + message.id + " in " + dialogId
+                            + " - the copy that arrived had the server's blob");
+                }
+                continue;
+            }
+            if (unreadable(stored.message)) {
                 continue;
             }
             // Readable means words or a file: a picture sent without a caption

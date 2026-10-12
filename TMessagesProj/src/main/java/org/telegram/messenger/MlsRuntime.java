@@ -69,6 +69,23 @@ public class MlsRuntime {
     /** And what the file in it was, for the same reason. */
     private final Map<Long, TLRPCMls.TL_mls_media> sentMedia = new HashMap<>();
 
+    /** What this device last edited a message into, by "dialog:id": an edit
+     *  carries no random id, and its copy comes back as a ciphertext this
+     *  device wrote and can never open (#252). */
+    private final Map<String, Edited> editedHere = new HashMap<>();
+
+    private static final class Edited {
+        final String text;
+        final ArrayList<TLRPC.MessageEntity> entities;
+        final TLRPCMls.TL_mls_media media;
+
+        Edited(String text, ArrayList<TLRPC.MessageEntity> entities, TLRPCMls.TL_mls_media media) {
+            this.text = text;
+            this.entities = entities;
+            this.media = media;
+        }
+    }
+
     public static MlsRuntime getInstance(int account) {
         synchronized (MlsRuntime.class) {
             if (instances[account] == null) {
@@ -438,9 +455,12 @@ public class MlsRuntime {
     }
 
     /** Which conversation and which message, because an id alone is only
-     *  unique within one. */
+     *  unique within one - and which edit of it: an edit is the same message
+     *  with a new ciphertext, and keyed by the id alone it was answered with
+     *  the words it replaced (#252). */
     private static String openingKey(TLRPC.Message message) {
-        return MessageObject.getDialogId(message) + ":" + message.id;
+        String key = MessageObject.getDialogId(message) + ":" + message.id;
+        return message.edit_date != 0 ? key + ":" + message.edit_date : key;
     }
 
     private byte[] alreadyOpened(TLRPC.Message message) {
@@ -529,11 +549,24 @@ public class MlsRuntime {
         // their own sentence turn into base64 a second after sending it.
         if (message.out && isCiphertext(message.message)) {
             String written;
+            Edited edited;
             synchronized (this) {
                 written = wroteHere.get(message.random_id);
+                edited = editedHere.get(MessageObject.getDialogId(message) + ":" + message.id);
             }
             if (written != null) {
                 message.message = written;
+                return true;
+            }
+            if (edited != null && message.edit_date != 0) {
+                message.message = edited.text;
+                message.entities = edited.entities == null ? new ArrayList<>() : edited.entities;
+                if (!message.entities.isEmpty()) {
+                    message.flags |= 128;
+                }
+                if (edited.media != null) {
+                    MlsMedia.attach(message, edited.media);
+                }
                 return true;
             }
             // Nothing on this device will ever open it: MLS does not let a
@@ -544,7 +577,7 @@ public class MlsRuntime {
             // Said out loud, because this is the moment a person's own message
             // would be lost if the words were not already in the database. The
             // storage layer refuses to write this over them - see
-            // MessagesStorage.mlsKeepWhatIsReadable - and this line is how the
+            // MlsStorage.keepWhatIsReadable - and this line is how the
             // two halves can be told apart in a log.
             FileLog.d("mls: the server's copy of message " + message.id + " in "
                     + MessageObject.getDialogId(message)
@@ -859,6 +892,18 @@ public class MlsRuntime {
             if (media != null) {
                 sentMedia.put(randomId, media);
             }
+        }
+    }
+
+    /** Remembers what a message was edited into, for the copy of the edit that
+     *  comes back (#252); the file too when the edit replaced it. */
+    public void edited(long dialogId, int messageId, String text, ArrayList<TLRPC.MessageEntity> entities,
+                       TLRPCMls.TL_mls_media media) {
+        synchronized (this) {
+            if (editedHere.size() > 200) {
+                editedHere.clear();
+            }
+            editedHere.put(dialogId + ":" + messageId, new Edited(text, entities, media));
         }
     }
 

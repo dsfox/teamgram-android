@@ -19483,6 +19483,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                     }
                 }
+                MlsReceive.getInstance(currentAccount).openEdit(message); // ice9: an edit opens like a new message (#252)
                 if (!fromGetDifference) {
                     for (int a = 0, count = message.entities.size(); a < count; a++) {
                         TLRPC.MessageEntity entity = message.entities.get(a);
