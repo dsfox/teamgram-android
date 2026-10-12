@@ -80,6 +80,14 @@ public final class Offered {
     public static final boolean ARTICLES = false;
 
     /**
+     * Headings, lists and tables sent as Telegram's rich message: the
+     * structure travels beside the ciphertext, where the server reads it
+     * (#253). Off: a rich message is sent flattened to its text, inside the
+     * ciphertext. Only the article editor makes one, and it is off too.
+     */
+    public static final boolean RICH_MESSAGES = false;
+
+    /**
      * Telegram's own secret chats ("Start Secret Chat" on a profile). The server
      * has no messages.requestEncryption; every chat here is already end-to-end
      * encrypted with MLS. Issue #181.

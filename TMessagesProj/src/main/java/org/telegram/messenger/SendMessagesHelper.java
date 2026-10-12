@@ -4352,6 +4352,10 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         if (richMessage != null && DialogObject.isEncryptedDialog(peer)) {
             return;
         }
+        if (richMessage != null && !Offered.RICH_MESSAGES) { // ice9: structure goes flattened inside the ciphertext, never beside it (#253)
+            message = MessageObject.formatRichMessage(richMessage, true).toString();
+            richMessage = null;
+        }
         if (message == null && caption == null && richMessage == null) {
             caption = "";
         }
