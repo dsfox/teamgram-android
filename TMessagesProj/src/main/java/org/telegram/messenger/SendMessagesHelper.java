@@ -4308,6 +4308,10 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         MessageObject replyToTopMsg = sendMessageParams.replyToTopMsg;
         TLRPC.WebPage webPage = sendMessageParams.webPage;
         TLRPC.TL_messageMediaWebPage mediaWebPage = sendMessageParams.mediaWebPage;
+        if (MlsRuntime.getInstance(currentAccount).hasConversation(peer)) { // ice9: a preview would name the link beside the ciphertext (#255)
+            webPage = null;
+            mediaWebPage = null;
+        }
         boolean searchLinks = sendMessageParams.searchLinks;
         MessageObject retryMessageObject = sendMessageParams.retryMessageObject;
         ArrayList<TLRPC.MessageEntity> entities = sendMessageParams.entities;
