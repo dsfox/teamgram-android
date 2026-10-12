@@ -88,6 +88,13 @@ public final class Offered {
     public static final boolean RICH_MESSAGES = false;
 
     /**
+     * A draft synced through the server (messages.saveDraft): it put the words
+     * on the server before anybody decided to send them, for every chat (#264).
+     * Off: a draft stays on this phone, as the checklist says it does.
+     */
+    public static final boolean CLOUD_DRAFTS = false;
+
+    /**
      * Telegram's own secret chats ("Start Secret Chat" on a profile). The server
      * has no messages.requestEncryption; every chat here is already end-to-end
      * encrypted with MLS. Issue #181.

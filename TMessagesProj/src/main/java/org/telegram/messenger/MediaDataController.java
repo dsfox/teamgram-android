@@ -7802,7 +7802,7 @@ public class MediaDataController extends BaseController {
         saveDraft(dialogId, threadId, draftMessage, replyToMessage, false);
 
         if (threadId == 0 || ChatObject.isForum(chat) || ChatObject.isMonoForum(chat)) {
-            if (!DialogObject.isEncryptedDialog(dialogId)) {
+            if (Offered.CLOUD_DRAFTS && !DialogObject.isEncryptedDialog(dialogId)) { // ice9: a draft stays on the phone (#264)
                 TLRPC.TL_messages_saveDraft req = new TLRPC.TL_messages_saveDraft();
                 req.peer = getMessagesController().getInputPeer(dialogId);
                 if (req.peer == null) {
