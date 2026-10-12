@@ -2328,7 +2328,7 @@ public class MlsRuntime {
      *  fallen, which is the moment somebody signed a phone out. */
     /**
      * Asks for the membership of every group this device holds a conversation
-     * for, once, when the app comes back.
+     * for, and compares every chat between two it holds one for.
      *
      * A change that happened while the app was not running never arrives as an
      * update - it is already in the history by then - and the hook that acts on
@@ -2356,13 +2356,23 @@ public class MlsRuntime {
             conversations = new ArrayList<>(groupIdByPeer.keySet());
         }
         int asked = 0;
+        int compared = 0;
         for (Long peerId : conversations) {
             if (peerId != null && DialogObject.isChatDialog(peerId)) {
                 MessagesController.getInstance(currentAccount).loadFullChat(-peerId, 0, true);
                 asked++;
+            } else if (peerId != null && peerId > 0) {
+                // A chat between two has no participant list to ask for, and
+                // was compared only when this phone wrote into it: a peer who
+                // set up a new phone was never let in while nobody here wrote,
+                // though the server said all along who was short (#247).
+                final long peer = peerId;
+                AndroidUtilities.runOnUIThread(() -> reconcile(peer));
+                compared++;
             }
         }
-        FileLog.d("mls: asked for the membership of " + asked + " group(s) after starting");
+        FileLog.d("mls: asked for the membership of " + asked + " group(s), compared "
+                + compared + " chat(s) between two");
     }
 
     /** The leaves of this conversation that name nobody, by their full names. */
