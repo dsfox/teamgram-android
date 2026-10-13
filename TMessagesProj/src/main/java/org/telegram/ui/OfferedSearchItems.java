@@ -45,7 +45,6 @@ final class OfferedSearchItems {
         guid(217, Offered.CALLS);
         link("tg2://settings/data/use-less-data", Offered.CALLS);
         guid(219, Offered.CALLS);
-        link("tg2://settings/data/proxy/use-for-calls", Offered.CALLS);
         link("tg2://settings/data/save-to-photos/channels", Offered.CHANNELS);
 
         guid(319, Offered.CLOUD_THEMES);
