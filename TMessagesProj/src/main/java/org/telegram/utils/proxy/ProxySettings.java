@@ -235,7 +235,7 @@ public final class ProxySettings {
                 }
 
                 host = host.toLowerCase();
-                if (!host.equals("telegram.me") && !host.equals("i.ice9.app") && !host.equals("telegram.dog")) {
+                if (!host.equals("i.ice9.app")) { // ice9: links come from our host alone (#195)
                     return null;
                 }
 
