@@ -530,4 +530,5 @@
     <string name="ArticleConversionText">This message uses rich formatting, which requires **ice9 Premium**.</string>
     <string name="UnsupportedBlockMessage">Update ice9 to view this part of the message</string>
     <string name="UnsupportedMessageMessage">Update ice9 to view this message</string>
+    <string name="RoundVideoCompositionInfo">Disable styling to record a plain square without outside-circle blur, dimming or ice9 overlays.</string>
 </resources>

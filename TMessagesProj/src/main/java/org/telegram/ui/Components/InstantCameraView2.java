@@ -370,6 +370,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         upload = MlsRoundVideo.liveUpload(currentAccount, delegate.getDialogId(), secretChat); // ice9: a round video in a chat that encrypts uploads whole, after recording (#80)
         activeOutputResolution = SharedSettings.roundVideoOutputResolution.get();
         session = new RoundVideoSession.Builder(getContext(), textureView)
+                .setOutputDirectory(new File(ApplicationLoader.getFilesDirFixed(), "cache"))
                 .setInitialFacing(SharedSettings.roundVideoLastCamera.get())
                 .setOutputResolution(activeOutputResolution)
                 .setVideoBitrate(SharedSettings.roundVideoVideoBitrate.get())
