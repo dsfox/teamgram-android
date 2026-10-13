@@ -3370,7 +3370,7 @@ public class InstantCameraView extends FrameLayout implements NotificationCenter
         private void didWriteData(File file, long availableSize, boolean last) {
             // ice9: in an encrypted chat the round video uploads whole, after recording (#80)
             if (org.telegram.messenger.MlsRuntime.getInstance(currentAccount)
-                    .hasConversation(delegate.getDialogId())) {
+                    .encrypts(delegate.getDialogId())) {
                 if (last) {
                     FileLog.d("mls: a round recording finished whole at " + file);
                     SendMessagesHelper.getInstance(currentAccount)

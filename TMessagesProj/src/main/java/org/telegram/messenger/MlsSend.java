@@ -119,7 +119,8 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
 
     /**
      * Whether an item of an album leaves upstream's album path for this one
-     * (#254): yes when the chat has a conversation.
+     * (#254): yes when the chat encrypts, whether or not a conversation exists
+     * yet (#257) - its items then wait in sendMedia like any file.
      *
      * Upstream's album path uploaded the pictures as pictures and sent the
      * captions beside them, and nothing on it knew about encryption. So an
@@ -134,7 +135,7 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      * waiting for them would wait for good. It goes alone, encrypted.
      */
     boolean takesAlbumItem(long peer, TLRPC.Message message, long groupId, boolean last, boolean again) {
-        if (!MlsRuntime.getInstance(currentAccount).hasConversation(peer)) {
+        if (!MlsRuntime.getInstance(currentAccount).encrypts(peer)) {
             return false;
         }
         if (again) {
@@ -316,23 +317,12 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      */
     void encryptThenSend(long peer, int messageId, TLRPC.TL_messages_sendMessage sending, long randomId, String plain,
                          ArrayList<TLRPC.MessageEntity> entities, MlsRuntime.Forwarded forwarded, Runnable send) {
-        if (waiting.containsKey(messageId)) {
-            // Sent again by the app's own resend while it waits here, or while it
-            // is on its way: once is enough.
-            FileLog.d("mls: message " + messageId + " is already waiting to be encrypted");
-            return;
-        }
-        attempt(peer, messageId, sending, randomId, plain, entities, forwarded, send);
-    }
-
-    private void attempt(long peer, int messageId, TLRPC.TL_messages_sendMessage sending, long randomId, String plain,
-                         ArrayList<TLRPC.MessageEntity> entities, MlsRuntime.Forwarded forwarded, Runnable send) {
         MlsRuntime runtime = MlsRuntime.getInstance(currentAccount);
         runtime.ensureConversation(peer, () -> {
             String carried = runtime.encrypt(peer, plain, entities, forwarded);
             if (carried == null && runtime.encrypts(peer)) {
                 waiting.put(messageId, new Waiting(peer,
-                        () -> attempt(peer, messageId, sending, randomId, plain, entities, forwarded, send)));
+                        () -> encryptThenSend(peer, messageId, sending, randomId, plain, entities, forwarded, send)));
                 FileLog.d("mls: message " + messageId + " to " + peer + " waits until it can be encrypted");
                 return;
             }
@@ -350,6 +340,12 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
             }
             send.run();
         });
+    }
+
+    /** Whether this message waits here to be encrypted, or is on its way: the
+     *  app's own resend leaves it alone, since it goes by itself. */
+    boolean isWaiting(int messageId) {
+        return waiting.containsKey(messageId);
     }
 
     /** A conversation with this peer can be written into now: what waits for
@@ -705,6 +701,23 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
     }
 
     /**
+     * A file that went up encrypted and cannot be described yet - no
+     * conversation so far, or one this phone waits to be let into - waits the
+     * way a message does (#257), and goes from what is already uploaded once
+     * the conversation is ready.
+     */
+    private void waitWithFile(SendMessagesHelper.DelayedMessage message, TLRPC.InputEncryptedFile uploaded,
+                              byte[] key, byte[] iv, long decryptedSize, String path) {
+        int id = message.obj.getId();
+        // Whatever was sent after it and waits for it goes now, and waits on
+        // its own if it has to.
+        message.sendDelayedRequests();
+        waiting.put(id, new Waiting(message.peer, () -> sendMedia(message, uploaded, key, iv, decryptedSize, path)));
+        FileLog.d("mls: message " + id + " to " + message.peer
+                + " waits until it can be encrypted, its file already up");
+    }
+
+    /**
      * Whether the bytes of this message have to be encrypted on the way up.
      *
      * True for a secret chat, which is what "sendRequest == null" meant at
@@ -717,17 +730,21 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      * was going up encrypted and a video, a voice message and a document were
      * going up in the clear, in the same conversation, with nothing said.
      *
-     * An item of an album gathered here goes up encrypted even when the
-     * conversation has gone since it was given: it then fails in sendMedia and
-     * the album goes without it, rather than the item going alone in the clear
-     * while the album waits for it.
+     * Decided by whether the chat encrypts, not by whether a conversation
+     * exists yet: the first file to somebody went up as a picture anybody could
+     * open (#257). Without a conversation the file goes up encrypted all the
+     * same, one is started beside the upload, and the file waits in sendMedia
+     * until it can be described.
      */
     boolean uploadEncrypted(SendMessagesHelper.DelayedMessage message) {
         if (message.sendRequest == null) {
             return true;
         }
-        message.mlsEncrypted = MlsRuntime.getInstance(currentAccount)
-                .hasConversation(message.peer) || albumOf(message) != null;
+        MlsRuntime runtime = MlsRuntime.getInstance(currentAccount);
+        message.mlsEncrypted = runtime.encrypts(message.peer);
+        if (message.mlsEncrypted && !runtime.hasConversation(message.peer)) {
+            runtime.ensureConversation(message.peer);
+        }
         FileLog.d("mls: a file of type " + message.type + " for " + message.peer
                 + " goes up " + (message.mlsEncrypted ? "encrypted" : "in the clear"));
         return message.mlsEncrypted;
@@ -745,6 +762,9 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      */
     void sendMedia(SendMessagesHelper.DelayedMessage message, TLRPC.InputEncryptedFile uploaded,
                               byte[] key, byte[] iv, long decryptedSize, String path) {
+        if (message.obj != null) {
+            waiting.remove(message.obj.getId());
+        }
         TLRPC.InputFile file = MlsMedia.asPlainFile(uploaded);
         TLRPCMls.TL_mls_media descriptor = message.obj == null ? null
                 : MlsMedia.describe(message.obj.messageOwner, key, iv, decryptedSize, path);
@@ -776,6 +796,12 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
                 : MlsRuntime.getInstance(currentAccount)
                         .encrypt(message.peer, caption, entities, message.mlsForwarded, descriptor);
         if (carried == null) {
+            if (file != null && descriptor != null && message.obj != null
+                    && message.sendRequest instanceof TLRPC.TL_messages_sendMedia
+                    && MlsRuntime.getInstance(currentAccount).encrypts(message.peer)) {
+                waitWithFile(message, uploaded, key, iv, decryptedSize, path);
+                return;
+            }
             // The bytes are already up there and nobody can read them: the key
             // never left this device. Sending the document anyway would post
             // something that can never be opened by anyone, so the message

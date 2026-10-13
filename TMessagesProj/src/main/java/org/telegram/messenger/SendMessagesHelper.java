@@ -1723,6 +1723,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             }
             return false;
         }
+        if (MlsSend.getInstance(currentAccount).isWaiting(messageObject.getId())) { // ice9: a message waiting to be encrypted goes by itself (#257)
+            return true;
+        }
         if (messageObject.messageOwner.action instanceof TLRPC.TL_messageEncryptedAction) {
             int enc_id = DialogObject.getEncryptedChatId(messageObject.getDialogId());
             TLRPC.EncryptedChat encryptedChat = getMessagesController().getEncryptedChat(enc_id);
@@ -10786,7 +10789,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             boolean isEncrypted = DialogObject.isEncryptedDialog(dialogId);
             // ice9: an encrypted conversation uploads a file again instead of reusing the first send
             boolean carriesOwnKey = MlsRuntime.getInstance(accountInstance.getCurrentAccount())
-                    .hasConversation(dialogId);
+                    .encrypts(dialogId);
             if (!forceDocument && groupMediaFinal) {
                 workers = new HashMap<>();
                 for (int a = 0; a < count; a++) {
