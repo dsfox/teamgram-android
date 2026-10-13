@@ -153,6 +153,7 @@ public abstract class BaseLocationAdapter extends AdapterWithDiffUtils {
     }
 
     public void searchPlacesWithQuery(final String query, final Location coordinate, boolean searchUser, boolean animated) {
+        if (!org.telegram.messenger.Offered.BOTS) return; // ice9: no venue bot, it would be told where the phone is (#267)
         if (coordinate == null && !stories || lastSearchLocation != null && coordinate != null && coordinate.distanceTo(lastSearchLocation) < 200) {
             return;
         }

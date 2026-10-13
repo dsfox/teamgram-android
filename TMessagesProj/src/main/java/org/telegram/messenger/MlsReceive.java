@@ -150,6 +150,12 @@ final class MlsReceive extends BaseController {
                     if (opened.get(j).id == shown.getId()) {
                         shown.messageOwner.message = opened.get(j).message;
                         shown.messageOwner.entities = opened.get(j).entities;
+                        // A location or a contact came inside the ciphertext
+                        // (#267), and the row names it by what it is.
+                        if (MlsInside.wire(opened.get(j).media) != null) {
+                            MlsInside.put(shown.messageOwner, opened.get(j).media);
+                            shown.updateMessageText();
+                        }
                         shown.generateCaption();
                         shown.setType();
                         changed = true;

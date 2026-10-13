@@ -317,12 +317,20 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      */
     void encryptThenSend(long peer, int messageId, TLRPC.TL_messages_sendMessage sending, long randomId, String plain,
                          ArrayList<TLRPC.MessageEntity> entities, MlsRuntime.Forwarded forwarded, Runnable send) {
+        encryptThenSend(peer, messageId, sending, randomId, plain, entities, forwarded, null, send);
+    }
+
+    /** The same, a location or a contact riding inside (#267). */
+    void encryptThenSend(long peer, int messageId, TLRPC.TL_messages_sendMessage sending, long randomId, String plain,
+                         ArrayList<TLRPC.MessageEntity> entities, MlsRuntime.Forwarded forwarded, TLObject inside,
+                         Runnable send) {
         MlsRuntime runtime = MlsRuntime.getInstance(currentAccount);
         runtime.ensureConversation(peer, () -> {
-            String carried = runtime.encrypt(peer, plain, entities, forwarded);
+            String carried = runtime.encrypt(peer, plain, entities, forwarded, null, inside);
             if (carried == null && runtime.encrypts(peer)) {
                 waiting.put(messageId, new Waiting(peer,
-                        () -> encryptThenSend(peer, messageId, sending, randomId, plain, entities, forwarded, send)));
+                        () -> encryptThenSend(peer, messageId, sending, randomId, plain, entities, forwarded, inside,
+                                send)));
                 FileLog.d("mls: message " + messageId + " to " + peer + " waits until it can be encrypted");
                 return;
             }
@@ -331,7 +339,7 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
                 // Remembered under the same random id the server will echo
                 // back, so its copy does not replace what was written with
                 // base64.
-                runtime.wrote(randomId, plain);
+                runtime.wrote(randomId, plain, null, inside);
                 sending.message = carried;
                 // The formatting travels inside the ciphertext, so it must not
                 // travel beside it as well.
@@ -401,6 +409,9 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
         if (request instanceof TLRPC.TL_messages_editMessage) {
             return encryptEdit(request, message);
         }
+        if (sendsInside(request, message)) {
+            return false;
+        }
         String kind = message == null ? null : besideTheCiphertext(request, message.getDialogId());
         if (kind == null) {
             return true;
@@ -421,6 +432,35 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
             refuse(each, kind);
         }
         return false;
+    }
+
+    /**
+     * A location or a contact, sent as a text whose ciphertext carries it
+     * (#267); the media request it came as never leaves. The text waits for
+     * a conversation the way any text does (#256). False when the request is
+     * not one, and it goes on to the check below - a live location among them.
+     */
+    private boolean sendsInside(TLObject request, MessageObject message) {
+        if (!(request instanceof TLRPC.TL_messages_sendMedia) || message == null) {
+            return false;
+        }
+        TLRPC.TL_messages_sendMedia sending = (TLRPC.TL_messages_sendMedia) request;
+        long peer = message.getDialogId();
+        if (!MlsInside.carries(sending.media) || !MlsRuntime.getInstance(currentAccount).encrypts(peer)) {
+            return false;
+        }
+        TLObject inside = MlsInside.wire(message.messageOwner.media);
+        if (inside == null) {
+            return false;
+        }
+        TLRPC.TL_messages_sendMessage text = MlsInside.asText(sending);
+        FileLog.d("mls: " + MlsInside.kindOf(inside) + " to " + peer + " goes inside the ciphertext, message "
+                + message.getId());
+        encryptThenSend(peer, message.getId(), text, sending.random_id, "", null,
+                MlsInside.forward(message.messageOwner.params), inside,
+                () -> getSendMessagesHelper().performSendMessageRequest(text, message, null, null, false, null, null,
+                        message.messageOwner.params, message.scheduled));
+        return true;
     }
 
     /** What would go beside the ciphertext, or null when nothing would. */
@@ -580,6 +620,43 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
     }
 
     /**
+     * A location or a contact forwarded into a chat that encrypts (#267): sent
+     * again as itself, its author kept with it, and carried inside the
+     * ciphertext. It has no bytes to read, so the file route refused it with
+     * an error.
+     */
+    private boolean forwardInside(MessageObject messageObject, TLRPC.MessageMedia carried, long did, long payStars,
+                                  long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+        HashMap<String, String> params = new HashMap<>();
+        MlsInside.keepForward(params, forwardedFrom(messageObject));
+        SendMessagesHelper.SendMessageParams fparams;
+        if (carried instanceof TLRPC.TL_messageMediaContact) {
+            // The way a shared card becomes something to send.
+            TLRPC.User user = new TLRPC.TL_userContact_old2();
+            user.phone = carried.phone_number;
+            user.first_name = carried.first_name;
+            user.last_name = carried.last_name;
+            user.id = carried.user_id;
+            if (carried.vcard != null && !carried.vcard.isEmpty()) {
+                TLRPC.RestrictionReason reason = new TLRPC.RestrictionReason();
+                reason.text = carried.vcard;
+                reason.platform = "";
+                reason.reason = "";
+                user.restriction_reason.add(reason);
+            }
+            fparams = SendMessagesHelper.SendMessageParams.of(user, did, null, null, null, params, true, 0, 0);
+        } else {
+            fparams = SendMessagesHelper.SendMessageParams.of(carried, did, null, null, null, params, true, 0, 0);
+        }
+        fparams.payStars = payStars;
+        fparams.monoForumPeer = monoForumPeerId;
+        fparams.suggestionParams = suggestionParams;
+        getSendMessagesHelper().sendMessage(fparams);
+        FileLog.d("mls: a location or a contact forwarded to " + did + " is sent again, inside the ciphertext");
+        return true;
+    }
+
+    /**
      * Sends a file again rather than forwarding it, when the conversation it is
      * going into encrypts.
      *
@@ -589,12 +666,17 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      *
      * A file that is not on this device cannot be sent again, because sending
      * it means reading it. Rather than forward it in the clear, which is the
-     * thing this exists to prevent, the message is refused and says why.
+     * thing this exists to prevent, the message is refused and says why. A
+     * location or a contact has no file and is sent again as itself (#267).
      */
     boolean forwardEncryptedFile(MessageObject messageObject, long did, long payStars,
                                          long monoForumPeerId, MessageSuggestionParams suggestionParams) {
         if (!MlsRuntime.getInstance(currentAccount).hasConversation(did)) {
             return false;
+        }
+        TLRPC.MessageMedia carried = MlsInside.media(MlsInside.wire(messageObject.messageOwner.media));
+        if (carried != null) {
+            return forwardInside(messageObject, carried, did, payStars, monoForumPeerId, suggestionParams);
         }
         File file = forwardableBytes(messageObject);
         if (file == null) {

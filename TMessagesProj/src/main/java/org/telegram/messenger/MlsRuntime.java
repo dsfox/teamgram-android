@@ -6,6 +6,7 @@ import android.util.Base64;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.InputSerializedData;
 import org.telegram.tgnet.SerializedData;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.TLRPCMls;
 
@@ -68,6 +69,10 @@ public class MlsRuntime {
 
     /** And what the file in it was, for the same reason. */
     private final Map<Long, TLRPCMls.TL_mls_media> sentMedia = new HashMap<>();
+
+    /** And the location or contact it carried inside (#267): the server's
+     *  copy is a text with nothing beside it. */
+    private final Map<Long, TLObject> sentInside = new HashMap<>();
 
     /** What this device last edited a message into, by "dialog:id": an edit
      *  carries no random id, and its copy comes back as a ciphertext this
@@ -346,6 +351,8 @@ public class MlsRuntime {
          *  holding it as a blob of noise and this is the only description of
          *  it that exists. */
         public TLRPCMls.TL_mls_media media;
+        /** The location or contact that came inside it (#267). */
+        public TLObject inside;
         /** What came out of the ciphertext, before it was made sense of. Kept
          *  so the same message can be shown again without asking MLS, which
          *  would refuse: a message opens exactly once. */
@@ -550,12 +557,15 @@ public class MlsRuntime {
         if (message.out && isCiphertext(message.message)) {
             String written;
             Edited edited;
+            TLObject inside;
             synchronized (this) {
                 written = wroteHere.get(message.random_id);
+                inside = sentInside.get(message.random_id);
                 edited = editedHere.get(MessageObject.getDialogId(message) + ":" + message.id);
             }
             if (written != null) {
                 message.message = written;
+                MlsInside.put(message, MlsInside.media(inside));
                 return true;
             }
             if (edited != null && message.edit_date != 0) {
@@ -650,6 +660,10 @@ public class MlsRuntime {
             if (opened.media != null) {
                 MlsMedia.attach(message, opened.media);
             }
+            // And a location or a contact is drawn again from what came inside (#267).
+            if (opened.inside != null) {
+                MlsInside.put(message, MlsInside.media(opened.inside));
+            }
             // The ciphertext has done its work and cannot be used again: MLS
             // opens a message once.
             if (isCiphertext(message.attachPath)) {
@@ -708,6 +722,7 @@ public class MlsRuntime {
                             message.forward.from_id, message.forward.from_name, message.forward.date);
                 }
                 opened.media = message.media;
+                opened.inside = message.geo != null ? message.geo : message.contact;
                 return opened;
             }
         }
@@ -906,14 +921,23 @@ public class MlsRuntime {
      * stored, that copy replaces a local one that was right.
      */
     public void wrote(long randomId, String text, TLRPCMls.TL_mls_media media) {
+        wrote(randomId, text, media, null);
+    }
+
+    /** The same, for a location or a contact carried inside (#267). */
+    public void wrote(long randomId, String text, TLRPCMls.TL_mls_media media, TLObject inside) {
         synchronized (this) {
             if (wroteHere.size() > 200) {
                 wroteHere.clear();     // nothing here is worth keeping for long
                 sentMedia.clear();
+                sentInside.clear();
             }
             wroteHere.put(randomId, text);
             if (media != null) {
                 sentMedia.put(randomId, media);
+            }
+            if (inside != null) {
+                sentInside.put(randomId, inside);
             }
         }
     }
@@ -946,9 +970,11 @@ public class MlsRuntime {
         }
         String written;
         TLRPCMls.TL_mls_media media;
+        TLObject inside;
         synchronized (this) {
             written = wroteHere.get(randomId);
             media = sentMedia.get(randomId);
+            inside = sentInside.get(randomId);
         }
         if (written != null) {
             echoed.message = written;
@@ -956,6 +982,7 @@ public class MlsRuntime {
         if (media != null) {
             MlsMedia.attach(echoed, media);
         }
+        MlsInside.put(echoed, MlsInside.media(inside));
     }
 
     /**
@@ -1026,9 +1053,18 @@ public class MlsRuntime {
      */
     public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities,
                           Forwarded from, TLRPCMls.TL_mls_media media) {
+        return encrypt(peerId, text, entities, from, media, null);
+    }
+
+    /**
+     * The same, carrying a location or a contact inside (#267): mls.geo or
+     * mls.contact after the file, which an older reader skips.
+     */
+    public String encrypt(long peerId, String text, ArrayList<TLRPC.MessageEntity> entities,
+                          Forwarded from, TLRPCMls.TL_mls_media media, TLObject inside) {
         // A file with no caption is still a message worth sending, so emptiness
         // only stops the ones that carry nothing at all.
-        if ((text == null || text.isEmpty()) && media == null) {
+        if ((text == null || text.isEmpty()) && media == null && inside == null) {
             return null;
         }
         if (text == null) {
@@ -1095,6 +1131,13 @@ public class MlsRuntime {
                     if (media != null) {
                         content.media = media;
                         content.flags |= 2;
+                    }
+                    if (inside instanceof TLRPCMls.TL_mls_geo) {
+                        content.geo = (TLRPCMls.TL_mls_geo) inside;
+                        content.flags |= 4;
+                    } else if (inside instanceof TLRPCMls.TL_mls_contact) {
+                        content.contact = (TLRPCMls.TL_mls_contact) inside;
+                        content.flags |= 8;
                     }
                     SerializedData out = new SerializedData();
                     content.serializeToStream(out);

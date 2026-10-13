@@ -770,12 +770,117 @@ public class TLRPCMls {
     }
 
     /**
+     * mls.geo lat:double long:double accuracy_radius:int title:string address:string provider:string venue_id:string venue_type:string = mls.Geo;
+     *
+     * A location sent once (#267): a place when it has a title, a point when
+     * not; an accuracy of zero is none.
+     */
+    public static class TL_mls_geo extends TLObject {
+        public static final int constructor = -2123525959;
+
+        public double lat;
+        public double _long;
+        public int accuracy_radius;
+        public String title = "";
+        public String address = "";
+        public String provider = "";
+        public String venue_id = "";
+        public String venue_type = "";
+
+        public static TL_mls_geo TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_geo.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.geo", constructor));
+                }
+                return null;
+            }
+            TL_mls_geo result = new TL_mls_geo();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            lat = stream.readDouble(exception);
+            _long = stream.readDouble(exception);
+            accuracy_radius = stream.readInt32(exception);
+            title = stream.readString(exception);
+            address = stream.readString(exception);
+            provider = stream.readString(exception);
+            venue_id = stream.readString(exception);
+            venue_type = stream.readString(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeDouble(lat);
+            stream.writeDouble(_long);
+            stream.writeInt32(accuracy_radius);
+            stream.writeString(title);
+            stream.writeString(address);
+            stream.writeString(provider);
+            stream.writeString(venue_id);
+            stream.writeString(venue_type);
+        }
+    }
+
+    /**
+     * mls.contact phone_number:string first_name:string last_name:string vcard:string user_id:long = mls.Contact;
+     *
+     * A contact (#267). The user id is zero when the person is not known to
+     * the sender as an account; the card is empty when it was too long to
+     * carry.
+     */
+    public static class TL_mls_contact extends TLObject {
+        public static final int constructor = 104717692;
+
+        public String phone_number = "";
+        public String first_name = "";
+        public String last_name = "";
+        public String vcard = "";
+        public long user_id;
+
+        public static TL_mls_contact TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_contact.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.contact", constructor));
+                }
+                return null;
+            }
+            TL_mls_contact result = new TL_mls_contact();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            phone_number = stream.readString(exception);
+            first_name = stream.readString(exception);
+            last_name = stream.readString(exception);
+            vcard = stream.readString(exception);
+            user_id = stream.readInt64(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeString(phone_number);
+            stream.writeString(first_name);
+            stream.writeString(last_name);
+            stream.writeString(vcard);
+            stream.writeInt64(user_id);
+        }
+    }
+
+    /**
      * mls.message flags:# text:string entities:Vector&lt;MessageEntity&gt; forward:flags.0?mls.Forward media:flags.1?mls.Media = mls.Content;
      *
      * What goes inside the ciphertext now that a message can be more than text:
      * the text with its formatting, where it was forwarded from, and what file
      * it carries. The two older shapes - mls.content and mls.forwarded - are
      * still read, because they are in people's chats.
+     *
+     * geo:flags.2?mls.Geo and contact:flags.3?mls.Contact follow media (#267).
+     * The id stays the one of the declaration above: a reader that does not
+     * know them skips the flags and the bytes after media, and opens the
+     * message as an empty text instead of failing it.
      */
     public static class TL_mls_message extends TLObject {
         public static final int constructor = 995434673;
@@ -785,6 +890,8 @@ public class TLRPCMls {
         public java.util.ArrayList<TLRPC.MessageEntity> entities = new java.util.ArrayList<>();
         public TL_mls_forward forward;
         public TL_mls_media media;
+        public TL_mls_geo geo;
+        public TL_mls_contact contact;
 
         public static TL_mls_message TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
             if (TL_mls_message.constructor != constructor) {
@@ -822,6 +929,14 @@ public class TLRPCMls {
             if ((flags & 2) != 0) {
                 media = TL_mls_media.TLdeserialize(stream, stream.readInt32(exception), exception);
             }
+            // Leniently: a shape this client does not know leaves the rest of
+            // the message readable.
+            if ((flags & 4) != 0) {
+                geo = TL_mls_geo.TLdeserialize(stream, stream.readInt32(false), false);
+            }
+            if ((flags & 8) != 0) {
+                contact = TL_mls_contact.TLdeserialize(stream, stream.readInt32(false), false);
+            }
         }
 
         public void serializeToStream(OutputSerializedData stream) {
@@ -838,6 +953,12 @@ public class TLRPCMls {
             }
             if ((flags & 2) != 0) {
                 media.serializeToStream(stream);
+            }
+            if ((flags & 4) != 0) {
+                geo.serializeToStream(stream);
+            }
+            if ((flags & 8) != 0) {
+                contact.serializeToStream(stream);
             }
         }
     }

@@ -171,8 +171,8 @@ public final class Offered {
      *
      * It is a stream of edits the server applies to a location it can read; in
      * a chat that encrypts it would have to be a stream of ciphertexts nothing
-     * here builds yet. A location sent once travels encrypted (the step after
-     * #258). Issue #258.
+     * here builds yet. A location sent once travels inside the ciphertext
+     * (#267). Issue #258.
      */
     public static final boolean LIVE_LOCATION = false;
 

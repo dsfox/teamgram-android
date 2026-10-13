@@ -215,6 +215,8 @@ public final class MlsStorage {
             if (!wordsLost) {
                 if (stored.media != null && !MlsMedia.isBlob(stored.media)) {
                     message.media = stored.media;
+                    // Kept only with the flag that says a message has media (#267).
+                    message.flags |= TLRPC.MESSAGE_FLAG_HAS_MEDIA;
                     FileLog.d("mls: kept the file of message " + message.id + " in " + dialogId
                             + " - the copy that arrived had the server's blob");
                 }
@@ -245,6 +247,7 @@ public final class MlsStorage {
             // given; the picture is the one already here, made by this device.
             if (stored.media != null) {
                 message.media = stored.media;
+                message.flags |= TLRPC.MESSAGE_FLAG_HAS_MEDIA;
             }
             // A forward into an encrypted conversation travels as an ordinary
             // message, so the copy coming back says nothing about who wrote it
