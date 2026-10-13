@@ -13,7 +13,7 @@ import java.util.HashMap;
 /**
  * Sending into a conversation that encrypts: text encrypted once there is a
  * conversation, files encrypted on the way up and described inside the
- * ciphertext, forwards of files sent again rather than copied. Kept out of
+ * ciphertext, forwards sent again rather than copied. Kept out of
  * SendMessagesHelper, which upstream rewrites at every release, and reached
  * from it by one call at each place it begins (#196).
  */
@@ -471,6 +471,9 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
         if (request instanceof TLRPC.TL_messages_sendInlineBotResult) {
             return "an inline bot's result";
         }
+        if (request instanceof TLRPC.TL_messages_forwardMessages) {
+            return "a copy the server makes by id";
+        }
         if (request instanceof TLRPC.TL_messages_sendMedia) {
             TLRPC.TL_messages_sendMedia sending = (TLRPC.TL_messages_sendMedia) request;
             return carried(sending.media, sending.message) ? null : kindOf(sending.media);
@@ -554,38 +557,74 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
     }
 
     /**
-     * Where a forward actually arrives, whatever started it. A forward of a
-     * file into a conversation that encrypts cannot be a forward at all: the
-     * server copies by id, so the copy points at the original blob - under a
-     * key this conversation was never given, or under none - and carries
-     * neither a description nor a key. Nobody could open it and nothing would
-     * say so. Those files are sent again; null means nothing here was ours to
-     * handle, a number is what the caller returns.
+     * Where a forward actually arrives, whatever started it. Into a chat that
+     * encrypts a forward cannot be a forward at all: the server copies by id,
+     * so the copy is the words as they were - in the clear, or a ciphertext of
+     * the conversation they came from, which nobody here can open - and a file
+     * points at the original blob, under a key this conversation was never
+     * given. Each message is sent again instead, encrypted for this chat, with
+     * who wrote it first inside the ciphertext, and it waits for a
+     * conversation like any message (#256, #259). Decided by the kind of chat,
+     * not by a conversation being there already: the first thing somebody is
+     * sent may be a forward. Null means nothing here was ours to handle, a
+     * number is what the caller returns.
      */
     Integer splitForwards(ArrayList<MessageObject> messages, long peer, boolean forwardFromMyName, boolean hideCaption,
                           boolean notify, int scheduleDate, int scheduleRepeatPeriod, MessageObject replyToTopMsg,
                           int video_timestamp, long payStars, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
-        if (messages != null && !messages.isEmpty()
-                && MlsRuntime.getInstance(currentAccount).hasConversation(peer)
-                && hasFile(messages)) {
-            ArrayList<MessageObject> plain = new ArrayList<>();
-            for (MessageObject each : messages) {
-                if (each != null && each.messageOwner != null && each.messageOwner.media != null
-                        && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty)
-                        && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage)) {
-                    forwardEncryptedFile(each, peer, payStars, monoForumPeerId, suggestionParams);
-                } else {
-                    plain.add(each);
+        if (messages == null || messages.isEmpty() || !MlsRuntime.getInstance(currentAccount).encrypts(peer)) {
+            return null;
+        }
+        for (MessageObject each : messages) {
+            if (each == null || each.messageOwner == null) {
+                continue;
+            }
+            if (each.messageOwner.media != null
+                    && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty)
+                    && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage)) {
+                forwardEncryptedFile(each, peer, payStars, monoForumPeerId, suggestionParams);
+            } else {
+                forwardText(each, peer, forwardFromMyName, notify, payStars, monoForumPeerId, suggestionParams);
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * A text forwarded into a chat that encrypts, sent again as a text of its
+     * own (#259): the formatting upstream keeps when it forwards from one's own
+     * name, and who wrote it first unless the person asked to hide that. Not a
+     * reply to anything: what the original answered is in another chat.
+     */
+    private void forwardText(MessageObject messageObject, long did, boolean dropAuthor, boolean notify, long payStars,
+                             long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+        TLRPC.Message owner = messageObject.messageOwner;
+        if (owner.message == null || owner.message.isEmpty()) {
+            return;
+        }
+        ArrayList<TLRPC.MessageEntity> entities = null;
+        if (owner.entities != null && !owner.entities.isEmpty()) {
+            entities = new ArrayList<>();
+            for (TLRPC.MessageEntity entity : owner.entities) {
+                if (entity instanceof TLRPC.TL_messageEntityBold
+                        || entity instanceof TLRPC.TL_messageEntityItalic
+                        || entity instanceof TLRPC.TL_messageEntityPre
+                        || entity instanceof TLRPC.TL_messageEntityCode
+                        || entity instanceof TLRPC.TL_messageEntityTextUrl
+                        || entity instanceof TLRPC.TL_messageEntitySpoiler
+                        || entity instanceof TLRPC.TL_messageEntityCustomEmoji) {
+                    entities.add(entity);
                 }
             }
-            if (plain.isEmpty()) {
-                return 0;
-            }
-            return getSendMessagesHelper().sendMessage(plain, peer, forwardFromMyName, hideCaption, notify, scheduleDate,
-                    scheduleRepeatPeriod, replyToTopMsg, video_timestamp, payStars, monoForumPeerId,
-                    suggestionParams);
         }
-        return null;
+        SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(owner.message, did,
+                null, null, null, true, entities, null, null, notify, 0, 0, null, false);
+        fparams.payStars = payStars;
+        fparams.monoForumPeer = monoForumPeerId;
+        fparams.suggestionParams = suggestionParams;
+        fparams.mlsForwarded = dropAuthor ? null : forwardedFrom(messageObject);
+        getSendMessagesHelper().sendMessage(fparams);
+        FileLog.d("mls: a text forwarded to " + did + " is sent again, encrypted for that chat");
     }
 
     /** Who wrote a message first: whoever forwarded it before, or its author. */
@@ -603,20 +642,6 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
             name = ContactsController.formatName(user.first_name, user.last_name);
         }
         return new MlsRuntime.Forwarded(author, name, owner.date);
-    }
-
-    /** Whether any of these carries a file, which is what cannot be forwarded
-     *  into a conversation that encrypts. Asked before the list is split, so a
-     *  list of plain text goes through untouched rather than round again. */
-    static boolean hasFile(ArrayList<MessageObject> messages) {
-        for (MessageObject each : messages) {
-            if (each != null && each.messageOwner != null && each.messageOwner.media != null
-                    && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty)
-                    && !(each.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -661,7 +686,7 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      * going into encrypts.
      *
      * True when it has been taken care of. False when this is not that case at
-     * all - no key, or nothing to send - and then the caller forwards as it
+     * all - a chat that does not encrypt - and then the caller forwards as it
      * always did.
      *
      * A file that is not on this device cannot be sent again, because sending
@@ -671,7 +696,7 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
      */
     boolean forwardEncryptedFile(MessageObject messageObject, long did, long payStars,
                                          long monoForumPeerId, MessageSuggestionParams suggestionParams) {
-        if (!MlsRuntime.getInstance(currentAccount).hasConversation(did)) {
+        if (!MlsRuntime.getInstance(currentAccount).encrypts(did)) {
             return false;
         }
         TLRPC.MessageMedia carried = MlsInside.media(MlsInside.wire(messageObject.messageOwner.media));
