@@ -6261,6 +6261,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setAllowStickersAndGifs(boolean needAnimatedEmoji, boolean needStickers, boolean needGifs, boolean waitingForKeyboardOpen) {
+        // ice9: no sticker or GIF tabs (#258)
+        needStickers &= Offered.STICKERS_AND_GIFS;
+        needGifs &= Offered.STICKERS_AND_GIFS;
         if ((allowStickers != needStickers || allowGifs != needGifs) && emojiView != null) {
             if (emojiViewVisible && !waitingForKeyboardOpen) {
                 removeEmojiViewAfterAnimation = true;

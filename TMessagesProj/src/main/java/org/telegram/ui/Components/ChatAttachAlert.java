@@ -6743,11 +6743,11 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                     richButton = buttonsCount++;
                 }
 
-                if (pollsEnabled) {
+                if (pollsEnabled && Offered.POLLS) { // ice9: no polls (#258)
                     pollButton = buttonsCount++;
                 }
                 // ice9: no checklist button where Premium cannot be bought (#227)
-                if (todoEnabled && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {
+                if (todoEnabled && Offered.POLLS && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {
                     todoButton = buttonsCount++;
                 }
                 if (plainTextEnabled) {

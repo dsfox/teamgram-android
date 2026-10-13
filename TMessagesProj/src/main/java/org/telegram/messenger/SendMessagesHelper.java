@@ -4572,7 +4572,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             webPage = null;
                         }
                     }
-                    if (canSendStickers && message.length() < 30 && webPage == null && (entities == null || entities.isEmpty()) && getMessagesController().diceEmojies.contains(message.replace("\ufe0f", "")) && encryptedChat == null && scheduleDate == 0) {
+                    if (canSendStickers && message.length() < 30 && webPage == null && (entities == null || entities.isEmpty()) && getMessagesController().diceEmojies.contains(message.replace("\ufe0f", "")) && encryptedChat == null && scheduleDate == 0 && Offered.DICE) { // ice9: a dice goes as the word it is (#258)
                         final TLRPC.TL_messageMediaDice mediaDice = new TLRPC.TL_messageMediaDice();
                         mediaDice.emoticon = message;
                         mediaDice.value = -1;
@@ -7593,6 +7593,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     protected void performSendMessageRequestMulti(final TLObject request, final ArrayList<MessageObject> msgObjs, final ArrayList<String> originalPaths, final ArrayList<Object> parentObjects, DelayedMessage delayedMessage, boolean scheduled) {
+        if (!MlsSend.getInstance(currentAccount).mayGo(request, msgObjs)) { // ice9: nothing goes beside the ciphertext (#258)
+            return;
+        }
         for (int a = 0, size = msgObjs.size(); a < size; a++) {
             putToSendingMessages(msgObjs.get(a).messageOwner, scheduled);
         }
@@ -7986,7 +7989,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 }
             }
         }
-        if (!MlsSend.getInstance(currentAccount).encryptEdit(req, msgObj)) { // ice9: an edit goes encrypted or not at all (#252)
+        if (!MlsSend.getInstance(currentAccount).mayGo(req, msgObj)) { // ice9: an edit goes encrypted, and nothing beside the ciphertext (#252, #258)
             return;
         }
         final TLRPC.Message newMsgObj = msgObj.messageOwner;
@@ -9437,7 +9440,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         final boolean forceDisableCheckSentMedia = pollSendParams != null;
         TLRPC.TL_document document = null;
         String parentObject = null;
-        if (!sendNew && !isEncrypted && !forceDisableCheckSentMedia) {
+        if (!sendNew && !isEncrypted && !forceDisableCheckSentMedia && !MlsRuntime.getInstance(accountInstance.getCurrentAccount()).encrypts(dialogId)) { // ice9: sent again encrypted, never as the last blob (#258)
             Object[] sentData = accountInstance.getMessagesStorage().getSentFile(originalPath, !isEncrypted ? MessagesStorage.SENT_FILE_TYPE_AUDIO : MessagesStorage.SENT_FILE_TYPE_AUDIO_ENCRYPTED);
             if (sentData != null && sentData[0] instanceof TLRPC.TL_document) {
                 document = (TLRPC.TL_document) sentData[0];
@@ -9878,7 +9881,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
                 TLRPC.TL_document document = null;
                 String parentObject = null;
-                if (!isEncrypted && !TextUtils.isEmpty(originalPath) && !forceDisableCheckSentMedia) {
+                if (!isEncrypted && !TextUtils.isEmpty(originalPath) && !forceDisableCheckSentMedia && !MlsRuntime.getInstance(accountInstance.getCurrentAccount()).encrypts(dialogId)) { // ice9: sent again encrypted (#258)
                     Object[] sentData = accountInstance.getMessagesStorage().getSentFile(originalPath, !isEncrypted ? MessagesStorage.SENT_FILE_TYPE_AUDIO : MessagesStorage.SENT_FILE_TYPE_AUDIO_ENCRYPTED);
                     if (sentData != null && sentData[0] instanceof TLRPC.TL_document) {
                         document = (TLRPC.TL_document) sentData[0];
@@ -11133,7 +11136,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             }
                             TLRPC.TL_document document = null;
                             String parentObject = null;
-                            if (!isEncrypted && info.ttl == 0 && !forceDisableCheckSentMedia && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) {
+                            if (!isEncrypted && !carriesOwnKey && info.ttl == 0 && !forceDisableCheckSentMedia && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) { // ice9: sent again encrypted (#258)
                                 Object[] sentData = accountInstance.getMessagesStorage().getSentFile(originalPath, !isEncrypted ? MessagesStorage.SENT_FILE_TYPE_VIDEO : MessagesStorage.SENT_FILE_TYPE_VIDEO_ENCRYPTED);
                                 if (sentData != null && sentData[0] instanceof TLRPC.TL_document) {
                                     document = (TLRPC.TL_document) sentData[0];
@@ -11977,7 +11980,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 }
                 TLRPC.TL_document document = null;
                 String parentObject = null;
-                if (!isEncrypted && ttl == 0 && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) {
+                if (!isEncrypted && ttl == 0 && !MlsRuntime.getInstance(accountInstance.getCurrentAccount()).encrypts(dialogId) && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) { // ice9: sent again encrypted (#258)
                     Object[] sentData = accountInstance.getMessagesStorage().getSentFile(originalPath, !isEncrypted ? MessagesStorage.SENT_FILE_TYPE_VIDEO : MessagesStorage.SENT_FILE_TYPE_VIDEO_ENCRYPTED);
                     if (sentData != null && sentData[0] instanceof TLRPC.TL_document) {
                         document = (TLRPC.TL_document) sentData[0];

@@ -354,6 +354,19 @@ public final class MlsMedia {
         return false;
     }
 
+    /** Whether this is what asBlob makes, on its way out (#258). */
+    public static boolean isBlob(TLRPC.InputMedia media) {
+        if (!(media instanceof TLRPC.TL_inputMediaUploadedDocument) || !"application/octet-stream".equals(media.mime_type)) {
+            return false;
+        }
+        for (TLRPC.DocumentAttribute attribute : media.attributes) {
+            if (attribute instanceof TLRPC.TL_documentAttributeFilename && "file".equals(attribute.file_name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ----------------------------------------------------------------------
     // Coming in
     // ----------------------------------------------------------------------

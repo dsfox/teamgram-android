@@ -1013,7 +1013,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
             isValidEmoji = spans == null || spans.length == 0;
         }
 
-        if (allowStickers && isValidEmoji && (currentChat == null || ChatObject.canSendStickers(currentChat))) {
+        if (allowStickers && org.telegram.messenger.Offered.STICKERS_AND_GIFS && isValidEmoji && (currentChat == null || ChatObject.canSendStickers(currentChat))) { // ice9: no sticker suggestions (#258)
             stickersToLoad.clear();
             if (SharedConfig.suggestStickers == 2 || !isValidEmoji) {
                 if (visibleByStickersSearch && SharedConfig.suggestStickers == 2) {
@@ -1123,7 +1123,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
                 delegate.needChangePanelVisibility(false);
                 visibleByStickersSearch = false;
             }
-        } else if (!usernameOnly && needBotContext && text.charAt(0) == '@') {
+        } else if (!usernameOnly && needBotContext && org.telegram.messenger.Offered.BOTS && text.charAt(0) == '@') { // ice9: no inline bots (#258)
             int index = text.indexOf(' ');
             int len = text.length();
             String username = null;

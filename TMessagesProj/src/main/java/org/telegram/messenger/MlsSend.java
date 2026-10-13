@@ -386,6 +386,83 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
     }
 
     /**
+     * Whether this request may leave, asked where every send ends
+     * (performSendMessageRequest). An edit is encrypted on its way
+     * (encryptEdit).
+     *
+     * In a chat that encrypts, media goes only as the blob with its
+     * ciphertext (#258). A location, a contact, a poll, a dice, and a file sent
+     * as a pointer to one already on the server went with no ciphertext at all
+     * and the server read them. Until a kind travels inside the ciphertext, a
+     * message of it fails here, where the person sees it; an inline bot's
+     * result never goes, the server makes it.
+     */
+    boolean mayGo(TLObject request, MessageObject message) {
+        if (request instanceof TLRPC.TL_messages_editMessage) {
+            return encryptEdit(request, message);
+        }
+        String kind = message == null ? null : besideTheCiphertext(request, message.getDialogId());
+        if (kind == null) {
+            return true;
+        }
+        refuse(message, kind);
+        return false;
+    }
+
+    /** The same for an album, one request: one item that may not go keeps the
+     *  whole album back (performSendMessageRequestMulti). */
+    boolean mayGo(TLObject request, ArrayList<MessageObject> messages) {
+        String kind = messages == null || messages.isEmpty() ? null
+                : besideTheCiphertext(request, messages.get(0).getDialogId());
+        if (kind == null) {
+            return true;
+        }
+        for (MessageObject each : messages) {
+            refuse(each, kind);
+        }
+        return false;
+    }
+
+    /** What would go beside the ciphertext, or null when nothing would. */
+    private String besideTheCiphertext(TLObject request, long peer) {
+        if (!MlsRuntime.getInstance(currentAccount).encrypts(peer)) {
+            return null;
+        }
+        if (request instanceof TLRPC.TL_messages_sendInlineBotResult) {
+            return "an inline bot's result";
+        }
+        if (request instanceof TLRPC.TL_messages_sendMedia) {
+            TLRPC.TL_messages_sendMedia sending = (TLRPC.TL_messages_sendMedia) request;
+            return carried(sending.media, sending.message) ? null : kindOf(sending.media);
+        }
+        if (request instanceof TLRPC.TL_messages_sendMultiMedia) {
+            for (TLRPC.TL_inputSingleMedia item : ((TLRPC.TL_messages_sendMultiMedia) request).multi_media) {
+                if (!carried(item.media, item.message)) {
+                    return kindOf(item.media);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean carried(TLRPC.InputMedia media, String message) {
+        return MlsMedia.isBlob(media) && MlsRuntime.isCiphertext(message);
+    }
+
+    private static String kindOf(TLRPC.InputMedia media) {
+        return media == null ? "a message" : media.getClass().getSimpleName();
+    }
+
+    private void refuse(MessageObject message, String kind) {
+        FileLog.e("mls: " + kind + " to " + message.getDialogId() + " would go beside the ciphertext, so message "
+                + message.getId() + " is not sent");
+        getMessagesStorage().markMessageAsSendError(message.messageOwner, message.scheduled ? 1 : 0);
+        message.messageOwner.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR;
+        getNotificationCenter().postNotificationName(NotificationCenter.messageSendError, message.getId());
+        getSendMessagesHelper().processSentMessage(message.getId());
+    }
+
+    /**
      * The new words of an edit, encrypted on their way out (#252).
      *
      * Editing used to undo the encryption of a message that had gone out
