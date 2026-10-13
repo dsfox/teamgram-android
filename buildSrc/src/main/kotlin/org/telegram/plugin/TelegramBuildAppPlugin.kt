@@ -27,9 +27,11 @@ class TelegramBuildAppPlugin : Plugin<Project> {
                 stringsXml.from(
                     telegramModule.fileTree("src/main/res/values") {
                         include("strings.xml")
+                        include("strings_ice9.xml") // ice9: our own strings ride beside upstream's (#192)
                     },
                     project.fileTree("src/main/res/values") {
                         include("strings.xml")
+                        include("strings_rewritten.xml") // ice9: the rewrites written by hand (#192)
                     }
                 )
 
