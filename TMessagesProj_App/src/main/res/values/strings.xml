@@ -543,4 +543,7 @@
     <string name="WalletNetworkFeeInfo">Every transfer costs a small network fee (**~%1$s**). ice9 covers your first **5** transfers each day.</string>
     <string name="WalletAddressLinkedToUser">This TON Blockchain address is linked to **%1$s** on ice9.</string>
     <string name="WalletAddressNoLinkedAccount">This address has no linked\nice9 account.</string>
+    <string name="CreateManagedBotUsernameSuffixesInfo">Must end in \'bot\' – or %1$s with **ice9 Premium**.</string>
+    <string name="CreateManagedBotUsernamePremiumRequired">Usernames ending in \'%1$s\' require ice9 Premium. **Subscribe ›**</string>
+    <string name="CreateManagedBotUsernamePremiumRequiredGeneric">This username requires ice9 Premium. **Subscribe ›**</string>
 </resources>
