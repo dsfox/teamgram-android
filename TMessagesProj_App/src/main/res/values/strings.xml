@@ -149,7 +149,8 @@
     <string name="EmailLoginChangeMessage">This email address will be used every time you log in to your ice9 account from a new device.</string>
     <string name="NoMailInstalled">Please send an email describing your problem to support@ice9.app</string>
     <string name="InviteUser">This user does not have ice9 yet, send an invitation?</string>
-    <string name="AreYouSureLogout">Are you sure you want to log out?\n\nNote that you can seamlessly use ice9 on all your devices at once.\n\nRemember, logging out kills all your Secret Chats.</string>
+    <string name="AreYouSureLogout">Are you sure you want to log out?\n\nThis will cancel all your Secret Chats.\n\nYou can use ice9 on all your devices at once and use several accounts in the same app.</string>
+    <string name="AreYouSureLogoutGrams">Are you sure you want to log out?\n\nThis will cancel all your Secret Chats and **delete wallet backups holding %s**. Without their recovery phrases, you\'ll lose access to these funds.\n\nYou can use ice9 on all your devices at once and use several accounts in the same app.</string>
     <string name="NoUsernameFound">There is no ice9 account with this username.</string>
     <string name="NoPhoneFound">There is no ice9 account with this phone number.</string>
     <string name="SecretLinkPreviewAlert">Would you like to enable extended link previews in Secret Chats? Note that link previews are generated on ice9 servers.</string>
@@ -502,7 +503,6 @@
     <string name="GroupCallCreatedLinkText">Anyone on ice9 can join your call by following the link below.</string>
     <string name="BotRestoreStorageText">**%s** is requesting permission to import data from a previous ice9 account used on device.</string>
     <string name="TodoPremiumRequired">Only **ice9 Premium** subscribers can mark tasks as done.</string>
-    <string name="TONBalanceText">Offer TON to submit post suggestions to channels on ice9</string>
     <string name="AgeVerificationTextGB">To access such content, you must confirm that you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone\'s camera. Your selfie will not be stored by ice9.</string>
     <string name="AgeVerificationNeedCameraPermission">ice9 needs access to your camera so that you can confirm your age.</string>
     <string name="Gift2PremiumSubtitle">Subscribe to **ice9 Premium** to send these gifts and unlock access to multiple additional features.</string>
@@ -531,4 +531,16 @@
     <string name="UnsupportedBlockMessage">Update ice9 to view this part of the message</string>
     <string name="UnsupportedMessageMessage">Update ice9 to view this message</string>
     <string name="RoundVideoCompositionInfo">Disable styling to record a plain square without outside-circle blur, dimming or ice9 overlays.</string>
+    <string name="WalletAuthorizeTransactionPasscode">Enter your current ice9 passcode to authorize transaction.</string>
+    <string name="WalletFirstGramsStoreInfo">Keep your Grams in ice9\n(💬 → ⋮ → Wallet) or other wallets.</string>
+    <string name="WalletFeePaidByTelegram">Free (paid by ice9)</string>
+    <string name="WalletEnterSecretPhraseInfo">Since you disabled backups for your wallet, you have to manually enter your Secret Phrase in every new ice9 session.</string>
+    <string name="WalletInvalidRecoveryPhraseInfo">Check the word order.\n\nOnly a recovery phrase created in ice9 can be imported here.</string>
+    <string name="WalletBackupEnabledDescription">Your encrypted key backup is split into three parts and stored across three continents.\n\nIt can only be reassembled on your devices, so no one — not even ice9 — can access your key.</string>
+    <string name="WalletBackupDisabledDescription">Your encrypted key backup will be split into three parts and stored across three continents.\n\nIt can only be reassembled on your devices, so no one — not even ice9 — can access your key.</string>
+    <string name="WalletRecoveryPhraseSupportWarning">ice9 Support **will never ask you** for your Recovery Phrase.</string>
+    <string name="WalletBackupEnabledInfo">Your keys are now stored encrypted across ice9\'s datacenters.</string>
+    <string name="WalletNetworkFeeInfo">Every transfer costs a small network fee (**~%1$s**). ice9 covers your first **5** transfers each day.</string>
+    <string name="WalletAddressLinkedToUser">This TON Blockchain address is linked to **%1$s** on ice9.</string>
+    <string name="WalletAddressNoLinkedAccount">This address has no linked\nice9 account.</string>
 </resources>
