@@ -307,6 +307,13 @@ public final class Offered {
      */
     public static final boolean HELP = false;
 
+    /**
+     * The TON wallet Telegram 13.0 ships: a balance, transfers in chats, TON
+     * Connect. The server offers no TON, so its door stays shut here; on iOS
+     * the wallet compiles into stubs, since Apple reads the binary (#278).
+     */
+    public static final boolean WALLET = false;
+
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which
     // an encrypted upload cannot take. It is offered again since #80 - the
