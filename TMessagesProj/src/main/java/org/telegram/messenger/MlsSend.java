@@ -345,9 +345,28 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
                 // travel beside it as well.
                 sending.entities = null;
                 sending.flags &= ~8;
+                dropTheQuote(sending.reply_to);
             }
             send.run();
         });
+    }
+
+    /**
+     * A reply's quote is a piece of a message the server could never read, so
+     * it stays on the phone: the request replies to the whole message, and the
+     * quote is drawn from the local copy (#266). iOS does the same in
+     * PendingMessageManager.
+     */
+    static void dropTheQuote(TLRPC.InputReplyTo replyTo) {
+        if (!(replyTo instanceof TLRPC.TL_inputReplyToMessage)) {
+            return;
+        }
+        TLRPC.TL_inputReplyToMessage reply = (TLRPC.TL_inputReplyToMessage) replyTo;
+        reply.quote_text = null;
+        reply.quote_entities = null;
+        reply.quote_offset = 0;
+        // quote_text, quote_entities and quote_offset: bits 2, 3 and 4.
+        reply.flags &= ~(4 | 8 | 16);
     }
 
     /** Whether this message waits here to be encrypted, or is on its way: the
@@ -1015,6 +1034,7 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
             // ciphertext they point at nothing. They travelled inside instead.
             request.entities.clear();
             request.flags &= ~8;
+            dropTheQuote(request.reply_to);
             if (message.obj != null) {
                 // Remembered under the random id the server will echo back, so its
                 // copy of this message does not replace the caption with base64.
