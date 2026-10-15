@@ -1270,6 +1270,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 return;
             }
             String finalPath = (String) args[1];
+            if (MlsSend.getInstance(currentAccount).waitsForTheWholeFile(messageObject)) { // ice9: an encrypted video goes up once converted (#281)
+                return;
+            }
 
             ArrayList<DelayedMessage> arr = delayedMessages.get(messageObject.messageOwner.attachPath);
             if (arr != null) {
@@ -1305,6 +1308,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             long availableSize = (Long) args[2];
             long finalSize = (Long) args[3];
             Float progress = (Float) args[4];
+            if (finalSize != 0 && MlsSend.getInstance(currentAccount).isWholeNow(messageObject)) { // ice9: #281
+                didReceivedNotification(NotificationCenter.filePreparingStarted, account, messageObject, finalPath);
+            }
             boolean isEncrypted = DialogObject.isEncryptedDialog(messageObject.getDialogId());
             getFileLoader().checkUploadNewDataAvailable(finalPath, isEncrypted, availableSize, finalSize, progress);
             if (finalSize != 0) {
@@ -1372,6 +1378,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 return;
             }
             String finalPath = (String) args[1];
+            MlsSend.getInstance(currentAccount).conversionFailed(messageObject); // ice9: #281
 
             ArrayList<DelayedMessage> arr = delayedMessages.get(finalPath);
             if (arr != null) {

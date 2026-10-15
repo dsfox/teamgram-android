@@ -9,6 +9,7 @@ import org.telegram.tgnet.TLRPCMls;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 /**
  * Sending into a conversation that encrypts: text encrypted once there is a
@@ -367,6 +368,49 @@ final class MlsSend extends BaseController implements NotificationCenter.Notific
         reply.quote_offset = 0;
         // quote_text, quote_entities and quote_offset: bits 2, 3 and 4.
         reply.flags &= ~(4 | 8 | 16);
+    }
+
+    /**
+     * A video the client converts goes up only once the converter is done (#281).
+     *
+     * Upstream starts the upload at the converter's first write and hands it
+     * the rest as it is written; the encrypting upload has no size estimate
+     * and takes the file's length at its start for the whole, so a converted
+     * video went up as the piece written by then - 245 KB of a video, with
+     * no end for the other side to decrypt. The send waits for the last write
+     * instead, the way a round video waits for its recording (wake).
+     */
+    private final HashSet<MessageObject> converting = new HashSet<>();
+    private final HashSet<MessageObject> converted = new HashSet<>();
+
+    boolean waitsForTheWholeFile(MessageObject messageObject) {
+        if (converted.remove(messageObject)) {
+            return false;
+        }
+        VideoEditedInfo info = messageObject.videoEditedInfo;
+        if (info == null || !info.needConvert()
+                || !MlsRuntime.getInstance(currentAccount).encrypts(messageObject.getDialogId())) {
+            return false;
+        }
+        converting.add(messageObject);
+        FileLog.d("mls: message " + messageObject.getId() + " waits for its video to finish converting");
+        return true;
+    }
+
+    /** Whether this message waited for its conversion, which is done now. */
+    boolean isWholeNow(MessageObject messageObject) {
+        if (!converting.remove(messageObject)) {
+            return false;
+        }
+        converted.add(messageObject);
+        FileLog.d("mls: message " + messageObject.getId() + "'s video is converted whole and goes up now");
+        return true;
+    }
+
+    /** A conversion that failed takes its message's place here with it. */
+    void conversionFailed(MessageObject messageObject) {
+        converting.remove(messageObject);
+        converted.remove(messageObject);
     }
 
     /** Whether this message waits here to be encrypted, or is on its way: the
