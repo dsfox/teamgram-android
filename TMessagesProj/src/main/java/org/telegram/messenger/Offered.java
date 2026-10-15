@@ -318,6 +318,15 @@ public final class Offered {
      */
     public static final boolean WALLET = false;
 
+    /**
+     * A person's own notification sounds: "Upload sound" on the sound
+     * screen, "Save for notifications" on an audio message, deleting a tone
+     * from the list. The server takes no uploads (teamgram's licence); the
+     * three tones it hands out are everybody's and nobody's to delete, and
+     * Android offers the phone's own sounds beside them (#282).
+     */
+    public static final boolean UPLOADED_SOUNDS = false;
+
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which
     // an encrypted upload cannot take. It is offered again since #80 - the

@@ -32,6 +32,7 @@ import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.telegram.messenger.Offered;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ContactsController;
@@ -436,7 +437,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
         if (selectedTones.get(tone.stableId) != null) {
             selectedTones.remove(tone.stableId);
             changed = true;
-        } else if (tone.fromServer) {
+        } else if (tone.fromServer && Offered.UPLOADED_SOUNDS) { // ice9: the server's tones are nobody's to delete (#282)
             selectedTones.put(tone.stableId, tone);
             changed = true;
         }
@@ -574,7 +575,9 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
             rowCount += serverTones.size();
             serverTonesEndRow = rowCount;
         }
-        uploadRow = rowCount++;
+        if (Offered.UPLOADED_SOUNDS) { // ice9: the server takes no uploads (#282)
+            uploadRow = rowCount++;
+        }
         dividerRow = rowCount++;
 
         if (!systemTones.isEmpty()) {
