@@ -9,7 +9,6 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
-import android.net.ConnectivityManager;
 import android.os.Build;
 import android.util.Log;
 
@@ -35,7 +34,8 @@ import java.util.Locale;
  * build ever: upstream's own check is for its standalone and beta builds, and
  * our server has no update to name. The site already names its build in
  * ice9.version, beside the APK, so the app reads that (UpdateSource decides
- * which host first), downloads a newer APK on an unmetered network, checks it
+ * which host first), downloads a newer APK on whatever network there is - a
+ * phone's own data limits are the person's to set - checks it
  * is ours - package, build number, signing certificate - and installs it when
  * the app goes to the background, the owner's choice: a person typing a
  * message is never thrown out of the app.
@@ -116,11 +116,6 @@ public final class Ice9Updates implements ForegroundDetector.Listener {
         }
         if (ready != null && readyBuild == offered) {
             say("build " + offered + " is downloaded and waits for the background");
-            return;
-        }
-        ConnectivityManager connectivity = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivity != null && connectivity.isActiveNetworkMetered()) {
-            say("build " + offered + " is out, not downloaded on a metered network");
             return;
         }
         File apk = new File(folder, "ice9-" + offered + ".apk");
