@@ -309,8 +309,12 @@ public final class Offered {
 
     /**
      * The TON wallet Telegram 13.0 ships: a balance, transfers in chats, TON
-     * Connect. The server offers no TON, so its door stays shut here; on iOS
-     * the wallet compiles into stubs, since Apple reads the binary (#278).
+     * Connect. The server offers no TON. Every door to it - the Money tab in
+     * the attachment menu, "Send money" in a profile, a chat's options and a
+     * message's, the settings row, the passcode rows, ton:// links - reads
+     * AppGlobalConfig.walletAvailable, which this keeps false whatever a
+     * server sends; on iOS the wallet compiles into stubs, since Apple reads
+     * the binary (#278).
      */
     public static final boolean WALLET = false;
 
