@@ -964,7 +964,8 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
                         }
                     }), true, dp(8f / 3f), dp(1)));
                 } else {
-                    underPhoneTextView.setText("This phone number is on Telegram.");
+                    // ice9: our own line, which upstream wrote as a literal naming Telegram (#275)
+                    underPhoneTextView.setText(LocaleController.getString(R.string.PhoneNumberIsOnIce9));
                 }
             }
             updateBottomTranslation(false);

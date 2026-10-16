@@ -14,6 +14,7 @@
     <string name="InviteNotInGroup">You are not in this group.</string>
     <string name="InviteByPhoneHint">+7 …</string>
     <string name="InviteCodeHint">The code is in the SMS from whoever invited you.</string>
+    <string name="PhoneNumberIsOnIce9">This phone number is on ice9.</string>
 
     <!-- Deleting the account at once, from Privacy and Security. -->
     <string name="DeleteAccountNow">Delete Account Now</string>
