@@ -135,6 +135,7 @@ import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SharedPrefsHelper;
 import org.telegram.messenger.TopicsController;
+import org.telegram.messenger.ThemeIdentity;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
@@ -401,6 +402,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        ThemeIdentity.remember(); // ice9: the theme the screens are built for (#270)
         isActive = true;
         activeInstanceCount++;
         if (BuildVars.DEBUG_VERSION) {
@@ -7416,8 +7418,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 checkNavigationBarColor = (boolean) args[1];
             }
             checkSystemBarColors(args.length > 2 && (boolean) args[2], true, checkNavigationBarColor && !isNavigationBarColorFrozen && !actionBarLayout.isTransitionAnimationInProgress());
-            // ice9: every screen is rebuilt on a theme change, so none keeps old colours (#88)
-            rebuildAllFragments(true);
+            // ice9: every screen is rebuilt when the theme changes, not when a chat opens (#88, #270)
+            if (ThemeIdentity.changed()) {
+                rebuildAllFragments(true);
+            }
         } else if (id == NotificationCenter.needSetDayNightTheme) {
             boolean instant = false;
             if (args[2] != null) {
