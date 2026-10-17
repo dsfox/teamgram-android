@@ -1,6 +1,7 @@
 package org.telegram.messenger;
 
 import android.content.SharedPreferences;
+import android.text.TextUtils;
 import android.util.Base64;
 
 import org.telegram.tgnet.ConnectionsManager;
@@ -685,19 +686,27 @@ public class MlsRuntime {
     }
 
     /**
-     * Puts the ciphertext behind a lock, when there is somewhere to put it.
+     * Puts the ciphertext behind a lock, and aside where there is room for it.
      *
-     * attachPath is where the client keeps things that never leave the device,
-     * and it already carries the path to the file when the message has one. A
-     * message with a file keeps its ciphertext in the caption instead: that is
-     * a base64 caption until a later pass opens it, which is worse to look at
-     * and better than overwriting the only path to the file itself.
+     * attachPath is where the client keeps things that never leave the device.
+     * It is set aside there unless it already holds the path to a file, which
+     * is the only record of where that file is.
+     *
+     * A message with a file is locked as well. It used to keep its ciphertext
+     * as the caption, to spare that path - and a file this device could never
+     * open, Gamma's from before Delta's phone joined, stood in the chat as a
+     * screen of base64 under the file (#285). No path was spared by it: what
+     * arrives from somebody else has none, and what this device wrote never
+     * gets here. Where a path does stand, the ciphertext is not lost: the
+     * server holds it, and a reopening asks the server rather than the cache.
      */
     private void stash(TLRPC.Message message) {
-        if (!isCiphertext(message.message) || message.media != null) {
+        if (!isCiphertext(message.message)) {
             return;
         }
-        message.attachPath = message.message;
+        if (message.media == null || TextUtils.isEmpty(message.attachPath) || isCiphertext(message.attachPath)) {
+            message.attachPath = message.message;
+        }
         message.message = LOCKED;
     }
 
