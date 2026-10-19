@@ -330,12 +330,11 @@ public final class Offered {
     /**
      * Saved Messages, the chat with oneself.
      *
-     * The server keeps nothing in it (#271): a note there would be the one
-     * thing stored in the clear, and a forward of an encrypted message
-     * would arrive as a lock nobody can open. It comes back once it is
-     * encrypted for one's own devices (#284).
+     * The server keeps nothing readable in it (#271): it takes only the
+     * ciphertext of a conversation between this account's own devices
+     * (#284), which MlsRuntime keeps like any other.
      */
-    public static final boolean SAVED_MESSAGES = false;
+    public static final boolean SAVED_MESSAGES = true;
 
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which

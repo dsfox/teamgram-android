@@ -135,21 +135,21 @@ public class MlsRuntime {
         String[] peerList = peers.split(",");
         String[] groupList = groups.split(",");
         String[] dateList = dates.isEmpty() ? new String[0] : dates.split(",");
-        // Conversations filed under this account's own number, which are the
-        // wreckage of a chat between two whose invitation named the person being
-        // invited (#155). Nothing encrypts to itself - worthEncrypting refuses -
-        // so such a row can never be used, and while it sits here it is what a
-        // dump of the map shows instead of the answer.
+        // Conversations filed under this account's own number by a build from
+        // before Saved Messages encrypted are the wreckage of a chat between
+        // two whose invitation named the person being invited (#155), and may
+        // hold somebody else. Dropped once; from then on that row is Saved
+        // Messages (#284), and encrypt() still refuses one holding anybody else.
         long self = UserConfig.getInstance(currentAccount).getClientUserId();
-        boolean changed = false;
+        boolean ownKept = storage().getBoolean("own_conversation_kept", false);
+        boolean changed = !ownKept;
         for (int i = 0; i < peerList.length && i < groupList.length; i++) {
             try {
                 long peerId = Long.parseLong(peerList[i]);
                 byte[] groupId = Base64.decode(groupList[i], Base64.NO_WRAP);
-                if (peerId == self) {
+                if (peerId == self && !ownKept) {
                     FileLog.d("mls: dropping " + shortId(groupId)
                             + ", which was filed under this account itself");
-                    changed = true;
                     continue;
                 }
                 groupIdByPeer.put(peerId, groupId);
@@ -198,6 +198,7 @@ public class MlsRuntime {
                 .putString("peers", peers.toString())
                 .putString("groups", groups.toString())
                 .putString("dates", dates.toString())
+                .putBoolean("own_conversation_kept", true)
                 .apply();
     }
 
@@ -425,6 +426,9 @@ public class MlsRuntime {
                     group.close();
                 }
             } catch (MlsCore.MlsException e) {
+                if (String.valueOf(e.getMessage()).contains("CannotDecryptOwnMessage")) {
+                    return Opened.of(Reading.WRITTEN_HERE);
+                }
                 FileLog.e("mls: cannot read a message in " + shortId(groupId) + ": " + e.getMessage());
                 return Opened.of(Reading.UNREADABLE);
             }
@@ -580,24 +584,14 @@ public class MlsRuntime {
                 }
                 return true;
             }
-            // Nothing on this device will ever open it: MLS does not let a
-            // sender read their own ciphertext, so keeping it buys nothing.
-            // A lock, and where there is a file the path to it is left alone -
-            // attachPath is the only record of where that file is.
-            //
-            // Said out loud, because this is the moment a person's own message
-            // would be lost if the words were not already in the database. The
-            // storage layer refuses to write this over them - see
-            // MlsStorage.keepWhatIsReadable - and this line is how the
-            // two halves can be told apart in a log.
+            // Outgoing is this account, not this device: another phone of it
+            // writes outgoing messages too, Saved Messages among them, and
+            // only MLS can tell whose they are (#284). Read below; one this
+            // device wrote stays locked - the storage layer keeps the words
+            // over it, see MlsStorage.keepWhatIsReadable.
             FileLog.d("mls: the server's copy of message " + message.id + " in "
                     + MessageObject.getDialogId(message)
-                    + " came back, and this device wrote it - nothing here can open it");
-            if (message.media == null) {
-                message.attachPath = message.message;
-            }
-            message.message = LOCKED;
-            return false;
+                    + " came back with no words kept here, reading it as another device's");
         }
         // Either the text is still the ciphertext, or it was put aside behind a
         // lock the last time this was tried.
@@ -833,17 +827,20 @@ public class MlsRuntime {
      *
      * A group is an MLS group of n, which is what MLS was built for (#40). A
      * channel is not: broadcasting is a different thing and none of it is built
-     * (#16). Saved Messages is out because a conversation with oneself would be
-     * one where every message is written by the only person who cannot read it
-     * back. A bot has no device to encrypt to and never will.
+     * (#16). Saved Messages is a conversation of this account's own devices,
+     * and with only one device a group of one (#284). A bot has no device to
+     * encrypt to and never will.
      *
      * A person or a chat this phone knows nothing about yet counts as one that
      * encrypts: waiting a little longer can be undone, a word in the clear
      * cannot.
      */
     public boolean encrypts(long peerId) {
-        if (peerId == 0 || peerId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+        if (peerId == 0) {
             return false;
+        }
+        if (peerId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+            return true;
         }
         if (DialogObject.isUserDialog(peerId)) {
             if (UserObject.isService(peerId)) {
@@ -1120,6 +1117,14 @@ public class MlsRuntime {
                     return null;
                 }
                 try {
+                    if (!onlyMine(peerId, group)) {
+                        if (forgetConversation(peerId, groupId)) {
+                            FileLog.e("mls: Saved Messages was written down as " + shortId(groupId)
+                                    + ", which holds somebody else; building this account's own");
+                            AndroidUtilities.runOnUIThread(() -> ensureConversation(peerId));
+                        }
+                        return null;
+                    }
                     // One shape for everything, the same one the other client
                     // writes. It used to be a choice between two older shapes, and
                     // neither of them could carry a file - nor could the client on
@@ -1306,6 +1311,12 @@ public class MlsRuntime {
     private void claimNext(long peerId, List<Long> members, int at, ArrayList<byte[]> collected,
                            ArrayList<Long> reached) {
         if (at >= members.size()) {
+            if (collected.isEmpty() && isSelf(peerId)) {
+                // Saved Messages on the only device: a group of one, and the
+                // others are let in as they publish (#284).
+                Utilities.globalQueue.postRunnable(() -> begin(peerId, collected, new ArrayList<>()));
+                return;
+            }
             if (collected.isEmpty()) {
                 synchronized (MlsRuntime.this) {
                     withoutDevices.put(peerId, System.currentTimeMillis());
@@ -1334,8 +1345,19 @@ public class MlsRuntime {
                     FileLog.d("mls: member " + member + " has no devices, so " + peerId + " starts without them");
                 }
             } else {
-                collected.addAll(claimed.packages);
-                reached.add(member);
+                int before = collected.size();
+                byte[] own = isSelf(member) ? ownName() : null;
+                for (byte[] keyPackage : claimed.packages) {
+                    // The server hands out this device's package too; added, it
+                    // would be a second leaf of this device with no keys (#284).
+                    if (own != null && java.util.Arrays.equals(MlsCore.keyPackageName(keyPackage), own)) {
+                        continue;
+                    }
+                    collected.add(keyPackage);
+                }
+                if (collected.size() > before) {
+                    reached.add(member);
+                }
             }
             claimNext(peerId, members, at + 1, collected, reached);
         });
@@ -1392,12 +1414,16 @@ public class MlsRuntime {
             try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
                 MlsCore.Group group = MlsCore.Group.create(identity);
                 try {
-                    MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
-                    // Taken here and not asked about, which is the one place that is
-                    // right: this group did not exist a moment ago, so there is
-                    // nobody to have raced with and nothing for the server to order.
-                    // Every later change goes through sendCommit and waits.
-                    group.acceptCommit(identity);
+                    byte[] welcome = null;
+                    if (!keyPackages.isEmpty()) {
+                        MlsCore.Invitation invitation = group.addMembers(identity, keyPackages);
+                        // Taken here and not asked about, which is the one place that is
+                        // right: this group did not exist a moment ago, so there is
+                        // nobody to have raced with and nothing for the server to order.
+                        // Every later change goes through sendCommit and waits.
+                        group.acceptCommit(identity);
+                        welcome = invitation.welcome;
+                    }
                     byte[] groupId = group.id();
 
                     // Saved before the welcome is sent. A welcome delivered for a
@@ -1407,7 +1433,7 @@ public class MlsRuntime {
 
                     // And only now asked whether this chat is ours to start.
                     // Outside this lock, because it is a round trip (#135).
-                    claimThenInvite(peerId, groupId, invitation.welcome, members);
+                    claimThenInvite(peerId, groupId, welcome, members);
                 } finally {
                     group.close();
                 }
@@ -1666,6 +1692,25 @@ public class MlsRuntime {
      *  every name that starts with it. */
     private static byte[] nameOf(long userId) {
         return (userId + "/").getBytes();
+    }
+
+    private boolean isSelf(long peerId) {
+        return peerId == UserConfig.getInstance(currentAccount).getClientUserId();
+    }
+
+    /** Whether a group used for this peer may carry what is written there:
+     *  for Saved Messages, only when every leaf is this account's (#284). */
+    private boolean onlyMine(long peerId, MlsCore.Group group) {
+        if (!isSelf(peerId)) {
+            return true;
+        }
+        byte[] prefix = nameOf(peerId);
+        for (byte[] name : group.memberNames()) {
+            if (!startsWith(name, prefix)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean startsWith(byte[] name, byte[] prefix) {
@@ -2361,7 +2406,9 @@ public class MlsRuntime {
         if (listIsFromTheServer && DialogObject.isChatDialog(peerId)) {
             putOutTheRest(peerId, members, attempt);
         }
-        boolean running = letIn(peerId, members, attempt);
+        // Saved Messages holds only this account, whose devices the next pass
+        // lets in; the comparison of people has nobody to compare (#284).
+        boolean running = !isSelf(peerId) && letIn(peerId, members, attempt);
         running |= letInMyOtherDevices(peerId, attempt);
         return running;
     }
