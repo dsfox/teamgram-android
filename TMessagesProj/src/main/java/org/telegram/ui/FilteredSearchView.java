@@ -820,7 +820,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
                         if (finalResultArray != null) {
                             localTipChats.addAll(finalResultArray);
                         }
-                        if (finalQuery != null && finalQuery.length() >= 3 && (LocaleController.getString(R.string.SavedMessages).toLowerCase().startsWith(finalQuery) ||
+                        if (org.telegram.messenger.Offered.SAVED_MESSAGES && finalQuery != null && finalQuery.length() >= 3 && (LocaleController.getString(R.string.SavedMessages).toLowerCase().startsWith(finalQuery) || // ice9: Saved Messages is not offered (#284)
                                 "saved messages".startsWith(finalQuery))) {
                             boolean found = false;
                             for (int i = 0; i < localTipChats.size(); i++) {

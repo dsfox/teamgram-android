@@ -13739,7 +13739,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             Bundle args = new Bundle();
             presentFragment(new GroupCreateActivity(args));
         });
-        io.add(R.drawable.outline_saved_24, getString(R.string.SavedMessages), () -> {
+        if (Offered.SAVED_MESSAGES) io.add(R.drawable.outline_saved_24, getString(R.string.SavedMessages), () -> { // ice9: Saved Messages is not offered (#284)
             Bundle args = new Bundle();
             args.putLong("user_id", UserConfig.getInstance(currentAccount).getClientUserId());
             presentFragment(new ChatActivity(args));

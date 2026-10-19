@@ -2828,6 +2828,7 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
             dialog_id = userId;
+            if (userId == getUserConfig().getClientUserId() && !org.telegram.messenger.Offered.SAVED_MESSAGES) return false; // ice9: Saved Messages is not offered (#284)
             botUser = arguments.getString("botUser");
             if (inlineQuery != null) {
                 getMessagesController().sendBotStart(currentUser, inlineQuery);
@@ -44774,7 +44775,7 @@ public class ChatActivity extends BaseFragment implements
             }
         });
 
-        if (inAppBrowser && !isHashtag && !isMail && !str.startsWith("tg2:")) {
+        if (org.telegram.messenger.Offered.SAVED_MESSAGES && inAppBrowser && !isHashtag && !isMail && !str.startsWith("tg2:")) { // ice9: Saved Messages is not offered (#284)
             options.add(R.drawable.outline_saved_24, getString(R.string.WebBookmarkAdd), () -> {
                 ArticleViewer.addBookmark(str, currentAccount, contentView, null, themeDelegate);
             });

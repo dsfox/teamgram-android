@@ -22458,6 +22458,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                 dialogId = encryptedChat.user_id;
                             }
                         }
+                        if (d.id == selfId && !org.telegram.messenger.Offered.SAVED_MESSAGES) continue; // ice9: Saved Messages is not offered (#284)
                         if (sortingDialogFilter.includesDialog(getAccountInstance(), dialogId, d)) {
                             if (canAddToForward(d)) {
                                 dialogsForward.add(d);
@@ -22481,6 +22482,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         for (int a = 0, N = allDialogs.size(); a < N; a++) {
             TLRPC.Dialog d = allDialogs.get(a);
+            if (d.id == selfId && !org.telegram.messenger.Offered.SAVED_MESSAGES) continue; // ice9: Saved Messages is not offered (#284)
             if (d instanceof TLRPC.TL_dialog) {
                 ArrayList<MessageObject> messageObjects = dialogMessage.get(d.id);
                 if (messageObjects != null) {
@@ -22544,7 +22546,9 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
                 if (canAddToForward(d) && d.folder_id == 0) {
-                    if (d.id == selfId) {
+                    if (d.id == selfId && !org.telegram.messenger.Offered.SAVED_MESSAGES) {
+                        selfAdded = true; // ice9: Saved Messages is not offered (#284)
+                    } else if (d.id == selfId) {
                         dialogsForward.add(0, d);
                         selfAdded = true;
                     } else {
@@ -22584,7 +22588,7 @@ public class MessagesController extends BaseController implements NotificationCe
             allDialogs.add(0, promoDialog);
             addDialogToItsFolder(-2, promoDialog);
         }
-        if (!selfAdded) {
+        if (!selfAdded && org.telegram.messenger.Offered.SAVED_MESSAGES) { // ice9: Saved Messages is not offered (#284)
             TLRPC.User user = getUserConfig().getCurrentUser();
             if (user != null) {
                 TLRPC.Dialog dialog = new TLRPC.TL_dialog();

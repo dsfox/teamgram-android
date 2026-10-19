@@ -2917,7 +2917,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 dialogs.add(d);
                 dialogsMap.put(d.id, d);
             }
-            if (!MessagesController.getInstance(currentAccount).dialogsForward.isEmpty()) {
+            if (!MessagesController.getInstance(currentAccount).dialogsForward.isEmpty() && (org.telegram.messenger.Offered.SAVED_MESSAGES || MessagesController.getInstance(currentAccount).dialogsForward.get(0).id != selfUserId)) { // ice9: Saved Messages is not offered (#284)
                 TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogsForward.get(0);
                 dialogs.add(dialog);
                 dialogsMap.put(dialog.id, dialog);
@@ -3210,6 +3210,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                     SQLiteCursor cursor = MessagesStorage.getInstance(currentAccount).getDatabase().queryFinalized("SELECT did, date FROM dialogs ORDER BY date DESC LIMIT 400");
                     while (cursor.next()) {
                         long id = cursor.longValue(0);
+                        if (id == UserConfig.getInstance(currentAccount).clientUserId && !org.telegram.messenger.Offered.SAVED_MESSAGES) continue; // ice9: Saved Messages is not offered (#284)
                         DialogSearchResult dialogSearchResult = new DialogSearchResult();
                         dialogSearchResult.date = cursor.intValue(1);
                         dialogsResult.put(id, dialogSearchResult);
@@ -3433,7 +3434,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             }
             searchResult.clear();
             searchAdapterHelper.mergeResults(null);
-            searchAdapterHelper.queryServerSearch(null, true, true, true, true, false, 0, false, 0, 0);
+            searchAdapterHelper.queryServerSearch(null, true, true, true, org.telegram.messenger.Offered.SAVED_MESSAGES, false, 0, false, 0, 0); // ice9: Saved Messages is not offered (#284)
             notifyDataSetChanged();
             checkCurrentList(true);
 
@@ -3453,7 +3454,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                         if (searchId != lastSearchId) {
                             return;
                         }
-                        searchAdapterHelper.queryServerSearch(query, true, true, true, true, false, 0, false, 0, searchId);
+                        searchAdapterHelper.queryServerSearch(query, true, true, true, org.telegram.messenger.Offered.SAVED_MESSAGES, false, 0, false, 0, searchId); // ice9: Saved Messages is not offered (#284)
                     });
                 }, 300);
             }

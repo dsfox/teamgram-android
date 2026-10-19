@@ -147,7 +147,7 @@ public class QuickShareSelectorOverlayLayout extends View {
 
         final UserConfig config = UserConfig.getInstance(currentAccount);
         long selfUserId = config.clientUserId;
-        dialogs.add(selfUserId);
+        if (org.telegram.messenger.Offered.SAVED_MESSAGES) dialogs.add(selfUserId); // ice9: Saved Messages is not offered (#284)
 
         if (config.suggestContacts) {
             final ArrayList<TLRPC.TL_topPeer> hints = MediaDataController.getInstance(currentAccount).hints;

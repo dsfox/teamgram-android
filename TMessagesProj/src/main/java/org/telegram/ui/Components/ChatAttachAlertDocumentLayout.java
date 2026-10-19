@@ -1953,7 +1953,7 @@ public class ChatAttachAlertDocumentLayout extends ChatAttachAlert.AttachAlertLa
                             if (finalResultArray != null) {
                                 localTipChats.addAll(finalResultArray);
                             }
-                            if (query.length() >= 3 && (LocaleController.getString(R.string.SavedMessages).toLowerCase().startsWith(query) || "saved messages".startsWith(query))) {
+                            if (org.telegram.messenger.Offered.SAVED_MESSAGES && query.length() >= 3 && (LocaleController.getString(R.string.SavedMessages).toLowerCase().startsWith(query) || "saved messages".startsWith(query))) { // ice9: Saved Messages is not offered (#284)
                                 boolean found = false;
                                 for (int i = 0; i < localTipChats.size(); i++) {
                                     if (localTipChats.get(i) instanceof TLRPC.User)

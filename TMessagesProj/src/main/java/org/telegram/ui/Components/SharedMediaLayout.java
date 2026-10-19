@@ -7003,7 +7003,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                         tabs.add(new Pair(TAB_PHOTOVIDEO, getString(R.string.SharedMediaTab2)));
                     }
                 }
-                if (hasSavedMessages) {
+                if (hasSavedMessages && org.telegram.messenger.Offered.SAVED_MESSAGES) { // ice9: Saved Messages is not offered (#284)
                     tabs.add(new Pair(TAB_SAVED_MESSAGES, getString(R.string.SavedMessagesTab2)));
                     MessagesController.getGlobalMainSettings().edit().putInt("savedhint", 3).apply();
                 }

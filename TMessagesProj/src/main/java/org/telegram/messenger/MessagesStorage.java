@@ -18239,6 +18239,7 @@ public class MessagesStorage extends BaseController {
             }
             while (cursor.next()) {
                 long id = cursor.longValue(0);
+                if (id == selfUserId && !org.telegram.messenger.Offered.SAVED_MESSAGES) continue; // ice9: Saved Messages is not offered (#284)
                 DialogsSearchAdapter.DialogSearchResult dialogSearchResult = new DialogsSearchAdapter.DialogSearchResult();
                 dialogSearchResult.date = cursor.intValue(1);
                 dialogsResult.put(id, dialogSearchResult);
@@ -18276,7 +18277,7 @@ public class MessagesStorage extends BaseController {
             cursor.dispose();
             cursor = null;
 
-            if (dialogsType != 4 && (savedMessages).startsWith(search1) || savedMessages2.startsWith(search1)) {
+            if (org.telegram.messenger.Offered.SAVED_MESSAGES && (dialogsType != 4 && (savedMessages).startsWith(search1) || savedMessages2.startsWith(search1))) { // ice9: Saved Messages is not offered (#284)
                 TLRPC.User user = UserConfig.getInstance(currentAccount).getCurrentUser();
                 DialogsSearchAdapter.DialogSearchResult dialogSearchResult = new DialogsSearchAdapter.DialogSearchResult();
                 dialogSearchResult.date = Integer.MAX_VALUE;

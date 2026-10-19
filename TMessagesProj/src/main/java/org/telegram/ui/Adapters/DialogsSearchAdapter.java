@@ -768,6 +768,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 final LongSparseArray<RecentSearchObject> hashMap = new LongSparseArray<>();
                 while (cursor.next()) {
                     long did = cursor.longValue(0);
+                    if (did == UserConfig.getInstance(currentAccount).getClientUserId() && !Offered.SAVED_MESSAGES) continue; // ice9: Saved Messages is not offered (#284)
 
                     boolean add = false;
                     if (DialogObject.isEncryptedDialog(did)) {
@@ -1196,7 +1197,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     true,
                     true,
                     dialogsType != DialogsActivity.DIALOGS_TYPE_IMPORT_HISTORY_GROUPS,
-                    dialogsType != DialogsActivity.DIALOGS_TYPE_IMPORT_HISTORY_GROUPS,
+                    Offered.SAVED_MESSAGES && dialogsType != DialogsActivity.DIALOGS_TYPE_IMPORT_HISTORY_GROUPS, // ice9: Saved Messages is not offered (#284)
                     dialogsType == DialogsActivity.DIALOGS_TYPE_ADD_USERS_TO || dialogsType == DialogsActivity.DIALOGS_TYPE_IMPORT_HISTORY_GROUPS,
                     0,
                     dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT,
@@ -1300,7 +1301,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                             true,
                             dialogsType != DialogsActivity.DIALOGS_TYPE_USERS_ONLY,
                             true,
-                            dialogsType != DialogsActivity.DIALOGS_TYPE_USERS_ONLY && dialogsType != DialogsActivity.DIALOGS_TYPE_IMPORT_HISTORY_GROUPS,
+                            Offered.SAVED_MESSAGES && dialogsType != DialogsActivity.DIALOGS_TYPE_USERS_ONLY && dialogsType != DialogsActivity.DIALOGS_TYPE_IMPORT_HISTORY_GROUPS, // ice9: Saved Messages is not offered (#284)
                             dialogsType == DialogsActivity.DIALOGS_TYPE_ADD_USERS_TO || dialogsType == DialogsActivity.DIALOGS_TYPE_BOT_SHARE,
                             0,
                             dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT,

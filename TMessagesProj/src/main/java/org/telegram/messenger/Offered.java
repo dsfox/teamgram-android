@@ -327,6 +327,16 @@ public final class Offered {
      */
     public static final boolean UPLOADED_SOUNDS = false;
 
+    /**
+     * Saved Messages, the chat with oneself.
+     *
+     * The server keeps nothing in it (#271): a note there would be the one
+     * thing stored in the clear, and a forward of an encrypted message
+     * would arrive as a lock nobody can open. It comes back once it is
+     * encrypted for one's own devices (#284).
+     */
+    public static final boolean SAVED_MESSAGES = false;
+
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which
     // an encrypted upload cannot take. It is offered again since #80 - the

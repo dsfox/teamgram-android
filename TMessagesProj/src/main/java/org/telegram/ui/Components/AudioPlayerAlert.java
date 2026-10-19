@@ -2929,7 +2929,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
                 o.dismiss();
             }, false);
         });
-        o2.add(R.drawable.msg_saved, getString(R.string.AudioSaveToSavedMessages), () -> {
+        if (org.telegram.messenger.Offered.SAVED_MESSAGES) o2.add(R.drawable.msg_saved, getString(R.string.AudioSaveToSavedMessages), () -> { // ice9: Saved Messages is not offered (#284)
             forward(messageObject, UserConfig.getInstance(currentAccount).getClientUserId());
             o.dismiss();
 
