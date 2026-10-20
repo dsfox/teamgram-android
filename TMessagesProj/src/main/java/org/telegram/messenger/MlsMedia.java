@@ -350,6 +350,15 @@ public final class MlsMedia {
      * can be sent as a plain document without being uploaded twice.
      */
     public static TLRPC.InputFile asPlainFile(TLRPC.InputEncryptedFile uploaded) {
+        // Past 10 MB the upload goes in big parts and says so (#265); its plain
+        // twin carries no checksum either.
+        if (uploaded instanceof TLRPC.TL_inputEncryptedFileBigUploaded) {
+            TLRPC.TL_inputFileBig big = new TLRPC.TL_inputFileBig();
+            big.id = uploaded.id;
+            big.parts = uploaded.parts;
+            big.name = "file";
+            return big;
+        }
         if (!(uploaded instanceof TLRPC.TL_inputEncryptedFileUploaded)) {
             return null;
         }
