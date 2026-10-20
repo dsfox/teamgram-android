@@ -125,7 +125,50 @@ public final class MlsMedia {
                 media.duration = (int) attribute.duration;
             }
         }
+        // A video's first frame, so one over the size fetched unasked is not
+        // an empty bubble until it is opened.
+        if (media.kind == KIND_VIDEO || media.kind == KIND_ROUND_VIDEO || media.kind == KIND_ANIMATION) {
+            byte[] blurred = firstFrameThumbnail(path);
+            if (blurred != null) {
+                media.thumb = blurred;
+            }
+        }
         return media;
+    }
+
+    /**
+     * The placeholder of a video: its first frame, written out as a small
+     * picture and made into a thumbnail the way a photograph's is.
+     */
+    public static byte[] firstFrameThumbnail(String path) {
+        if (path == null || path.isEmpty()) {
+            return no("there is no video to read");
+        }
+        android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
+        java.io.File frameFile = null;
+        try {
+            retriever.setDataSource(path);
+            android.graphics.Bitmap frame = retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            if (frame == null) {
+                return no("the video gave no first frame: " + path);
+            }
+            frameFile = java.io.File.createTempFile("mls-frame", ".jpg", ApplicationLoader.applicationContext.getCacheDir());
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(frameFile)) {
+                frame.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, out);
+            }
+            frame.recycle();
+            return miniThumbnail(frameFile.getAbsolutePath());
+        } catch (Throwable e) {
+            return no("the video's first frame could not be read: " + e.getMessage());
+        } finally {
+            try {
+                retriever.release();
+            } catch (Throwable ignored) {
+            }
+            if (frameFile != null) {
+                frameFile.delete();
+            }
+        }
     }
 
     /**
