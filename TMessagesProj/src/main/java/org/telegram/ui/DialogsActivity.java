@@ -11521,7 +11521,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             @Override
             public boolean canSchedule() {
-                if (selectedDialogs.isEmpty()) return false;
+                if (selectedDialogs.isEmpty() || !Offered.SCHEDULED_MESSAGES) return false; // ice9: scheduling is not offered (#273)
                 for (long did : selectedDialogs) {
                     if (DialogObject.isEncryptedDialog(did)) return false;
                     if (getMessagesController().getSendPaidMessagesStars(did) > 0) return false;
@@ -11941,7 +11941,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (getParentActivity() == null) return false;
 
         boolean onlyMyself = false;
-        boolean canSchedule = true;
+        boolean canSchedule = Offered.SCHEDULED_MESSAGES; // ice9: scheduling is not offered (#273)
         for (int i = 0; i < selectedDialogs.size(); ++i) {
             final long did = selectedDialogs.get(i);
             if (onlyMyself && did != getUserConfig().getClientUserId())

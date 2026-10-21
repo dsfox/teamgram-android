@@ -219,7 +219,7 @@ public class AIEditorAlert extends BottomSheetWithRecyclerListView implements No
                             .show();
                     })
                     .add(R.drawable.msg_share, getString(R.string.AIEditorShareStyle), () -> {
-                        final String link = "https://t.me/addstyle/" + tone.slug;
+                        final String link = "https://i.ice9.app/addstyle/" + tone.slug;
                         new ShareAlert(context, null, link, false, link, false, resourcesProvider) {
                             @Override
                             protected void onSend(LongSparseArray<TLRPC.Dialog> dids, int count, TLRPC.TL_forumTopic topic, boolean showToast) {
@@ -316,7 +316,7 @@ public class AIEditorAlert extends BottomSheetWithRecyclerListView implements No
                     runSend(0, 0, false);
                     dismiss();
                 })
-                .add(R.drawable.msg_calendar2, getString(self ? R.string.SetReminder : R.string.ScheduleMessage), () -> {
+                .addIf(org.telegram.messenger.Offered.SCHEDULED_MESSAGES, R.drawable.msg_calendar2, getString(self ? R.string.SetReminder : R.string.ScheduleMessage), () -> { // ice9: scheduling is not offered (#273)
                     AlertsCreator.createScheduleDatePickerDialog(context, dialogId, new AlertsCreator.ScheduleDatePickerDelegate() {
                         @Override
                         public void didSelectDate(boolean notify, int scheduleDate, int scheduleRepeatPeriod) {

@@ -7441,7 +7441,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             }
 
             final boolean showSendAsFile = !canEdit && !isCurrentVideo && !captionEdit.hasTimer();
-            final boolean showSchedule = !canEdit && canScheduleMessage && !hasTtl;
+            final boolean showSchedule = !canEdit && canScheduleMessage && !hasTtl && org.telegram.messenger.Offered.SCHEDULED_MESSAGES; // ice9: scheduling is not offered (#273)
             final boolean showWithoutSound = !(canEdit && canReplace) && !userIsSelf;
             final boolean multipleSelected = placeProvider != null && placeProvider.getSelectedCount() > 1;
 
