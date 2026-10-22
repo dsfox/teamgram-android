@@ -932,6 +932,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		} else {
 			NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.closeInCallActivity);
 			privateCall = callIShouldHavePutIntoIntent;
+			Ice9CallAudio.started(privateCall != null ? privateCall.id : 0, true); // ice9: what the call did with sound (#288)
 			videoCall = privateCall != null && privateCall.video;
 			if (videoCall) {
 				isVideoAvailable = true;
@@ -943,7 +944,9 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			FileLog.e("(3) set VoIPService.callIShouldHavePutIntoIntent = null");
 			if (instantAccept) {
 				instantAccept = false;
+				instantAcceptInProgress = true; // ice9: the answer started this service (#288)
 				acceptIncomingCall();
+				instantAcceptInProgress = false; // ice9: (#288)
 			} else if (USE_CONNECTION_SERVICE) {
 				acknowledgeCall(false);
 				showNotification();
@@ -1120,6 +1123,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				ConnectionsManager.getInstance(currentAccount).sendRequest(reqCall, (response12, error12) -> AndroidUtilities.runOnUIThread(() -> {
 					if (error12 == null) {
 						privateCall = ((TL_phone.TL_phone_phoneCall) response12).phone_call;
+						Ice9CallAudio.started(privateCall.id, false); // ice9: what the call did with sound (#288)
 						a_or_b = salt1;
 						dispatchStateChanged(STATE_WAITING);
 						if (endCallAfterRequest) {
@@ -2241,7 +2245,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			groupCall.call.can_change_join_muted = true;
 			groupCall.call.rtmp_stream = isRtmpStream;
 			if (joinConference instanceof TLRPC.TL_inputGroupCallSlug) {
-				groupCall.call.invite_link = "https://t.me/call/" + joinConference.slug;
+				groupCall.call.invite_link = "https://i.ice9.app/call/" + joinConference.slug;
 			}
 			groupCall.chatId = 0;
 			groupCall.currentAccount = AccountInstance.getInstance(currentAccount);
@@ -3476,6 +3480,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				}
 				NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcMicAmplitudeEvent, levels[0]);
 				NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcSpeakerAmplitudeEvent, levels[1]);
+				Ice9CallAudio.levels(this, levels[0], levels[1]); // ice9: what the call did with sound (#288)
 			});
 			tgVoip[CAPTURE_DEVICE_CAMERA].setOnStateUpdatedListener(this::onConnectionStateChanged);
 			tgVoip[CAPTURE_DEVICE_CAMERA].setOnSignalBarsUpdatedListener(this::onSignalBarCountChanged);
@@ -4299,6 +4304,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 	public void acceptIncomingCall() {
 		updateCurrentForegroundType();
+		Ice9CallAudio.answered(this, instantAcceptInProgress, lastForegroundType); // ice9: what the call did with sound (#288)
 		MessagesController.getInstance(currentAccount).ignoreSetOnline = false;
 		stopRinging();
 		showNotification();
@@ -4607,6 +4613,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		if (messagesController.voipDebug == null) {
 			messagesController.voipDebug = new VoIPDebugToSend(currentAccount);
 		}
+		finalState.debugLog = Ice9CallAudio.into(finalState.debugLog); // ice9: what the call did with sound (#288)
 		messagesController.voipDebug.push(privateCall.id, privateCall.access_hash, finalState, lastLogFilePath);
 		lastLogFilePath = null;
 
@@ -5340,6 +5347,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	}
 
 	private boolean foregroundStarted;
+	private boolean instantAcceptInProgress; // ice9: (#288)
 	private int foregroundId;
 	private Notification foregroundNotification;
 	private int lastForegroundType;
@@ -5444,6 +5452,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				if (callStartTime == 0) {
 					callStartTime = SystemClock.elapsedRealtime();
 				}
+				if (groupCall == null) Ice9CallAudio.established(this); // ice9: what the call did with sound (#288)
 				//peerCapabilities = tgVoip.getPeerCapabilities();
 			}
 			if (newState == STATE_FAILED) {
