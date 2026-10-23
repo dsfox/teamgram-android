@@ -24,17 +24,18 @@ import java.util.List;
  * On 22 October a callee woken by the call push answered, heard the caller,
  * and was not heard; calling again worked. Nothing on either side said
  * whether the microphone gave silence, Android silenced the recording, or the
- * sound was lost on the way. This keeps the answer for every call: the levels
- * of this phone's microphone and of the other side as the engine reported
- * them, whether Android silenced the recording, and the state the app was in
- * when the call was answered. It goes into the app log and, under "ice9",
+ * sound was lost on the way. This keeps the answer for every call: the level
+ * of the other side as the engine reported it, whether Android silenced the
+ * recording, and the state the app was in when the call was answered.
+ * The engine of private calls (InstanceV2Impl) reports this phone's own level
+ * as 0 always, so it is not kept: whether this phone was heard is the other
+ * phone's peer level. It goes into the app log and, under "ice9",
  * into the stats log the phone sends after the call (phone.saveCallDebug),
  * where the server writes it beside the route.
  */
 public final class Ice9CallAudio {
 
-    // tgcalls reports levels from 0 to 1; speech sits well above this, a
-    // silenced or dead microphone at 0.
+    // tgcalls reports levels from 0 to 1; speech sits well above this.
     private static final float HEARD = 0.01f;
     private static final long REPORT_EVERY_MS = 5000;
 
@@ -50,11 +51,8 @@ public final class Ice9CallAudio {
     private static long answeredAt;
     private static long establishedAt;
     private static int samples;
-    private static float micMax;
     private static float peerMax;
-    private static int micHeard;
     private static int peerHeard;
-    private static long micFirstMs = -1;
     private static long peerFirstMs = -1;
     private static String silenced = "unknown";
     private static long lastReport;
@@ -71,9 +69,9 @@ public final class Ice9CallAudio {
         importanceAtAnswer = 0;
         foregroundTypes = -1;
         answeredAt = establishedAt = 0;
-        samples = micHeard = peerHeard = 0;
-        micMax = peerMax = 0;
-        micFirstMs = peerFirstMs = -1;
+        samples = peerHeard = 0;
+        peerMax = 0;
+        peerFirstMs = -1;
         silenced = "unknown";
         lastReport = 0;
         FileLog.d("ice9 call audio: call " + id + (isIncoming ? " incoming" : " outgoing") + ", process up " + processAgeAtStartMs + " ms");
@@ -98,7 +96,7 @@ public final class Ice9CallAudio {
                 + " fgsTypes=0x" + Integer.toHexString(types) + " micGranted=" + micGranted);
     }
 
-    /** The call connected: from here a silent microphone is a fault. */
+    /** The call connected: from here a silent line is a fault. */
     public static synchronized void established(Context context) {
         if (establishedAt == 0) {
             establishedAt = SystemClock.elapsedRealtime();
@@ -107,19 +105,12 @@ public final class Ice9CallAudio {
         FileLog.d("ice9 call audio: established, recording silenced=" + silenced);
     }
 
-    /** One report of levels from the engine: this phone's microphone, the other side. */
+    /** One report of levels from the engine; only the other side's is real. */
     public static synchronized void levels(Context context, float mine, float theirs) {
         samples++;
         long now = SystemClock.elapsedRealtime();
         long since = establishedAt != 0 ? now - establishedAt : -1;
-        micMax = Math.max(micMax, mine);
         peerMax = Math.max(peerMax, theirs);
-        if (mine > HEARD) {
-            micHeard++;
-            if (micFirstMs < 0) {
-                micFirstMs = since;
-            }
-        }
         if (theirs > HEARD) {
             peerHeard++;
             if (peerFirstMs < 0) {
@@ -200,9 +191,6 @@ public final class Ice9CallAudio {
             o.put("mic_granted", micGranted);
             o.put("silenced", silenced);
             o.put("samples", samples);
-            o.put("mic_max", micMax);
-            o.put("mic_heard", micHeard);
-            o.put("mic_first_ms", micFirstMs);
             o.put("peer_max", peerMax);
             o.put("peer_heard", peerHeard);
             o.put("peer_first_ms", peerFirstMs);
@@ -214,8 +202,7 @@ public final class Ice9CallAudio {
     }
 
     private static String summaryLine() {
-        return "call " + callId + " samples=" + samples + " mic max=" + micMax + " heard=" + micHeard
-                + " first=" + micFirstMs + "ms, peer max=" + peerMax + " heard=" + peerHeard
+        return "call " + callId + " samples=" + samples + " peer max=" + peerMax + " heard=" + peerHeard
                 + " first=" + peerFirstMs + "ms, silenced=" + silenced;
     }
 }
