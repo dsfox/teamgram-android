@@ -920,6 +920,11 @@ public class ConnectionsManager extends BaseController {
         });
     }
 
+    // ice9: the server no longer offers the key this phone holds for it (#245)
+    public static void onServerKeyRefused(final int currentAccount) {
+        AndroidUtilities.runOnUIThread(org.telegram.ui.Ice9ServerKeyChanged::ask);
+    }
+
     public static void onProxyError() {
         AndroidUtilities.runOnUIThread(() -> NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.needShowAlert, 3));
     }

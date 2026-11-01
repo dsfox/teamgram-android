@@ -25,6 +25,7 @@
 #include "NativeByteBuffer.h"
 #include "Config.h"
 #include "Connection.h"
+#include "Timer.h"
 
 thread_local static std::vector<std::string> serverPublicKeys;
 thread_local static std::vector<uint64_t> serverPublicKeysFingerprints;
@@ -43,11 +44,19 @@ Handshake::Handshake(Datacenter *datacenter, HandshakeType type, HandshakeDelega
 
 Handshake::~Handshake() {
     cleanupHandshake();
+    if (refusedRetryTimer != nullptr) {
+        refusedRetryTimer->stop();
+        delete refusedRetryTimer;
+        refusedRetryTimer = nullptr;
+    }
 }
 
 void Handshake::beginHandshake(bool reconnect) {
     if (LOGS_ENABLED) DEBUG_D("account%u dc%u handshake: begin, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
     cleanupHandshake();
+    if (refusedRetryTimer != nullptr) {
+        refusedRetryTimer->stop();
+    }
     Connection *connection = getConnection();
     handshakeState = 1;
 
@@ -402,6 +411,17 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
             }
             if (keyFingerprint == 0) {
                 if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: the server does not offer the key this phone holds for it (%" PRIu64 ")", currentDatacenter->instanceNum, currentDatacenter->datacenterId, pinnedFingerprint);
+                // ice9: told once a round, asked again in ten seconds rather than at once (#245)
+                ConnectionsManager::getInstance(currentDatacenter->instanceNum).delegate->onServerKeyRefused(currentDatacenter->instanceNum);
+                if (refusedRetryTimer == nullptr) {
+                    refusedRetryTimer = new Timer(currentDatacenter->instanceNum, [&] {
+                        refusedRetryTimer->stop();
+                        beginHandshake(false);
+                    });
+                }
+                refusedRetryTimer->setTimeout(10000, false);
+                refusedRetryTimer->start();
+                return;
             } else {
                 if (LOGS_ENABLED) DEBUG_D("account%u dc%u handshake: using the server's own key %" PRIu64, currentDatacenter->instanceNum, currentDatacenter->datacenterId, pinnedFingerprint);
             }

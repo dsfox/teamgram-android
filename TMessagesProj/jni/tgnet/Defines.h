@@ -156,6 +156,8 @@ typedef struct ConnectiosManagerDelegate {
     virtual void onBytesReceived(int32_t amount, int32_t networkType, int32_t instanceNum) = 0;
     virtual void onRequestNewServerIpAndPort(int32_t second, int32_t instanceNum) = 0;
     virtual void onProxyError(int32_t instanceNum) = 0;
+    // ice9: the server no longer offers the key this phone holds for it (#245)
+    virtual void onServerKeyRefused(int32_t instanceNum) = 0;
     virtual void getHostByName(std::string domain, int32_t instanceNum, ConnectionSocket *socket) = 0;
     virtual int32_t getInitFlags(int32_t instanceNum) = 0;
     virtual void onPremiumFloodWait(int32_t instanceNum, int32_t requestToken, bool isUpload) = 0;

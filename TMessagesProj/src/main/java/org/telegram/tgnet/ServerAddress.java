@@ -221,6 +221,14 @@ public class ServerAddress {
         editor.apply();
     }
 
+    /** A new key for the same server, checked against the code its owner gave (#245). */
+    public static void replaceKey(byte[] key) {
+        if (key == null || !ServerCode.isAcceptable(key)) {
+            return;
+        }
+        preferences().edit().putString(KEY, Base64.encodeToString(key, Base64.NO_WRAP)).apply();
+    }
+
     /** What is kept now, so that a check that fails can put it back as it was. */
     public static final class Kept {
         private final String host;

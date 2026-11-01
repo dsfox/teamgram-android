@@ -18,6 +18,7 @@ class ByteArray;
 class TLObject;
 class TL_future_salt;
 class Connection;
+class Timer;
 
 class Handshake {
 
@@ -59,6 +60,7 @@ private:
     int32_t authKeyPendingRequestId = 0;
     int64_t authKeyPendingMessageId = 0;
     bool needResendData = false;
+    Timer *refusedRetryTimer = nullptr; // ice9: a refused key is retried slowly (#245)
 
     void sendRequestData(TLObject *object, bool important);
     void sendAckRequest(int64_t messageId);

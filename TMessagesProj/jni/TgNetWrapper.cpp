@@ -34,6 +34,7 @@ jmethodID jclass_ConnectionsManager_onBytesSent;
 jmethodID jclass_ConnectionsManager_onBytesReceived;
 jmethodID jclass_ConnectionsManager_onRequestNewServerIpAndPort;
 jmethodID jclass_ConnectionsManager_onProxyError;
+jmethodID jclass_ConnectionsManager_onServerKeyRefused;
 jmethodID jclass_ConnectionsManager_getHostByName;
 jmethodID jclass_ConnectionsManager_getInitFlags;
 jmethodID jclass_ConnectionsManager_onPremiumFloodWait;
@@ -408,6 +409,10 @@ class Delegate : public ConnectiosManagerDelegate {
         jniEnv[instanceNum]->CallStaticVoidMethod(jclass_ConnectionsManager, jclass_ConnectionsManager_onProxyError);
     }
 
+    void onServerKeyRefused(int32_t instanceNum) {
+        jniEnv[instanceNum]->CallStaticVoidMethod(jclass_ConnectionsManager, jclass_ConnectionsManager_onServerKeyRefused, instanceNum);
+    }
+
     void getHostByName(std::string domain, int32_t instanceNum, ConnectionSocket *socket) {
         jstring domainName = jniEnv[instanceNum]->NewStringUTF(domain.c_str());
         jniEnv[instanceNum]->CallStaticVoidMethod(jclass_ConnectionsManager, jclass_ConnectionsManager_getHostByName, domainName, (jlong) (intptr_t) socket);
@@ -697,6 +702,10 @@ extern "C" int registerNativeTgNetFunctions(JavaVM *vm, JNIEnv *env) {
     }
     jclass_ConnectionsManager_onProxyError = env->GetStaticMethodID(jclass_ConnectionsManager, "onProxyError", "()V");
     if (jclass_ConnectionsManager_onProxyError == 0) {
+        return JNI_FALSE;
+    }
+    jclass_ConnectionsManager_onServerKeyRefused = env->GetStaticMethodID(jclass_ConnectionsManager, "onServerKeyRefused", "(I)V");
+    if (jclass_ConnectionsManager_onServerKeyRefused == 0) {
         return JNI_FALSE;
     }
     jclass_ConnectionsManager_getHostByName = env->GetStaticMethodID(jclass_ConnectionsManager, "getHostByName", "(Ljava/lang/String;J)V");
