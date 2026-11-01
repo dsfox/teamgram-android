@@ -266,6 +266,13 @@
                 <data android:host="i.ice9.app" android:scheme="http" />
                 <data android:host="i.ice9.app" android:scheme="https" />
             </intent-filter>
+            <!-- ice9: ice9.ru/server opens the server page in the app where i.ice9.app is unreachable (#245) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="ice9.ru" android:path="/server" />
+            </intent-filter>
             <intent-filter android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:priority="1">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT" />

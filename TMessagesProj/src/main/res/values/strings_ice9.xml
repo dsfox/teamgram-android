@@ -6,6 +6,7 @@
 
     <!-- Inviting somebody by number, with a code that lets them in (ice9 #47, #164). -->
     <string name="InviteCodeLine">Your invitation code: %1$s</string>
+    <string name="InviteServerLine">Then open this link, and the app opens with my server already filled in: %1$s</string>
     <string name="InviteAlreadyHere">This person is already on ice9 — just write to them.</string>
     <string name="InviteNoCode">Could not get an invitation code. Try again later.</string>
     <string name="InviteByPhone">Invite by phone number</string>
@@ -47,6 +48,8 @@
     <string name="Ice9ServerOwnKey">own key</string>
     <string name="Ice9ServerLinkMalformed">This server link is damaged. Ask for it again.</string>
     <string name="Ice9ServerSameServer">This device already talks to this server.</string>
+    <string name="Ice9ServerShare">Share this server</string>
+    <string name="Ice9ServerShareInfo">A link and a QR code that open ice9 with this server and its code already filled in.</string>
 
     <!-- The app's own log, sent in the open, under Server (ice9 #227). -->
     <string name="Ice9SendLogs">Send app logs</string>

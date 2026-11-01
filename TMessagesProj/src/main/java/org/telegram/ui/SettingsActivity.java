@@ -703,6 +703,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(10, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_language, getString(R.string.SettingsLanguage), LocaleController.getCurrentLanguageName()));
         // ice9: the server row, with the address on the row itself (#65)
         items.add(SettingCell.Factory.of(60, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9Server), ServerAddress.describe() + (ServerAddress.keyDer() != null ? " \u00b7 " + getString(R.string.Ice9ServerOwnKey) : "")));
+        // ice9: a server of one's own is handed on from here (#245)
+        if (!ServerAddress.isOurs()) {
+            items.add(SettingCell.Factory.of(62, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.msg_qrcode, getString(R.string.Ice9ServerShare), getString(R.string.Ice9ServerShareInfo)));
+        }
         // ice9: the app log row, in the open (#227)
         items.add(SettingCell.Factory.of(61, IconBackgroundColors.GRAY.top, IconBackgroundColors.GRAY.bottom, R.drawable.settings_data, getString(R.string.Ice9SendLogs), getString(R.string.Ice9SendLogsInfo)));
 
@@ -861,6 +865,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
             case 61:
                 AppLogs.send(getParentActivity());
+                break;
+            case 62:
+                Ice9ServerShare.show(getParentActivity());
                 break;
 
             case 11:

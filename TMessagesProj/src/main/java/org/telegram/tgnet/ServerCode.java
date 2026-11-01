@@ -178,8 +178,14 @@ public final class ServerCode {
             this.malformed = malformed;
         }
 
-        private static final String[] PREFIXES = {"https://i.ice9.app/server#", "http://i.ice9.app/server#", "tg2://server#"};
+        private static final String[] PREFIXES = {"https://i.ice9.app/server#", "http://i.ice9.app/server#", "https://ice9.ru/server#", "http://ice9.ru/server#", "tg2://server#"};
         private static final Pattern REST = Pattern.compile("^([A-Za-z0-9.\\-]+):([0-9]{1,5})(?:/([0-9]{24}))?$");
+
+        /** The link to hand a server on by (#245): through ice9.ru for a number on a Russian network, which often cannot reach i.ice9.app. */
+        public static String make(String host, int port, String code, boolean russian) {
+            String base = russian ? "https://ice9.ru/server#" : "https://i.ice9.app/server#";
+            return base + host + ":" + port + (code == null || code.isEmpty() ? "" : "/" + code);
+        }
 
         /** The server a link names, a malformed Link for a server link that cannot be read, null for any other link. */
         public static Link parse(String url) {

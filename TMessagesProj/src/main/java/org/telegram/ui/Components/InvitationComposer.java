@@ -13,6 +13,8 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.ServerAddress;
+import org.telegram.tgnet.ServerCode;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPCInvite;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -76,11 +78,21 @@ public final class InvitationComposer {
             // ice9.app (Cloudflare); ice9.ru is served from our own machine and
             // opens there (#178). Everyone else keeps the server link.
             String cleaned = phone == null ? "" : phone.replaceAll("[^+0-9]", "");
-            String sentence = cleaned.startsWith("+7")
+            boolean russian = cleaned.startsWith("+7");
+            String sentence = russian
                     ? LocaleController.formatString(R.string.InviteText2, "https://ice9.ru")
                     : ContactsController.getInstance(account).getInviteText(1);
-            String body = sentence
-                    + "\n" + LocaleController.formatString(R.string.InviteCodeLine, code);
+            String body = sentence;
+            // From a server of one's own the app alone would land on ours: the
+            // link fills this server in on the first screen (#245).
+            if (!ServerAddress.isOurs()) {
+                body += "\n" + LocaleController.formatString(R.string.InviteServerLine,
+                        ServerCode.Link.make(ServerAddress.host(), ServerAddress.port(), ServerAddress.code(), russian));
+            }
+            body += "\n" + LocaleController.formatString(R.string.InviteCodeLine, code);
+            if (!ServerAddress.isOurs()) {
+                FileLog.d("invite: the SMS hands on the server as " + ServerCode.Link.make(ServerAddress.host(), ServerAddress.port(), ServerAddress.code(), russian));
+            }
             // The walks read this line: one number, the code in the body, and the group if any.
             FileLog.d("invite: composing an SMS to one number with code " + code + (chatId != 0 ? " for chat " + chatId : ""));
             if (fragment.getParentActivity() == null) {
