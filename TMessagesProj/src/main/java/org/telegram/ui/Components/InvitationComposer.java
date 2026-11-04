@@ -4,12 +4,14 @@ import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Bundle;
 import android.text.InputType;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
@@ -17,7 +19,9 @@ import org.telegram.tgnet.ServerAddress;
 import org.telegram.tgnet.ServerCode;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPCInvite;
+import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.ChatActivity;
 
 /**
  * The one place an invitation SMS is composed from (#47).
@@ -70,6 +74,10 @@ public final class InvitationComposer {
                         : text.contains("USER_NOT_PARTICIPANT") ? R.string.InviteNotInGroup
                         : R.string.InviteNoCode;
                 FileLog.d("invite: no code for the number - " + (error != null ? error.text : "wrong answer"));
+                if (said == R.string.InviteAlreadyHere) {
+                    offerToWrite(fragment, phone);
+                    return;
+                }
                 BulletinFactory.of(fragment).createSimpleBulletin(R.raw.error, getString(said)).show();
                 return;
             }
@@ -110,6 +118,44 @@ public final class InvitationComposer {
                 afterComposing.run();
             }
         }));
+    }
+
+    /**
+     * The number already has an account: say so, and offer the chat instead
+     * of an OK that left nowhere to go (#296). The phone had sent that number
+     * to the server once, while nobody held it, so the person is not among
+     * the contacts; Write finds them by the number, makes them a contact and
+     * opens the chat.
+     */
+    private static void offerToWrite(BaseFragment fragment, String phone) {
+        if (fragment.getParentActivity() == null) {
+            return;
+        }
+        final int account = fragment.getCurrentAccount();
+        AlertDialog.Builder builder = new AlertDialog.Builder(fragment.getParentActivity());
+        builder.setMessage(getString(R.string.InviteAlreadyHere));
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        builder.setPositiveButton(getString(R.string.SendMessage), (dialog, which) -> {
+            String digits = phone == null ? "" : phone.replaceAll("[^0-9]", "");
+            NumberLookup.resolve(account, digits, user -> {
+                if (user == null) {
+                    FileLog.d("invite: already here, and the number finds nobody");
+                    BulletinFactory.of(fragment).createSimpleBulletin(R.raw.error, getString(R.string.InviteNoCode)).show();
+                    return;
+                }
+                if (!ContactsController.getInstance(account).isContact(user.id)) {
+                    ContactsController.getInstance(account).addContact(user, false);
+                }
+                // The walks read this line: the alert led to this person's chat.
+                FileLog.d("invite: already here, opening the chat with " + user.id);
+                Bundle args = new Bundle();
+                args.putLong("user_id", user.id);
+                if (MessagesController.getInstance(account).checkCanOpenChat(args, fragment)) {
+                    fragment.presentFragment(new ChatActivity(args));
+                }
+            });
+        });
+        fragment.showDialog(builder.create());
     }
 
     /**
