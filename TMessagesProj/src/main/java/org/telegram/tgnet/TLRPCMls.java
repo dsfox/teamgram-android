@@ -1365,4 +1365,188 @@ public class TLRPCMls {
             stream.writeInt32(constructor);
         }
     }
+
+    /**
+     * mls.getKeyLog user_id:long known_size:long = mls.KeyLog;
+     *
+     * Which signature keys the server has said are this person's, in a log
+     * that only grows, with the proofs (#44). known_size is the size of the
+     * log this phone kept last, or 0.
+     */
+    public static class TL_mls_getKeyLog extends TLObject {
+        public static final int constructor = 1641178120;
+
+        public long user_id;
+        public long known_size;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_mls_keyLog.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(user_id);
+            stream.writeInt64(known_size);
+        }
+    }
+
+    static java.util.ArrayList<byte[]> readHashes(InputSerializedData stream, boolean exception) {
+        java.util.ArrayList<byte[]> hashes = new java.util.ArrayList<>();
+        int magic = stream.readInt32(exception);
+        if (magic != 0x1cb5c415) {
+            if (exception) {
+                throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+            }
+            return hashes;
+        }
+        int count = stream.readInt32(exception);
+        if (count < 0 || count > 128) {
+            if (exception) {
+                throw new RuntimeException("not a number of hashes in a proof: " + count);
+            }
+            return hashes;
+        }
+        for (int i = 0; i < count; i++) {
+            hashes.add(stream.readByteArray(exception));
+        }
+        return hashes;
+    }
+
+    static void writeHashes(OutputSerializedData stream, java.util.ArrayList<byte[]> hashes) {
+        stream.writeInt32(0x1cb5c415);
+        stream.writeInt32(hashes.size());
+        for (byte[] h : hashes) {
+            stream.writeByteArray(h);
+        }
+    }
+
+    /** mls.keyLogHead size:long root:bytes date:int log_key:bytes signature:bytes = mls.KeyLogHead; */
+    public static class TL_mls_keyLogHead extends TLObject {
+        public static final int constructor = 1654801443;
+
+        public long size;
+        public byte[] root;
+        public int date;
+        public byte[] log_key;
+        public byte[] signature;
+
+        public static TL_mls_keyLogHead TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_keyLogHead.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.keyLogHead", constructor));
+                }
+                return null;
+            }
+            TL_mls_keyLogHead result = new TL_mls_keyLogHead();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            size = stream.readInt64(exception);
+            root = stream.readByteArray(exception);
+            date = stream.readInt32(exception);
+            log_key = stream.readByteArray(exception);
+            signature = stream.readByteArray(exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(size);
+            stream.writeByteArray(root);
+            stream.writeInt32(date);
+            stream.writeByteArray(log_key);
+            stream.writeByteArray(signature);
+        }
+    }
+
+    /** mls.keyLogEntry index:long name:bytes signature_key:bytes proof:Vector&lt;bytes&gt; = mls.KeyLogEntry; */
+    public static class TL_mls_keyLogEntry extends TLObject {
+        public static final int constructor = 1287681784;
+
+        public long index;
+        public byte[] name;
+        public byte[] signature_key;
+        public java.util.ArrayList<byte[]> proof = new java.util.ArrayList<>();
+
+        public static TL_mls_keyLogEntry TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_keyLogEntry.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.keyLogEntry", constructor));
+                }
+                return null;
+            }
+            TL_mls_keyLogEntry result = new TL_mls_keyLogEntry();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            index = stream.readInt64(exception);
+            name = stream.readByteArray(exception);
+            signature_key = stream.readByteArray(exception);
+            proof = readHashes(stream, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            stream.writeInt64(index);
+            stream.writeByteArray(name);
+            stream.writeByteArray(signature_key);
+            writeHashes(stream, proof);
+        }
+    }
+
+    /** mls.keyLog head:mls.KeyLogHead entries:Vector&lt;mls.KeyLogEntry&gt; consistency:Vector&lt;bytes&gt; = mls.KeyLog; */
+    public static class TL_mls_keyLog extends TLObject {
+        public static final int constructor = 1042434330;
+
+        public TL_mls_keyLogHead head;
+        public java.util.ArrayList<TL_mls_keyLogEntry> entries = new java.util.ArrayList<>();
+        /** That the head's tree holds the one of the size asked about. */
+        public java.util.ArrayList<byte[]> consistency = new java.util.ArrayList<>();
+
+        public static TL_mls_keyLog TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
+            if (TL_mls_keyLog.constructor != constructor) {
+                if (exception) {
+                    throw new RuntimeException(String.format("can't parse magic %x in mls.keyLog", constructor));
+                }
+                return null;
+            }
+            TL_mls_keyLog result = new TL_mls_keyLog();
+            result.readParams(stream, exception);
+            return result;
+        }
+
+        public void readParams(InputSerializedData stream, boolean exception) {
+            head = TL_mls_keyLogHead.TLdeserialize(stream, stream.readInt32(exception), exception);
+            int magic = stream.readInt32(exception);
+            if (magic != 0x1cb5c415) {
+                if (exception) {
+                    throw new RuntimeException(String.format("wrong Vector magic, got %x", magic));
+                }
+                return;
+            }
+            int count = stream.readInt32(exception);
+            for (int i = 0; i < count; i++) {
+                TL_mls_keyLogEntry entry = TL_mls_keyLogEntry.TLdeserialize(stream, stream.readInt32(exception), exception);
+                if (entry == null) {
+                    return;
+                }
+                entries.add(entry);
+            }
+            consistency = readHashes(stream, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            head.serializeToStream(stream);
+            stream.writeInt32(0x1cb5c415);
+            stream.writeInt32(entries.size());
+            for (TL_mls_keyLogEntry e : entries) {
+                e.serializeToStream(stream);
+            }
+            writeHashes(stream, consistency);
+        }
+    }
 }

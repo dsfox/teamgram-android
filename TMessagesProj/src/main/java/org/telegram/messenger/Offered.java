@@ -336,6 +336,14 @@ public final class Offered {
      */
     public static final boolean SAVED_MESSAGES = true;
 
+    /**
+     * The address book in the Contacts tab's search. A row there was a
+     * person in the phone's address book, in ice9 or not, and a tap opened
+     * an invitation even for somebody already here (#297). The search lists
+     * people in ice9; inviting is the Invite Friends screen's.
+     */
+    public static final boolean ADDRESS_BOOK_IN_CONTACTS_SEARCH = false;
+
     // A round video in a conversation that encrypts used to be switched off
     // here: the one message uploaded while it was still being recorded, which
     // an encrypted upload cannot take. It is offered again since #80 - the

@@ -1004,6 +1004,7 @@ public class ContactsController extends BaseController {
         Utilities.globalQueue.postRunnable(() -> {
             int newPhonebookContacts = 0;
             int serverContactsInPhonebook = 0;
+            final boolean reask = request && Ice9ContactReask.take(currentAccount); // ice9: numbers nobody held, asked once a day (#297)
             boolean disableDeletion = true; //disable contacts deletion, because phone numbers can't be compared due to different numbers format
             /*if (schedule) {
                 try {
@@ -1181,6 +1182,7 @@ public class ContactsController extends BaseController {
                                 existing.shortPhones.remove(index);
                                 existing.phoneDeleted.remove(index);
                                 existing.phoneTypes.remove(index);
+                                if (reask && value.phoneDeleted.get(a) != 1 && !contactsByPhone.containsKey(sphone) && !contactsByShortPhone.containsKey(sphone9)) toImport.add(Ice9ContactReask.input(value, a)); // ice9: a number nobody held, asked again (#297)
                             }
                         }
                         if (existing.phones.isEmpty()) {

@@ -216,6 +216,7 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
                     }
                 }
 
+                if (!org.telegram.messenger.Offered.ADDRESS_BOOK_IN_CONTACTS_SEARCH) allUnregistredContacts = new ArrayList<>(); // ice9: only people in ice9 (#297)
                 if (allUnregistredContacts == null) {
                     allUnregistredContacts = new ArrayList<>();
                     for (ContactsController.Contact contact : ContactsController.getInstance(currentAccount).phoneBookContacts) {
