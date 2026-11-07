@@ -1331,7 +1331,7 @@ public class MlsRuntime {
         long member = members.get(at);
         TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
         request.user_id = member;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+        MlsKeyLog.getInstance(currentAccount).claim(request, (response, error) -> {
             if (error != null || !(response instanceof TLRPCMls.TL_mls_keyPackages)) {
                 giveUp(peerId, "no key packages for " + member
                         + (error != null ? ": " + error.text : ""));
@@ -2730,7 +2730,7 @@ public class MlsRuntime {
 
         TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
         request.user_id = self;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+        MlsKeyLog.getInstance(currentAccount).claim(request, (response, error) -> {
             if (error != null || !(response instanceof TLRPCMls.TL_mls_keyPackages)) {
                 FileLog.e("mls: cannot reach this account's own devices"
                         + (error != null ? ": " + error.text : ""));
@@ -3215,7 +3215,7 @@ public class MlsRuntime {
         long member = missing.get(at);
         TLRPCMls.TL_mls_claimKeyPackages request = new TLRPCMls.TL_mls_claimKeyPackages();
         request.user_id = member;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+        MlsKeyLog.getInstance(currentAccount).claim(request, (response, error) -> {
             if (error == null && response instanceof TLRPCMls.TL_mls_keyPackages) {
                 TLRPCMls.TL_mls_keyPackages claimed = (TLRPCMls.TL_mls_keyPackages) response;
                 if (claimed.packages.isEmpty()) {

@@ -56,6 +56,12 @@ public final class MlsCore {
 
     private static native byte[] messageGroupId0(byte[] ciphertext);
     private static native byte[] keyPackageName0(byte[] keyPackage);
+    private static native byte[] keyPackageSignatureKey0(byte[] keyPackage);
+    private static native boolean keyLogHeadIsSigned0(long size, byte[] root, int date, byte[] logKey, byte[] signature);
+    private static native boolean keyLogProvesInclusion0(long userId, byte[] name, byte[] signatureKey,
+                                                         long index, long size, byte[] proof, byte[] root);
+    private static native boolean keyLogProvesConsistency0(long first, long second, byte[] firstRoot,
+                                                           byte[] secondRoot, byte[] proof);
     private static native byte[] identityName0(long identity);
 
     private static native byte[] recoveryPhrase(int words);
@@ -124,6 +130,40 @@ public final class MlsCore {
             return null;
         }
         return keyPackageName0(keyPackage);
+    }
+
+    /** The key a key package's device signs with, which the key log holds for it (#44). */
+    public static byte[] keyPackageSignatureKey(byte[] keyPackage) {
+        if (keyPackage == null || keyPackage.length == 0) {
+            return null;
+        }
+        return keyPackageSignatureKey0(keyPackage);
+    }
+
+    /** Whether the key log's head is signed by logKey (#44). */
+    public static boolean keyLogHeadIsSigned(long size, byte[] root, int date, byte[] logKey, byte[] signature) {
+        if (root == null || logKey == null || signature == null) {
+            return false;
+        }
+        return keyLogHeadIsSigned0(size, root, date, logKey, signature);
+    }
+
+    /** Whether the log of size with root holds, at index, this key for this device of userId (#44). */
+    public static boolean keyLogProvesInclusion(long userId, byte[] name, byte[] signatureKey,
+                                                long index, long size, byte[] proof, byte[] root) {
+        if (name == null || signatureKey == null || proof == null || root == null) {
+            return false;
+        }
+        return keyLogProvesInclusion0(userId, name, signatureKey, index, size, proof, root);
+    }
+
+    /** Whether the log of second with secondRoot holds the log of first with firstRoot (#44). */
+    public static boolean keyLogProvesConsistency(long first, long second, byte[] firstRoot,
+                                                  byte[] secondRoot, byte[] proof) {
+        if (firstRoot == null || secondRoot == null || proof == null) {
+            return false;
+        }
+        return keyLogProvesConsistency0(first, second, firstRoot, secondRoot, proof);
     }
 
     /**

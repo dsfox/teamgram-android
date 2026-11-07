@@ -335,3 +335,75 @@ JNIEXPORT jint JNICALL
 Java_org_telegram_messenger_MlsCore_recoveryDerivation(JNIEnv *env, jclass class) {
     return (jint) mls_recovery_derivation();
 }
+
+// The key a key package's device signs with, which the key log holds (#44).
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_keyPackageSignatureKey0(JNIEnv *env, jclass class, jbyteArray keyPackage) {
+    jsize len = (*env)->GetArrayLength(env, keyPackage);
+    jbyte *bytes = (*env)->GetByteArrayElements(env, keyPackage, NULL);
+    struct MlsBuffer out = mls_key_package_signature_key((const unsigned char *) bytes, (size_t) len);
+    (*env)->ReleaseByteArrayElements(env, keyPackage, bytes, JNI_ABORT);
+    return take(env, out);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_telegram_messenger_MlsCore_keyLogHeadIsSigned0(JNIEnv *env, jclass class, jlong size, jbyteArray root,
+                                                         jint date, jbyteArray logKey, jbyteArray signature) {
+    jsize rootLen = (*env)->GetArrayLength(env, root);
+    jsize keyLen = (*env)->GetArrayLength(env, logKey);
+    jsize signatureLen = (*env)->GetArrayLength(env, signature);
+    jbyte *r = (*env)->GetByteArrayElements(env, root, NULL);
+    jbyte *k = (*env)->GetByteArrayElements(env, logKey, NULL);
+    jbyte *s = (*env)->GetByteArrayElements(env, signature, NULL);
+    bool ok = mls_key_log_head_is_signed((uint64_t) size, (const unsigned char *) r, (size_t) rootLen, (int32_t) date,
+                                         (const unsigned char *) k, (size_t) keyLen,
+                                         (const unsigned char *) s, (size_t) signatureLen);
+    (*env)->ReleaseByteArrayElements(env, root, r, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, logKey, k, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, signature, s, JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_telegram_messenger_MlsCore_keyLogProvesInclusion0(JNIEnv *env, jclass class, jlong userId, jbyteArray name,
+                                                            jbyteArray signatureKey, jlong index, jlong size,
+                                                            jbyteArray proof, jbyteArray root) {
+    jsize nameLen = (*env)->GetArrayLength(env, name);
+    jsize keyLen = (*env)->GetArrayLength(env, signatureKey);
+    jsize proofLen = (*env)->GetArrayLength(env, proof);
+    jsize rootLen = (*env)->GetArrayLength(env, root);
+    jbyte *n = (*env)->GetByteArrayElements(env, name, NULL);
+    jbyte *k = (*env)->GetByteArrayElements(env, signatureKey, NULL);
+    jbyte *p = (*env)->GetByteArrayElements(env, proof, NULL);
+    jbyte *r = (*env)->GetByteArrayElements(env, root, NULL);
+    bool ok = mls_key_log_proves_inclusion((int64_t) userId, (const unsigned char *) n, (size_t) nameLen,
+                                           (const unsigned char *) k, (size_t) keyLen,
+                                           (uint64_t) index, (uint64_t) size,
+                                           (const unsigned char *) p, (size_t) proofLen,
+                                           (const unsigned char *) r, (size_t) rootLen);
+    (*env)->ReleaseByteArrayElements(env, name, n, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, signatureKey, k, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, proof, p, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, root, r, JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_telegram_messenger_MlsCore_keyLogProvesConsistency0(JNIEnv *env, jclass class, jlong first, jlong second,
+                                                              jbyteArray firstRoot, jbyteArray secondRoot,
+                                                              jbyteArray proof) {
+    jsize firstLen = (*env)->GetArrayLength(env, firstRoot);
+    jsize secondLen = (*env)->GetArrayLength(env, secondRoot);
+    jsize proofLen = (*env)->GetArrayLength(env, proof);
+    jbyte *f = (*env)->GetByteArrayElements(env, firstRoot, NULL);
+    jbyte *s = (*env)->GetByteArrayElements(env, secondRoot, NULL);
+    jbyte *p = (*env)->GetByteArrayElements(env, proof, NULL);
+    bool ok = mls_key_log_proves_consistency((uint64_t) first, (uint64_t) second,
+                                             (const unsigned char *) f, (size_t) firstLen,
+                                             (const unsigned char *) s, (size_t) secondLen,
+                                             (const unsigned char *) p, (size_t) proofLen);
+    (*env)->ReleaseByteArrayElements(env, firstRoot, f, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, secondRoot, s, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, proof, p, JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
