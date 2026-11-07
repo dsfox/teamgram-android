@@ -50,6 +50,9 @@
     <string name="Ice9ServerSameServer">This device already talks to this server.</string>
     <string name="Ice9ServerShare">Share this server</string>
     <string name="Ice9ServerShareInfo">A link and a QR code that open ice9 with this server and its code already filled in.</string>
+    <!-- A key none of this account's phones made, in the key log (ice9 #44). -->
+    <string name="Ice9NewDeviceKeyTitle">A key of a new device appeared in your account</string>
+    <string name="Ice9NewDeviceKeyInfo">The server lists a device in your account that none of your phones knows. If you have just signed in on another phone, that is it, and all is well. If not, somebody may be trying to read your messages: sign out of the devices you do not know in Settings and tell the owner of the server.</string>
     <string name="Ice9ServerKeyChangedTitle">The server has a new key</string>
     <string name="Ice9ServerKeyChangedInfo">This server no longer has the key this device trusts, so the app cannot reach it. Ask the server\'s owner for its new code and type it here - nothing on this device is lost. Do not type a code that did not come from the owner.</string>
     <string name="Ice9ServerKeyChangedHint">New server code, 24 digits</string>

@@ -55,6 +55,10 @@ final class MlsReceive extends BaseController {
     // Made on the device: the server is told a one-way derivation of them
     // and never the words themselves.
     MlsRecoveryPhrase.getInstance(currentAccount).ensure();
+
+    // And whether a key this account's phones never made has appeared in the
+    // key log (#44).
+    MlsKeyLog.getInstance(currentAccount).watchOwn();
     }
 
     /** The server says there is a commit or a welcome waiting. */

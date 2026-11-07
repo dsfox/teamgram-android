@@ -63,6 +63,7 @@ public final class MlsCore {
     private static native boolean keyLogProvesConsistency0(long first, long second, byte[] firstRoot,
                                                            byte[] secondRoot, byte[] proof);
     private static native byte[] identityName0(long identity);
+    private static native byte[] identitySignatureKey0(long identity);
 
     private static native byte[] recoveryPhrase(int words);
 
@@ -212,6 +213,11 @@ public final class MlsCore {
          */
         public byte[] name() {
             return identityName0(this.handle);
+        }
+
+        /** The key this device signs with, which the key log holds for it (#44). */
+        public byte[] signatureKey() {
+            return identitySignatureKey0(this.handle);
         }
 
         public Identity(byte[] name) throws MlsException {

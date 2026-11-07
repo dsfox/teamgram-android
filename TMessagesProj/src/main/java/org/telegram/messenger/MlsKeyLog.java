@@ -2,6 +2,7 @@ package org.telegram.messenger;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.text.TextUtils;
 import android.util.Base64;
 
 import org.telegram.tgnet.ConnectionsManager;
@@ -105,34 +106,13 @@ public final class MlsKeyLog {
             }
             TLRPCMls.TL_mls_keyLog log = (TLRPCMls.TL_mls_keyLog) response;
             TLRPCMls.TL_mls_keyLogHead head = log.head;
-            String wrong = null;
-            if (head == null || !MlsCore.keyLogHeadIsSigned(head.size, head.root, head.date, head.log_key, head.signature)) {
-                wrong = "the key log's head is not signed by its own key";
-            } else if (pinned != null && !Arrays.equals(pinned, head.log_key)) {
-                wrong = "the key log is signed by another key than the one this phone pinned";
-            } else if (pinned != null && head.size < keptSize) {
-                wrong = "the key log holds " + head.size + " keys, and this phone saw " + keptSize;
-            } else if (pinned != null && head.size == keptSize && keptRoot != null && !Arrays.equals(keptRoot, head.root)) {
-                wrong = "the key log of " + head.size + " keys is not the one this phone saw";
-            } else if (pinned != null && head.size > keptSize && keptSize > 0 && keptRoot != null
-                    && !MlsCore.keyLogProvesConsistency(keptSize, head.size, keptRoot, head.root, joined(log.consistency))) {
-                wrong = "the key log of " + head.size + " keys does not hold the one of " + keptSize + " this phone saw";
-            }
+            String wrong = untrusted(log, pinned, keptSize, keptRoot);
             if (wrong != null) {
                 refuse(userId, packages, wrong);
                 then.run(new ArrayList<>());
                 return;
             }
-            if (pinned == null) {
-                FileLog.d("mls: the key log of " + server + " is pinned now, at " + head.size + " keys");
-            }
-            if (pinned == null || head.size > keptSize) {
-                kept.edit()
-                        .putString(server + ".key", Base64.encodeToString(head.log_key, Base64.NO_WRAP))
-                        .putLong(server + ".size", head.size)
-                        .putString(server + ".root", Base64.encodeToString(head.root, Base64.NO_WRAP))
-                        .apply();
-            }
+            keep(kept, server, head, pinned, keptSize);
 
             ArrayList<byte[]> vouched = new ArrayList<>();
             for (byte[] keyPackage : packages) {
@@ -158,6 +138,122 @@ public final class MlsKeyLog {
                 }
             }
             then.run(vouched);
+        });
+    }
+
+    /** What is wrong with the log's head against what this phone kept, or null. */
+    private static String untrusted(TLRPCMls.TL_mls_keyLog log, byte[] pinned, long keptSize, byte[] keptRoot) {
+        TLRPCMls.TL_mls_keyLogHead head = log.head;
+        if (head == null || !MlsCore.keyLogHeadIsSigned(head.size, head.root, head.date, head.log_key, head.signature)) {
+            return "the key log's head is not signed by its own key";
+        } else if (pinned != null && !Arrays.equals(pinned, head.log_key)) {
+            return "the key log is signed by another key than the one this phone pinned";
+        } else if (pinned != null && head.size < keptSize) {
+            return "the key log holds " + head.size + " keys, and this phone saw " + keptSize;
+        } else if (pinned != null && head.size == keptSize && keptRoot != null && !Arrays.equals(keptRoot, head.root)) {
+            return "the key log of " + head.size + " keys is not the one this phone saw";
+        } else if (pinned != null && head.size > keptSize && keptSize > 0 && keptRoot != null
+                && !MlsCore.keyLogProvesConsistency(keptSize, head.size, keptRoot, head.root, joined(log.consistency))) {
+            return "the key log of " + head.size + " keys does not hold the one of " + keptSize + " this phone saw";
+        }
+        return null;
+    }
+
+    /** The pin on first sight, and the newest head after. */
+    private static void keep(SharedPreferences kept, String server, TLRPCMls.TL_mls_keyLogHead head, byte[] pinned, long keptSize) {
+        if (pinned == null) {
+            FileLog.d("mls: the key log of " + server + " is pinned now, at " + head.size + " keys");
+        }
+        if (pinned == null || head.size > keptSize) {
+            kept.edit()
+                    .putString(server + ".key", Base64.encodeToString(head.log_key, Base64.NO_WRAP))
+                    .putLong(server + ".size", head.size)
+                    .putString(server + ".root", Base64.encodeToString(head.root, Base64.NO_WRAP))
+                    .apply();
+        }
+    }
+
+    /**
+     * Part 4: this account's own entries, read now and then. A key in the log
+     * that none of the account's phones made is how a device the server put
+     * in shows itself, so a key this phone has not seen before is told to the
+     * person. On the first look the keys already there are taken as the
+     * account's own (a phone just signed in cannot tell its siblings from
+     * anything else) - except a key under this very device's name that is not
+     * this device's, which is never anybody's but the server's.
+     */
+    public void watchOwn() {
+        final long self = UserConfig.getInstance(currentAccount).getClientUserId();
+        if (self == 0) {
+            return;
+        }
+        final byte[] myName;
+        final byte[] myKey;
+        synchronized (MlsKeyPackages.getInstance(currentAccount).stateLock()) {
+            try (MlsCore.Identity identity = MlsKeyPackages.getInstance(currentAccount).identity()) {
+                myName = identity.name();
+                myKey = identity.signatureKey();
+            } catch (MlsCore.MlsException e) {
+                return;
+            }
+        }
+        if (myName == null || myKey == null) {
+            return;
+        }
+        final String server = server();
+        final SharedPreferences kept = storage();
+        final byte[] pinned = read(kept, server + ".key");
+        final long keptSize = kept.getLong(server + ".size", 0);
+        final byte[] keptRoot = read(kept, server + ".root");
+        final String seenKey = server + ".own." + self;
+
+        TLRPCMls.TL_mls_getKeyLog request = new TLRPCMls.TL_mls_getKeyLog();
+        request.user_id = self;
+        request.known_size = pinned != null ? keptSize : 0;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
+            if (error != null || !(response instanceof TLRPCMls.TL_mls_keyLog)) {
+                return;
+            }
+            TLRPCMls.TL_mls_keyLog log = (TLRPCMls.TL_mls_keyLog) response;
+            String wrong = untrusted(log, pinned, keptSize, keptRoot);
+            if (wrong != null) {
+                FileLog.e("mls: " + wrong + "; this account's keys are not read from it");
+                return;
+            }
+            TLRPCMls.TL_mls_keyLogHead head = log.head;
+            keep(kept, server, head, pinned, keptSize);
+
+            java.util.Set<String> before = kept.getStringSet(seenKey, null);
+            boolean first = before == null;
+            java.util.HashSet<String> seen = new java.util.HashSet<>(first ? java.util.Collections.emptySet() : before);
+            ArrayList<String> appeared = new ArrayList<>();
+            for (TLRPCMls.TL_mls_keyLogEntry entry : log.entries) {
+                if (!MlsCore.keyLogProvesInclusion(self, entry.name, entry.signature_key, entry.index, head.size,
+                        joined(entry.proof), head.root)) {
+                    FileLog.e("mls: entry " + entry.index + " of this account does not prove itself in the key log");
+                    continue;
+                }
+                String id = Base64.encodeToString(entry.name, Base64.NO_WRAP) + ":"
+                        + Base64.encodeToString(entry.signature_key, Base64.NO_WRAP);
+                boolean named = Arrays.equals(entry.name, myName);
+                if (named && Arrays.equals(entry.signature_key, myKey)) {
+                    seen.add(id);
+                    continue;
+                }
+                if (!seen.add(id)) {
+                    continue;
+                }
+                if (first && !named) {
+                    continue;
+                }
+                appeared.add(new String(entry.name, java.nio.charset.StandardCharsets.UTF_8));
+            }
+            kept.edit().putStringSet(seenKey, seen).apply();
+            FileLog.d("mls: watching " + seen.size() + " key(s) of this account in the key log of " + head.size);
+            if (!appeared.isEmpty()) {
+                FileLog.e("mls: a key of a new device appeared in this account: " + TextUtils.join(", ", appeared));
+                AndroidUtilities.runOnUIThread(org.telegram.ui.Ice9NewDeviceKey::tell);
+            }
         });
     }
 

@@ -407,3 +407,9 @@ Java_org_telegram_messenger_MlsCore_keyLogProvesConsistency0(JNIEnv *env, jclass
     (*env)->ReleaseByteArrayElements(env, proof, p, JNI_ABORT);
     return ok ? JNI_TRUE : JNI_FALSE;
 }
+
+// The key this device signs with, which the key log holds for it (#44).
+JNIEXPORT jbyteArray JNICALL
+Java_org_telegram_messenger_MlsCore_identitySignatureKey0(JNIEnv *env, jclass class, jlong identity) {
+    return take(env, mls_identity_signature_key((const Identity *) from_handle(identity)));
+}
