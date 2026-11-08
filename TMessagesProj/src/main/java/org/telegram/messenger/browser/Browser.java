@@ -225,6 +225,10 @@ public class Browser {
         return url.matches("^(https://)?(i\\.)?ice9\\.app(/.*|$)");
     }
 
+    public static boolean isGetPremiumUrl(String url) {
+        return url != null && url.matches("(?i)^(https?://)?(t\\.me|telegram\\.me|telegram\\.dog)/getpremium([/?#].*)?$");
+    }
+
     public static class Progress {
 
         private Runnable onInitListener;

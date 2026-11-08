@@ -149,7 +149,7 @@ android {
                 // target triple through CMAKE_C_FLAGS, and this project overwrites those flags in
                 // half a dozen CMakeLists, which silently builds for the host (Mach-O) instead.
                 // CMake's own Android support carries the triple in the compile rules instead.
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21', '-DANDROID_USE_LEGACY_TOOLCHAIN_FILE=false' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_USE_LEGACY_TOOLCHAIN_FILE=false' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
                 targets 'tmessages.49'
             }
         }
