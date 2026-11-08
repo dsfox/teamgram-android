@@ -5321,6 +5321,7 @@ messagesController.loadGlobalNotificationsSettings();
             fragmentSearchField.editText.setSelection(searchString.length());
         } else if (initialSearchString != null) {
             showSearch(true, false, false, true);
+            fragmentSearchFieldWatcher.toggleSearch(true);
             fragmentSearchField.editText.setText(initialSearchString);
             fragmentSearchField.editText.setSelection(initialSearchString.length());
             initialSearchString = null;
@@ -5442,7 +5443,9 @@ messagesController.loadGlobalNotificationsSettings();
                 contentView.requestLayout();
                 if (!hasFragment()) {
                     invalidateScrollY = true;
-                    fixScrollYAfterArchiveOpened = true;
+                    if (scrollYOffset != 0) {
+                        fixScrollYAfterArchiveOpened = true;
+                    }
                     if (fragmentView != null) {
                         fragmentView.invalidate();
                     }
@@ -7376,6 +7379,9 @@ messagesController.loadGlobalNotificationsSettings();
 
     public void search(String query, boolean animated) {
         showSearch(true, false, animated);
+        if (fragmentSearchFieldWatcher != null) {
+            fragmentSearchFieldWatcher.toggleSearch(true);
+        }
         if (fragmentSearchField != null) {
             fragmentSearchField.editText.setText(query);
             fragmentSearchField.editText.setSelection(query.length());
@@ -7403,6 +7409,9 @@ messagesController.loadGlobalNotificationsSettings();
         }
         searchIsShowed = show;
         glassEngine.invalidate();
+        if (!show) {
+            updateFilterTabs(false, animated);
+        }
         if (show) {
             boolean onlyDialogsAdapter;
             if (searchFiltersWasShowed || forceNotOnlyDialogs) {
@@ -8559,7 +8568,7 @@ messagesController.loadGlobalNotificationsSettings();
         }
 
         if (!isCommunityCell) {
-            ActionBarMenuSubItem markAsUnreadItem = new ActionBarMenuSubItem(getParentActivity(), true, false);
+            ActionBarMenuSubItem markAsUnreadItem = new ActionBarMenuSubItem(getParentActivity(), !hasFolders, false);
             if (cell.getHasUnread()) {
                 markAsUnreadItem.setTextAndIcon(LocaleController.getString(R.string.MarkAsRead), R.drawable.msg_markread);
             } else {
@@ -8637,7 +8646,7 @@ messagesController.loadGlobalNotificationsSettings();
         }
 
         if (hasPinAction[0]) {
-            ActionBarMenuSubItem unpinItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
+            ActionBarMenuSubItem unpinItem = new ActionBarMenuSubItem(getParentActivity(), !hasFolders && isCommunityCell, false);
             if (isDialogPinned(dialog)) {
                 unpinItem.setTextAndIcon(LocaleController.getString(R.string.UnpinMessage), R.drawable.msg_unpin);
             } else {
