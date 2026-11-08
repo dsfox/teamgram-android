@@ -4061,7 +4061,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         });
     }
 
-    /** t.me/contact/…?free=… (tg://contact?token=…&free=…): the user of the contact token, then the free token. */
+    /** i.ice9.app/contact/…?free=… (tg://contact?token=…&free=…): the user of the contact token, then the free token. */
     private void openNoPaidMessagesContactLink(final int account, final String contactToken, final String token, final Browser.Progress progress) {
         if (progress != null) {
             progress.init();
