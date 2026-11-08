@@ -331,28 +331,28 @@ public class DefaultThemesPreviewCell extends LinearLayout implements Theme.Colo
     private Theme.ThemeInfo previewsTheme;
     private boolean previewsDay;
 
-// ice9: an empty themes row is filled once account.getThemes answers (#223)
-private void setThemesIfLoaded() {
-if (adapter.items != null && !adapter.items.isEmpty()) {
-return;
-}
-if (!MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes.isEmpty()) {
-ArrayList<ChatThemeBottomSheet.ChatThemeItem> themes = new ArrayList<>(MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes);
-if (currentType == ThemeActivity.THEME_TYPE_BASIC) {
+    // ice9: an empty themes row is filled once account.getThemes answers (#223)
+    private void setThemesIfLoaded() {
+        if (adapter.items != null && !adapter.items.isEmpty()) {
+            return;
+        }
+        if (!MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes.isEmpty()) {
+            ArrayList<ChatThemeBottomSheet.ChatThemeItem> themes = new ArrayList<>(MediaDataController.getInstance(parentFragment.getCurrentAccount()).defaultEmojiThemes);
+            if (currentType == ThemeActivity.THEME_TYPE_BASIC) {
 
-EmojiThemes chatTheme = EmojiThemes.createPreviewCustom(parentFragment.getCurrentAccount());
-chatTheme.loadPreviewColors(parentFragment.getCurrentAccount());
-ChatThemeBottomSheet.ChatThemeItem item = new ChatThemeBottomSheet.ChatThemeItem(chatTheme);
-item.themeIndex = !Theme.isCurrentThemeDay() ? 2 : 0;
-themes.add(item);
-}
+                EmojiThemes chatTheme = EmojiThemes.createPreviewCustom(parentFragment.getCurrentAccount());
+                chatTheme.loadPreviewColors(parentFragment.getCurrentAccount());
+                ChatThemeBottomSheet.ChatThemeItem item = new ChatThemeBottomSheet.ChatThemeItem(chatTheme);
+                item.themeIndex = !Theme.isCurrentThemeDay() ? 2 : 0;
+                themes.add(item);
+            }
 
-adapter.setItems(themes);
-}
-}
+            adapter.setItems(themes);
+        }
+    }
 
-public void updateDayNightMode() {
-setThemesIfLoaded();
+    public void updateDayNightMode() {
+        setThemesIfLoaded();
         previewsTheme = Theme.getActiveTheme();
         previewsDay = Theme.isCurrentThemeDay();
         if (currentType == ThemeActivity.THEME_TYPE_BASIC || currentType == TYPE_CUSTOM_LIST) {

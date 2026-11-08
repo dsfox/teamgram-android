@@ -1412,18 +1412,18 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
             return new RecyclerListView.Holder(view);
         }
 
-@Override
-public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-if (searching && position < phoneCount()) {
-bindPhoneRow(holder, position);
-return;
-}
-if (searching) {
-position -= phoneCount();
-}
-switch (holder.getItemViewType()) {
-case 0: {
-GraySectionCell cell = (GraySectionCell) holder.itemView;
+        @Override
+        public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+            if (searching && position < phoneCount()) {
+                bindPhoneRow(holder, position);
+                return;
+            }
+            if (searching) {
+                position -= phoneCount();
+            }
+            switch (holder.getItemViewType()) {
+                case 0: {
+                    GraySectionCell cell = (GraySectionCell) holder.itemView;
                     if (searching) {
                         cell.setText(getString(R.string.GlobalSearch));
                     } else if (position == userTypesHeaderRow) {

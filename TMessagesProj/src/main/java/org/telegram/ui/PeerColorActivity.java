@@ -1163,19 +1163,19 @@ public class PeerColorActivity extends BaseFragment implements NotificationCente
             giftsCount = 0;
             uniqueGifts.clear();
 
-rowCount = 0;
-colorPickerRow = rowCount++;
-iconRow = Offered.COLOUR_ICONS ? rowCount++ : -1;
-infoRow = rowCount++;
-if ((type == PAGE_PROFILE) && (selectedColor >= 0 || selectedEmojiCollectible != null || selectedPeerCollectible != null)) {
-clearRow = rowCount++;
-shadowRow = rowCount++;
-}
-final StarsController.GiftsList giftsList = type == PAGE_NAME ? giftsWithPeerColor : gifts;
-if (Offered.GIFTS && (type == PAGE_PROFILE || type == PAGE_NAME) && giftsList != null) {
-giftsTabsRow = rowCount++;
-if (selectedTabGift == null) {
-for (int i = 0; i < giftsList.gifts.size(); ++i) {
+            rowCount = 0;
+            colorPickerRow = rowCount++;
+            iconRow = Offered.COLOUR_ICONS ? rowCount++ : -1;
+            infoRow = rowCount++;
+            if ((type == PAGE_PROFILE) && (selectedColor >= 0 || selectedEmojiCollectible != null || selectedPeerCollectible != null)) {
+                clearRow = rowCount++;
+                shadowRow = rowCount++;
+            }
+            final StarsController.GiftsList giftsList = type == PAGE_NAME ? giftsWithPeerColor : gifts;
+            if (Offered.GIFTS && (type == PAGE_PROFILE || type == PAGE_NAME) && giftsList != null) {
+                giftsTabsRow = rowCount++;
+                if (selectedTabGift == null) {
+                    for (int i = 0; i < giftsList.gifts.size(); ++i) {
                         TL_stars.SavedStarGift savedGift = giftsList.gifts.get(i);
                         if (savedGift.gift instanceof TL_stars.TL_starGiftUnique) {
                             uniqueGifts.add((TL_stars.TL_starGiftUnique) savedGift.gift);
@@ -1843,21 +1843,21 @@ for (int i = 0; i < giftsList.gifts.size(); ++i) {
         }
     }
 
-@Override
-public boolean onBackPressed(boolean invoked) {
-if (!isChannel && hasUnsavedChanged() && premiumOrOffered()) {
-if (invoked) showUnsavedAlert();
-return false;
-}
+    @Override
+    public boolean onBackPressed(boolean invoked) {
+        if (!isChannel && hasUnsavedChanged() && premiumOrOffered()) {
+            if (invoked) showUnsavedAlert();
+            return false;
+        }
         return super.onBackPressed(invoked);
     }
 
-@Override
-public boolean isSwipeBackEnabled(MotionEvent event) {
-if (!isChannel && hasUnsavedChanged() && premiumOrOffered()) {
-return false;
-}
-return super.isSwipeBackEnabled(event);
+    @Override
+    public boolean isSwipeBackEnabled(MotionEvent event) {
+        if (!isChannel && hasUnsavedChanged() && premiumOrOffered()) {
+            return false;
+        }
+        return super.isSwipeBackEnabled(event);
     }
 
     private void showUnsavedAlert() {
