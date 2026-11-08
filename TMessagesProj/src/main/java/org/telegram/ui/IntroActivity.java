@@ -1013,11 +1013,6 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
                 lastButtonColor2 = buttonColor2;
                 startMessagingButtonBackground.setColors(new int[]{buttonColor1, buttonColor2});
             }
-            final int logoColor = Theme.multAlpha(getThemedColor(Theme.key_actionBarDefaultTitle), 0.9f);
-            if (logoDrawable != null && logoColor != lastLogoColor) {
-                lastLogoColor = logoColor;
-                logoDrawable.setColorFilter(logoColor, PorterDuff.Mode.MULTIPLY);
-            }
             fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
             if (switchLanguageTextView != null) {
                 switchLanguageTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));

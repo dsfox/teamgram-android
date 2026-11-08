@@ -852,6 +852,28 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asCustomShadow(versionView));
     }
 
+    /** ice9: changing server asks, then signs out; the address is typed on sign-in (#65) */
+    private void askAboutChangingServer() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(getString(R.string.Ice9ServerChangeTitle));
+        builder.setMessage(getString(R.string.Ice9ServerChangeInfo));
+        builder.setPositiveButton(getString(R.string.Ice9ServerChange), (dialog, which) -> {
+            // ice9: the question goes back before the sign-out; the old address stays
+            ServerAddress.askAgain();
+            getMessagesController().performLogout(1);
+        });
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        AlertDialog dialog = builder.create();
+        showDialog(dialog);
+        TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (button != null) {
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
+        }
+    }
+
     private void presentSettingFragment(BaseFragment fragment) {
         if (AndroidUtilities.isTablet() && LaunchActivity.instance != null && LaunchActivity.instance.getRightActionBarLayout() != null) {
             final INavigationLayout layout = LaunchActivity.instance.getRightActionBarLayout();
