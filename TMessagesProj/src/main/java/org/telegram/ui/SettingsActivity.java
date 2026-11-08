@@ -920,6 +920,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 presentFragment(new RoundVideoSettingsActivity());
                 break;
             }
+            case 26: {
+                presentFragment(new AudioRecorderSettingsActivity());
+                break;
+            }
         }
     }
 
