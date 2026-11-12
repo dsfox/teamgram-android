@@ -126,6 +126,11 @@ android {
         }
     }
 
+    // IWidgetEngine: the widget engine's isolated process (WidgetEngineService).
+    buildFeatures {
+        aidl true
+    }
+
     lintOptions {
         disable 'MissingTranslation'
         disable 'ExtraTranslation'
@@ -155,7 +160,7 @@ android {
                 // half a dozen CMakeLists, which silently builds for the host (Mach-O) instead.
                 // CMake's own Android support carries the triple in the compile rules instead.
                 arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_USE_LEGACY_TOOLCHAIN_FILE=false' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
-                targets 'tmessages.49'
+                targets 'tmessages.49', 'twidget'
             }
         }
     }
