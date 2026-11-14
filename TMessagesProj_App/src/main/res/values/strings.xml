@@ -124,6 +124,7 @@
     <string name="EnterYourPasscodeInfo">Please enter your current ice9 passcode to manage this option.</string>
     <string name="EnterYourTelegramPasscode">Enter your ice9 passcode</string>
     <string name="ScreenCaptureAlert">This will hide the contents of your chats or chat list from the task switcher, but you will not be able to take screenshots on ice9.\n\nYou may need to restart the app for this to take effect.</string>
+    <string name="LiveLocationPausedText">Open ice9 to continue sharing your location.</string>
     <string name="RecoveryEmailSubtitle">You can set a recovery email to be able to reset your password and restore access to your ice9 account.</string>
     <string name="YourEmailSkipWarningText">No, seriously.\n\nIf you forget your password, you will lose access to your ice9 account. There will be no way to restore it.</string>
     <string name="TurnPasswordOffPassport">Warning! All data saved in your ice9 Passport will be lost!</string>
@@ -477,6 +478,8 @@
     <string name="Gift2ChannelNotifyNotChecked">You will not receive a message from ice9 when your channel receives a gift.</string>
     <string name="Gift2Host">ice9</string>
     <string name="Gift2CantDoText">Transfer this gift to your ice9 account on Fragment to unlock this action.</string>
+    <string name="Gift2TransferToMyProfileText">Do you want to transfer **%s** from your wallet to your ice9 profile?</string>
+    <string name="Gift2MoveToMyGiftsText">Transfer this collectible off-chain to your ice9 account?</string>
     <string name="Gift2ExportTONUnlocksAlertText_one">In %d day, youll be able to send this collectible to any TON blockchain address outside ice9 for sale or auction.</string>
     <string name="Gift2ExportTONUnlocksAlertText_other">In %d days, youll be able to send this collectible to any TON blockchain address outside ice9 for sale or auction.</string>
     <string name="Gift2ExportTONUpdateRequiredText">Please update your ice9 application to the latest version.</string>
@@ -532,6 +535,7 @@
     <string name="UnsupportedMessageMessage">Update ice9 to view this message</string>
     <string name="RoundVideoCompositionInfo">Disable styling to record a plain square without outside-circle blur, dimming or ice9 overlays.</string>
     <string name="WalletAuthorizeTransactionPasscode">Enter your current ice9 passcode to authorize transaction.</string>
+    <string name="WalletTransactionTelegram">ice9</string>
     <string name="WalletFirstGramsStoreInfo">Keep your Grams in ice9\n(💬 → ⋮ → Wallet) or other wallets.</string>
     <string name="WalletFeePaidByTelegram">Free (paid by ice9)</string>
     <string name="WalletEnterSecretPhraseInfo">Since you disabled backups for your wallet, you have to manually enter your Secret Phrase in every new ice9 session.</string>
@@ -546,4 +550,8 @@
     <string name="CreateManagedBotUsernameSuffixesInfo">Must end in \'bot\' – or %1$s with **ice9 Premium**.</string>
     <string name="CreateManagedBotUsernamePremiumRequired">Usernames ending in \'%1$s\' require ice9 Premium. **Subscribe ›**</string>
     <string name="CreateManagedBotUsernamePremiumRequiredGeneric">This username requires ice9 Premium. **Subscribe ›**</string>
+    <string name="NewContactPhoneNotOnTelegram">This phone number is not on ice9. **Invite >**</string>
+    <string name="NewContactPhoneOnTelegram">This phone number is on ice9.</string>
+    <string name="ForwardHideSenderNamePremium">Subscribe to **ice9 Premium** to forward formatted messages without the sender’s name.</string>
+    <string name="FpnvConsentText">ice9 can confirm the phone number of this SIM card with your carrier and log you in without a code.</string>
 </resources>

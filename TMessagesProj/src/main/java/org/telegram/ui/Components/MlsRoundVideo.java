@@ -4,7 +4,7 @@ import androidx.annotation.NonNull;
 
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MlsRuntime;
-import org.telegram.utils.camera.roundvideo.RoundVideoSession;
+import org.telegram.utils.recorder.round.RoundVideoSession;
 
 import java.io.File;
 
