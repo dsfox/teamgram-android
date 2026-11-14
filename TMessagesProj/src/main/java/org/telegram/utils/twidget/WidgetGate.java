@@ -28,7 +28,7 @@ final class WidgetGate {
     // a storage commit is at most MAX_STORAGE_COMMIT_BYTES, a wallet call far below the cap here.
     static final int MAX_LINK = 256, MAX_COPY_TEXT = 256, MAX_REQUEST_DATA = 64, MAX_STORAGE_COMMIT = 2 * 12 * 4096 + 64,
             MAX_WALLET_CALL = 256 * 1024;
-    private static final String[] TELEGRAM_HOSTS = {"t.me", "telegram.me", "telegram.dog"};
+    private static final String[] TELEGRAM_HOSTS = {"i.ice9.app"}; // ice9: our host only, not upstream's three (#87)
 
     private final boolean canQuery, backgroundQuery, wallet;
     private int presses, usedPress;

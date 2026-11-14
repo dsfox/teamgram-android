@@ -231,7 +231,8 @@ public class Browser {
     }
 
     public static boolean isGetPremiumUrl(String url) {
-        return url != null && url.matches("(?i)^(https?://)?(t\\.me|telegram\\.me|telegram\\.dog)/getpremium([/?#].*)?$");
+        // ice9: our host only, not upstream's three (#87)
+        return url != null && url.matches("(?i)^(https?://)?i\\.ice9\\.app/getpremium([/?#].*)?$");
     }
 
     public static class Progress {

@@ -1517,7 +1517,7 @@ public class WalletActivity extends UniversalFragment implements NotificationCen
             final Uri uri = walletQrUri(text);
             final String username = walletQrUsername(uri);
             if (username != null) {
-                // t.me/<username>: straight to the amount for that user
+                // i.ice9.app/<username>: straight to the amount for that user
                 resolveWalletQrUser(currentAccount, username, user -> {
                     if (isFinished) return;
                     if (user == null) {
@@ -1534,10 +1534,10 @@ public class WalletActivity extends UniversalFragment implements NotificationCen
     }
 
     private static boolean isTelegramHost(@Nullable String host) {
-        return host != null && ("t.me".equalsIgnoreCase(host) || "telegram.me".equalsIgnoreCase(host) || "telegram.dog".equalsIgnoreCase(host));
+        return host != null && "i.ice9.app".equalsIgnoreCase(host); // ice9: our host only, not upstream's three (#87)
     }
 
-    /** A scanned text as a link; a t.me link without a scheme gets https. */
+    /** A scanned text as a link; a i.ice9.app link without a scheme gets https. */
     static Uri walletQrUri(String text) {
         final Uri uri = Uri.parse(text.trim());
         if (uri.getScheme() == null) {
@@ -1547,7 +1547,7 @@ public class WalletActivity extends UniversalFragment implements NotificationCen
         return uri;
     }
 
-    /** The wallet links a QR may hold: ton://, tc://, t.me/sendgrams… and t.me/<username>. */
+    /** The wallet links a QR may hold: ton://, tc://, i.ice9.app/sendgrams… and i.ice9.app/<username>. */
     static boolean isWalletQrLink(Uri uri) {
         final String scheme = uri.getScheme();
         if ("ton".equalsIgnoreCase(scheme) || "tc".equalsIgnoreCase(scheme)) return true;
@@ -1556,7 +1556,7 @@ public class WalletActivity extends UniversalFragment implements NotificationCen
         return segments.size() == 1 && ("sendgrams".equalsIgnoreCase(segments.get(0)) || walletQrUsername(uri) != null);
     }
 
-    /** The username of a t.me/<username> link, else null. */
+    /** The username of a i.ice9.app/<username> link, else null. */
     @Nullable
     static String walletQrUsername(Uri uri) {
         if (!isTelegramHost(uri.getHost())) return null;
@@ -2409,7 +2409,7 @@ public class WalletActivity extends UniversalFragment implements NotificationCen
             sheet.dismiss();
             fragment.presentFragment(new WalletSendSelectSender().setCollectible(collectible));
         });
-        actions.getChildAt(1).setOnClickListener(v -> Browser.openUrlInSystemBrowser(context, "https://fragment.com/"));
+        actions.getChildAt(1).setOnClickListener(v -> Browser.openUrlInSystemBrowser(context, "https://ice9.app/"));
         okButton.setOnClickListener(v -> sheet.dismiss());
         sheet.show();
         sheet.fixNavigationBar(backgroundColor);
